@@ -1066,10 +1066,29 @@ async function loadLeave(){
   let html='';
   const allGroups=CU?.role==='admin'?[...GAME_GROUPS,'기타']:GAME_GROUPS;
 
+  // 검색창 (인사팀만)
+  if(CU?.role==='admin'){
+    html+=`<div style="padding:8px 16px 4px">
+      <input id="leaveSearch" oninput="filterLeave()" placeholder="🔍 이름 검색..."
+        style="width:100%;padding:10px 14px;background:white;border:1.5px solid var(--border);border-radius:12px;font-size:14px;outline:none;box-sizing:border-box">
+    </div>`;
+  }
+  html+='<div id="leaveList">';
+
   for(const gName of allGroups){
     const accs=byGroup[gName];
     if(!accs||accs.length===0)continue;
     const gColor={'좋아요':'#6C35DE','댓글':'#FF6B9D','시크릿':'#00C9A7','기타':'#F7B731'}[gName]||'#888';
+
+    // 인사팀: 그룹 헤더 + 그룹 전체 드롭다운
+    if(CU?.role==='admin'){
+      const grpId='grp_'+gName;
+      html+=`<div data-group="${gName}" style="margin:10px 16px 4px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="toggleLeaveAcc('${grpId}')">`;
+      html+=`<div style="width:10px;height:10px;border-radius:50%;background:${gColor};flex-shrink:0"></div>`;
+      html+=`<div style="font-size:15px;font-weight:900;color:${gColor}">${gName} <span style="font-size:12px;font-weight:600;color:var(--text3)">(${accs.length}명)</span></div>`;
+      html+=`<span id="arr_${grpId}" style="color:${gColor};font-size:13px;margin-left:auto">▼</span></div>`;
+      html+=`<div id="${grpId}" style="display:none">`;
+    }
 
     for(const acc of accs){
       const prizes=allMemberPrizes&&allMemberPrizes[acc.key]?Object.entries(allMemberPrizes[acc.key]):[];
@@ -1079,7 +1098,7 @@ async function loadLeave(){
       const totalLeave=manualLeave+prizeLeave;
 
       const accId='acc_'+acc.key;
-      html+=`<div class="card" style="margin-top:${html?'0':'12'}px">`;
+      html+=`<div class="card" data-name="${escH(acc.name)}" style="margin-top:0">`;
       html+=`<div onclick="toggleLeaveAcc('${accId}')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;">`;
       html+=`<div style="display:flex;align-items:center;gap:10px">`;
       html+=`<div style="width:28px;height:28px;border-radius:50%;background:${gColor};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:white">${gName.charAt(0)}</div>`;
@@ -1136,14 +1155,27 @@ async function loadLeave(){
 
       html+=`</div></div>`;
     }
-
-    // 인사팀 그룹 컨테이너 닫기
-    if(CU?.role==='admin'){
-      html+=`</div>`;
-    }
+    if(CU?.role==='admin')html+=`</div>`; // 그룹 컨테이너 닫기
   }
+  html+='</div>'; // leaveList 닫기
 
   el.innerHTML=html||'<div class="empty"><div class="empty-icon">📭</div>데이터 없음</div>';
+}
+
+function filterLeave(){
+  const q=(document.getElementById('leaveSearch')?.value||'').toLowerCase();
+  const list=document.getElementById('leaveList');if(!list)return;
+  // 카드들 필터링
+  list.querySelectorAll('.card').forEach(card=>{
+    const name=card.querySelector('[data-name]')?.dataset.name||card.textContent;
+    card.style.display=(!q||name.toLowerCase().includes(q))?'':'none';
+  });
+  // 그룹 헤더도 처리
+  list.querySelectorAll('[data-group]').forEach(hdr=>{
+    const gName=hdr.dataset.group;
+    const grpEl=document.getElementById('grp_'+gName);
+    if(q&&grpEl){grpEl.style.display='block';document.getElementById('arr_grp_'+gName).textContent='▲';}
+  });
 }
 
 function toggleLeaveAcc(id){
