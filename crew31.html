@@ -267,10 +267,19 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
         <div class="fl"><label>제목</label><input class="fi" id="noticeEditTitle"></div>
         <div class="fl"><label>내용</label><textarea class="fi" id="noticeEditBody" rows="6" style="resize:none;line-height:1.6"></textarea></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:16px">
+      <!-- 인사팀 버튼 -->
+      <div id="noticeAdminBtns" style="display:flex;gap:8px;margin-top:16px">
         <button id="noticeEditBtn" class="btn-sm sec" style="flex:1" onclick="toggleNoticeEdit()">수정</button>
         <button id="noticeSaveBtn" class="btn-sm pri" style="flex:1;display:none" onclick="saveNoticeEdit()">저장</button>
         <button class="btn-sm" style="flex:1;background:rgba(255,92,92,0.1);color:var(--red)" onclick="delNoticeFromDetail()">삭제</button>
+      </div>
+      <!-- 사원 댓글 -->
+      <div id="noticeMemberArea" style="display:none;margin-top:16px">
+        <div id="noticeCommentList" style="margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px">
+          <input class="fi" id="noticeCommentInput" placeholder="댓글 남기기..." style="flex:1">
+          <button class="btn-sm pri" onclick="submitNoticeComment()">등록</button>
+        </div>
       </div>
     </div>
   </div>
@@ -328,6 +337,24 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
     <div class="btn-row">
       <button class="btn-sec" onclick="closeVoteModal()">취소</button>
       <button class="btn-pri" onclick="saveVote()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP LOCK MODAL -->
+
+<div class="overlay" id="groupLockModal">
+  <div class="modal">
+    <div class="modal-title" id="lockModalTitle">🔒 그룹 잠금</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px" id="lockModalDesc">비밀번호를 입력하세요</div>
+    <input type="hidden" id="lockTargetGroupId">
+    <div class="fl">
+      <label>4자리 비밀번호</label>
+      <input class="fi" id="lockPwInput" type="password" maxlength="4" inputmode="numeric" placeholder="●●●●" style="text-align:center;font-size:24px;letter-spacing:8px">
+    </div>
+    <div class="btn-row">
+      <button class="btn-sec" onclick="closeGroupLockModal()">취소</button>
+      <button class="btn-pri" onclick="confirmGroupLock()">확인</button>
     </div>
   </div>
 </div>
@@ -428,7 +455,7 @@ function renderAllGroupTabs(){
 function renderGroupTabsFor(containerId,activeGid,fn){
   const el=document.getElementById(containerId);if(!el)return;
   el.innerHTML=`<button class="gtab ${activeGid==='notice'?'active':''}" onclick="${fn}('notice',this)">📢 공지</button>`
-    +Object.entries(groups).map(([id,g])=>`<button class="gtab ${activeGid===id?'active':''}" onclick="${fn}('${id}',this)">${escH(g.name)}</button>`).join('');
+    +Object.entries(groups).map(([id,g])=>`<button class="gtab ${activeGid===id?'active':''}" data-gid="${id}" onclick="checkGroupLock('${id}',this)">${escH(g.name)}${g.lock?'🔒':''}</button>`).join('');
 }
 
 function renderVoteGroupTabs(){
@@ -920,13 +947,25 @@ function openLinkModal(vid,editing){
   document.getElementById('linkModal').classList.add('active');
 }
 function closeLinkModal(){document.getElementById('linkModal').classList.remove('active');}
+function cleanInstagramUrl(url){
+  // reel → p 변환
+  url=url.replace(/instagram\.com\/reel\//g,'instagram.com/p/');
+  // ? 이후 삭제 (/ 뒤의 ? 포함)
+  url=url.replace(/\?.*/,'');
+  // 끝 슬래시 정리
+  if(!url.endsWith('/'))url+='/';
+  return url.trim();
+}
+
 async function submitLink(){
   const vid=document.getElementById('linkVoteId').value;
   const nick=document.getElementById('linkNick').value.trim();
   const url=document.getElementById('linkUrl').value.trim();
   const note=document.getElementById('linkNote').value.trim();
   if(!nick){showToast('닉네임을 입력하세요');return;}
+  url=cleanInstagramUrl(url);
   if(!url||!url.startsWith('http')){showToast('올바른 링크를 입력하세요');return;}
+  document.getElementById('linkUrl').value=url;
   const key=CU?.key||('anon_'+Date.now());
   await dbSet(`links/${vid}/${key}`,{memberKey:key,nick,name:nick,url,note,time:Date.now()});
   closeLinkModal();showToast('✅ 링크 제출 완료!');loadHome();
@@ -964,7 +1003,15 @@ async function loadSettings(){
     :sorted.map(([k,m])=>`<div class="set-row"><div class="set-name">${escH(m.name)}</div><button class="set-del" onclick="delMember('${k}')">삭제</button></div>`).join('');
   const gl=document.getElementById('groupList');
   gl.innerHTML=Object.entries(groups).length===0?'<div style="padding:12px 16px;font-size:13px;color:var(--text3)">그룹 없음</div>'
-    :Object.entries(groups).map(([id,g])=>`<div class="set-row"><div style="width:10px;height:10px;border-radius:50%;background:${g.color}"></div><div class="set-name">${escH(g.name)}</div><button class="set-del" onclick="delGroup('${id}')">삭제</button></div>`).join('');
+    :Object.entries(groups).map(([id,g])=>`<div class="set-row">
+      <div style="width:10px;height:10px;border-radius:50%;background:${g.color};flex-shrink:0"></div>
+      <div class="set-name">${escH(g.name)}</div>
+      ${g.lock
+        ?`<button onclick="openGroupLockModal('${id}','unlock')" style="background:rgba(255,179,71,0.15);border:none;border-radius:8px;color:var(--gold);padding:6px 10px;font-size:12px;font-weight:700">🔓 해제</button>`
+        :`<button onclick="openGroupLockModal('${id}','lock')" style="background:rgba(91,155,213,0.15);border:none;border-radius:8px;color:var(--blue);padding:6px 10px;font-size:12px;font-weight:700">🔒 잠금</button>`
+      }
+      <button class="set-del" onclick="delGroup('${id}')">삭제</button>
+    </div>`).join('');
   renderAllGroupTabs();
   loadVoteManageList();
 }
@@ -1263,7 +1310,34 @@ function openNoticeDetail(nid,title,body,createdAt){
   document.getElementById('noticeEditBtn').style.display='';
   document.getElementById('noticeSaveBtn').style.display='none';
   _noticeEditMode=false;
+  const isAdmin=CU?.role==='admin';
+  document.getElementById('noticeAdminBtns').style.display=isAdmin?'flex':'none';
+  document.getElementById('noticeMemberArea').style.display=isAdmin?'none':'block';
+  if(!isAdmin)loadNoticeComments(nid);
   document.getElementById('noticeDetailOverlay').classList.add('active');
+}
+
+async function loadNoticeComments(nid){
+  const el=document.getElementById('noticeCommentList');if(!el)return;
+  const comments=await dbGet(`noticeComments/${nid}`);
+  if(!comments||Object.keys(comments).length===0){el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:4px 0">댓글이 없습니다</div>';return;}
+  const list=Object.values(comments).sort((a,b)=>(a.time||0)-(b.time||0));
+  el.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">💬 댓글</div>'+list.map(c=>`
+    <div style="padding:6px 10px;background:var(--surface2);border-radius:10px;margin-bottom:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--accent)">${escH(c.name||'')}</div>
+      <div style="font-size:13px;color:var(--text)">${escH(c.body||'')}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${fmtDate(c.time)}</div>
+    </div>`).join('');
+}
+
+async function submitNoticeComment(){
+  const nid=document.getElementById('noticeDetailId').value;
+  const body=document.getElementById('noticeCommentInput').value.trim();
+  if(!body){showToast('댓글을 입력하세요');return;}
+  await dbPush(`noticeComments/${nid}`,{name:CU.name,body,time:Date.now()});
+  document.getElementById('noticeCommentInput').value='';
+  showToast('💬 댓글 등록됨');
+  loadNoticeComments(nid);
 }
 function closeNoticeDetail(){document.getElementById('noticeDetailOverlay').classList.remove('active');}
 
@@ -1305,6 +1379,64 @@ async function delNoticeFromDetail(){
   closeNoticeDetail();showToast('🗑️ 삭제됨');loadNoticePage();
 }
 
+
+// ── 그룹 잠금 ──
+let _lockAction=null; // 'lock' or 'unlock' or 'enter'
+
+function openGroupLockModal(groupId,action){
+  _lockAction=action;
+  document.getElementById('lockTargetGroupId').value=groupId;
+  document.getElementById('lockPwInput').value='';
+  const g=groups[groupId];
+  const gName=g?.name||'그룹';
+  if(action==='lock'){
+    document.getElementById('lockModalTitle').textContent='🔒 잠금 설정';
+    document.getElementById('lockModalDesc').textContent=`${gName} 탭에 사용할 비밀번호를 입력하세요`;
+  }else if(action==='unlock'){
+    document.getElementById('lockModalTitle').textContent='🔓 잠금 해제';
+    document.getElementById('lockModalDesc').textContent=`현재 비밀번호를 입력하세요`;
+  }else{
+    document.getElementById('lockModalTitle').textContent=`🔒 ${gName}`;
+    document.getElementById('lockModalDesc').textContent='비밀번호를 입력하세요';
+  }
+  document.getElementById('groupLockModal').classList.add('active');
+  setTimeout(()=>document.getElementById('lockPwInput').focus(),300);
+}
+function closeGroupLockModal(){document.getElementById('groupLockModal').classList.remove('active');}
+
+async function confirmGroupLock(){
+  const gid=document.getElementById('lockTargetGroupId').value;
+  const pw=document.getElementById('lockPwInput').value;
+  if(pw.length!==4||!/^\d{4}$/.test(pw)){showToast('4자리 숫자를 입력하세요');return;}
+  const g=await dbGet(`groups/${gid}`);
+
+  if(_lockAction==='lock'){
+    await dbSet(`groups/${gid}/lock`,pw);
+    closeGroupLockModal();showToast('🔒 잠금 설정 완료');await loadGroups();loadSettings();
+  }else if(_lockAction==='unlock'){
+    if(g?.lock!==pw){showToast('비밀번호가 틀렸습니다');return;}
+    await dbSet(`groups/${gid}/lock`,'');
+    closeGroupLockModal();showToast('🔓 잠금 해제됨');await loadGroups();loadSettings();
+  }else{
+    // enter: 비번 맞으면 해당 그룹 탭 열기
+    if(g?.lock!==pw){showToast('비밀번호가 틀렸습니다');document.getElementById('lockPwInput').value='';return;}
+    sessionStorage.setItem('unlockedGroup_'+gid,'1');
+    closeGroupLockModal();
+    // 탭 열기
+    const btn=document.querySelector(`#homeGroupTabs .gtab[data-gid="${gid}"]`);
+    if(btn)setHomeGroup(gid,btn);
+  }
+}
+
+function checkGroupLock(gid,btn){
+  if(CU?.role==='admin'){setHomeGroup(gid,btn);return;}
+  const g=groups[gid];
+  if(!g?.lock){setHomeGroup(gid,btn);return;}
+  // 이미 이 세션에서 해제됐으면 바로 접근
+  if(sessionStorage.getItem('unlockedGroup_'+gid)==='1'){setHomeGroup(gid,btn);return;}
+  // 잠금 모달 열기
+  openGroupLockModal(gid,'enter');
+}
 // ── UTILS ──
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
