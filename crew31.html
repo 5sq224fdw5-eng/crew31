@@ -771,7 +771,8 @@ function selectCalDay(ds){calSel=ds;renderCalendar();}
 
 async function showCalDetail(ds){
   const el=document.getElementById('calDetail');
-  const [calData,links,votes]=await Promise.all([dbGet(`calendar/${ds}`),dbGet('links'),dbGet('votes')]);
+  const [calData,links,votes,ms]=await Promise.all([dbGet(`calendar/${ds}`),dbGet('links'),dbGet('votes'),dbGet('members')]);
+  if(ms)members=ms;
 
   if(CU?.role==='member'){
     if(!calData||!calData[CU.key]){el.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>${ds} 참여 기록 없음</div>`;return;}
