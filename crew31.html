@@ -374,7 +374,8 @@ async function gameSet(p,d){try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT'
 async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 
 const VOTE_TYPES=['출근','연차','2인1조','투피드','재능기부','열정페이'];
-const todayStr=new Date().toISOString().slice(0,10);
+function getKSTDate(){const d=new Date();d.setHours(d.getHours()+9);return d.toISOString().slice(0,10);}
+const todayStr=getKSTDate();
 let CU=null,groups={},members={},activeGroup='notice',activeStatusGroup='all',voteSettingsGroup='',calY,calM,calSel;
 
 // ── LOGIN ──
@@ -641,7 +642,7 @@ async function syncWithGame(groupId,groupName,optionName){
 
     if(manualLeave<=0&&prizesArr.length===0){showToast('⚠️ 오락실 연차 잔여 없음');return;}
 
-    await gamePush(`leaveLog/${gameKey}`,{type:'deduct',amount:1,date:new Date().toISOString().slice(0,10),memo:'연차 사용 (crew31)'});
+    await gamePush(`leaveLog/${gameKey}`,{type:'deduct',amount:1,date:getKSTDate(),memo:'연차 사용 (crew31)'});
 
     if(manualLeave>0){
       await gameSet(`memberLeave/${gameKey}`,manualLeave-1);
@@ -1187,7 +1188,7 @@ async function adminLeaveAdjust(gameKey, sign){
   const memo=memoEl?.value.trim()||'';
   if(!amount||amount<1){showToast('일수를 입력하세요');return;}
 
-  const today=new Date().toISOString().slice(0,10);
+  const today=getKSTDate();
 
   if(sign>0){
     // 적립
