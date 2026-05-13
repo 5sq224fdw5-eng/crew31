@@ -1157,6 +1157,20 @@ async function loadLeave(){
         });
       }
 
+      // 인사팀: 적립/차감/메모 UI
+      if(CU?.role==='admin'){
+        html+=`<div style="padding:10px 16px 14px;border-top:1px solid var(--border)">`;
+        html+=`<div style="font-size:12px;font-weight:800;color:var(--accent);margin-bottom:8px">✏️ 연차 수동 처리</div>`;
+        html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+        html+=`<input id="leaveAmt_${acc.key}" type="number" min="1" placeholder="일수" style="width:70px;padding:8px 10px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;font-size:14px;outline:none;text-align:center">`;
+        html+=`<input id="leaveMemo_${acc.key}" placeholder="📝 메모" style="flex:1;padding:8px 10px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;font-size:13px;outline:none">`;
+        html+=`</div>`;
+        html+=`<div style="display:flex;gap:6px">`;
+        html+=`<button onclick="adminLeaveAdjust('${acc.key}',1)" style="flex:1;padding:9px;background:rgba(93,184,138,0.15);border:none;border-radius:10px;font-size:13px;font-weight:800;color:var(--green)">+ 적립</button>`;
+        html+=`<button onclick="adminLeaveAdjust('${acc.key}',-1)" style="flex:1;padding:9px;background:rgba(255,92,92,0.1);border:none;border-radius:10px;font-size:13px;font-weight:800;color:var(--red)">− 차감</button>`;
+        html+=`</div></div>`;
+      }
+
       html+=`</div></div>`;
     }
     if(CU?.role==='admin')html+=`</div>`; // 그룹 컨테이너 닫기
@@ -1164,6 +1178,55 @@ async function loadLeave(){
   html+='</div>'; // leaveList 닫기
 
   el.innerHTML=html||'<div class="empty"><div class="empty-icon">📭</div>데이터 없음</div>';
+}
+
+async function adminLeaveAdjust(gameKey, sign){
+  const amtEl=document.getElementById('leaveAmt_'+gameKey);
+  const memoEl=document.getElementById('leaveMemo_'+gameKey);
+  const amount=parseInt(amtEl?.value);
+  const memo=memoEl?.value.trim()||'';
+  if(!amount||amount<1){showToast('일수를 입력하세요');return;}
+
+  const today=new Date().toISOString().slice(0,10);
+
+  if(sign>0){
+    // 적립
+    await gamePush(`leaveLog/${gameKey}`,{type:'give',amount,date:today,memo});
+    const cur=await gameGet(`memberLeave/${gameKey}`)||0;
+    await gameSet(`memberLeave/${gameKey}`,cur+amount);
+    showToast(`✅ +${amount}일 적립 완료!`);
+  }else{
+    // 차감
+    const cur=await gameGet(`memberLeave/${gameKey}`)||0;
+    // 수동 연차 먼저, 없으면 경품 연차
+    const memberPrizes=await gameGet(`memberPrizes/${gameKey}`);
+    const prizeLeave=memberPrizes?Object.values(memberPrizes).filter(p=>p&&!p.deducted&&p.name==='연차').length:0;
+    if(cur+prizeLeave<amount){showToast('연차 잔여가 부족합니다');return;}
+    await gamePush(`leaveLog/${gameKey}`,{type:'deduct',amount,date:today,memo});
+    let remaining=amount;
+    if(cur>0){
+      const fromManual=Math.min(cur,remaining);
+      await gameSet(`memberLeave/${gameKey}`,cur-fromManual);
+      remaining-=fromManual;
+    }
+    if(remaining>0&&memberPrizes){
+      const today2=new Date().toLocaleDateString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit'}).replace(/\.\s*/g,'.').slice(0,-1);
+      const entries=Object.entries(memberPrizes);
+      for(const [pk,p] of entries){
+        if(remaining<=0)break;
+        if(p&&!p.deducted&&p.name==='연차'){
+          await gameSet(`memberPrizes/${gameKey}/${pk}/deducted`,true);
+          await gameSet(`memberPrizes/${gameKey}/${pk}/deductDate`,today2);
+          remaining--;
+        }
+      }
+    }
+    showToast(`✅ -${amount}일 차감 완료!`);
+  }
+
+  if(amtEl)amtEl.value='';
+  if(memoEl)memoEl.value='';
+  loadLeave(); // 새로고침
 }
 
 function filterLeave(){
