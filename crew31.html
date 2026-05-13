@@ -196,6 +196,7 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
   <div class="nav">
     <button class="nav-btn active" onclick="goTab('home')" data-tab="home">🏠 홈</button>
     <button class="nav-btn" onclick="goTab('calendar')" data-tab="calendar">🗓 캘린더</button>
+    <button class="nav-btn" onclick="goTab('leave')" data-tab="leave">🏖️ 연차</button>
     <button class="nav-btn admin-only" onclick="goTab('status')" data-tab="status" style="display:none">📊 현황</button>
     <button class="nav-btn admin-only" onclick="goTab('notice')" data-tab="notice" style="display:none">📢 공지</button>
     <button class="nav-btn admin-only" onclick="goTab('settings')" data-tab="settings" style="display:none">⚙️ 설정</button>
@@ -206,6 +207,16 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
   <div class="page active" id="pageHome">
     <div class="gtabs" id="homeGroupTabs"></div>
     <div id="homeContent"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- LEAVE TAB -->
+
+  <div class="page" id="pageLeave">
+    <div style="padding:12px 16px 4px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:13px;color:var(--text2)">오락실 연차·경품 현황</div>
+      <button onclick="loadLeave()" style="background:var(--surface2);border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;color:var(--text2)">새로고침</button>
+    </div>
+    <div id="leaveContent"><div class="loading"><div class="spinner"></div></div></div>
   </div>
 
   <!-- CALENDAR -->
@@ -238,6 +249,29 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
         <button class="btn-sm pri" style="width:100%" onclick="openNoticeModal()">+ 공지 작성</button>
       </div>
       <div id="noticeAdminList"></div>
+    </div>
+  </div>
+
+  <!-- NOTICE DETAIL -->
+
+  <div class="overlay" id="noticeDetailOverlay">
+    <div class="modal">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="modal-title" style="margin-bottom:0" id="noticeDetailTitle"></div>
+        <button onclick="closeNoticeDetail()" style="background:var(--surface2);border:none;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--text2)">접기</button>
+      </div>
+      <div id="noticeDetailMeta" style="font-size:11px;color:var(--text3);margin-bottom:12px"></div>
+      <div id="noticeDetailBody" style="font-size:14px;color:var(--text2);line-height:1.7;white-space:pre-wrap"></div>
+      <input type="hidden" id="noticeDetailId">
+      <div id="noticeEditArea" style="display:none;margin-top:12px">
+        <div class="fl"><label>제목</label><input class="fi" id="noticeEditTitle"></div>
+        <div class="fl"><label>내용</label><textarea class="fi" id="noticeEditBody" rows="6" style="resize:none;line-height:1.6"></textarea></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button id="noticeEditBtn" class="btn-sm sec" style="flex:1" onclick="toggleNoticeEdit()">수정</button>
+        <button id="noticeSaveBtn" class="btn-sm pri" style="flex:1;display:none" onclick="saveNoticeEdit()">저장</button>
+        <button class="btn-sm" style="flex:1;background:rgba(255,92,92,0.1);color:var(--red)" onclick="delNoticeFromDetail()">삭제</button>
+      </div>
     </div>
   </div>
 
@@ -900,17 +934,21 @@ async function loadNoticePage(){
   if(!notices){el.innerHTML='<div style="padding:12px 16px;font-size:13px;color:var(--text3)">공지 없음</div>';return;}
   const list=Object.entries(notices).filter(([k,n])=>!n.deleted).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
   if(list.length===0){el.innerHTML='<div style="padding:12px 16px;font-size:13px;color:var(--text3)">공지 없음</div>';return;}
-  el.innerHTML=list.map(([nid,n])=>`
-    <div style="padding:12px 16px;border-top:1px solid var(--border)">
-      <div style="display:flex;gap:10px;align-items:flex-start">
-        <div style="flex:1">
+  el.innerHTML=list.map(([nid,n])=>{
+    const preview=n.body?(n.body.length>30?n.body.slice(0,30)+'...':n.body):'';
+    return `<div onclick="openNoticeDetail('${nid}','${escH(n.title).replace(/'/g,'\\\'')
+      }','${(n.body||'').replace(/\n/g,' ').replace(/'/g,'\\\'').slice(0,500)}',${n.createdAt||0})" 
+      style="padding:12px 16px;border-top:1px solid var(--border);cursor:pointer;active:background:var(--surface2)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:700">${escH(n.title)}</div>
-          ${n.body?`<div style="font-size:13px;color:var(--text2);margin-top:4px;line-height:1.6">${escH(n.body)}</div>`:''}
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">${fmtDate(n.createdAt)}</div>
+          ${preview?`<div style="font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(preview)}</div>`:''}
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(n.createdAt)}</div>
         </div>
-        <button class="set-del" onclick="delNotice('${nid}')">삭제</button>
+        <span style="color:var(--text3);font-size:14px;flex-shrink:0">›</span>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 async function delNotice(nid){if(!confirm('삭제?'))return;await dbSet(`notices/${nid}/deleted`,true);showToast('🗑️ 삭제됨');loadNoticePage();}
 
@@ -963,9 +1001,196 @@ function goTab(tab){
   document.getElementById('page'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.add('active');
   if(tab==='home')loadHome();
   if(tab==='calendar')renderCalendar();
+  if(tab==='leave')loadLeave();
   if(tab==='status')loadStatus();
   if(tab==='notice')loadNoticePage();
   if(tab==='settings')loadSettings();
+}
+
+
+// ── 연차 탭 ──
+async function loadLeave(){
+  const el=document.getElementById('leaveContent');
+  el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+
+  // crew31 닉네임으로 오락실에서 해당 계정 찾기
+  const crewName=CU?.role==='admin'?null:CU?.name;
+  const [gameMembers,allMemberPrizes,allMemberLeave,allLeaveLog]=await Promise.all([
+    gameGet('members'),gameGet('memberPrizes'),gameGet('memberLeave'),gameGet('leaveLog')
+  ]);
+  if(!gameMembers){el.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
+
+  // 매칭: 관리자면 전체, 사원이면 본인 닉네임 포함 계정
+  const GAME_GROUPS=['좋아요','댓글','시크릿'];
+  let targetAccounts=[];
+  if(CU?.role==='admin'){
+    // 인사팀: 전체 멤버 연차 현황
+    targetAccounts=Object.entries(gameMembers).map(([k,m])=>({key:k,name:m.name}));
+  }else{
+    // 사원: 본인 닉네임 포함된 계정들 (좋아요불주먹, 댓글불주먹, 시크릿불주먹)
+    targetAccounts=Object.entries(gameMembers)
+      .filter(([k,m])=>m.name.replace(/^\*/,'').replace(/^(좋아요|댓글|시크릿)/,'')===crewName)
+      .map(([k,m])=>({key:k,name:m.name}));
+    if(targetAccounts.length===0){
+      // 직접 이름 매칭도 시도
+      targetAccounts=Object.entries(gameMembers)
+        .filter(([k,m])=>m.name===crewName||m.name.includes(crewName))
+        .map(([k,m])=>({key:k,name:m.name}));
+    }
+  }
+
+  if(targetAccounts.length===0){el.innerHTML='<div class="empty"><div class="empty-icon">📭</div>오락실 계정을 찾을 수 없습니다</div>';return;}
+
+  // 그룹별로 묶기
+  const byGroup={};
+  GAME_GROUPS.forEach(g=>byGroup[g]=[]);
+  byGroup['기타']=[];
+  targetAccounts.forEach(acc=>{
+    const clean=acc.name.replace(/^\*/,'');
+    const g=GAME_GROUPS.find(g=>clean.startsWith(g))||'기타';
+    byGroup[g].push(acc);
+  });
+
+  let html='';
+  const allGroups=CU?.role==='admin'?[...GAME_GROUPS,'기타']:GAME_GROUPS;
+
+  for(const gName of allGroups){
+    const accs=byGroup[gName];
+    if(!accs||accs.length===0)continue;
+    const gColor={'좋아요':'#6C35DE','댓글':'#FF6B9D','시크릿':'#00C9A7','기타':'#F7B731'}[gName]||'#888';
+
+    for(const acc of accs){
+      const prizes=allMemberPrizes&&allMemberPrizes[acc.key]?Object.entries(allMemberPrizes[acc.key]):[];
+      const manualLeave=(allMemberLeave&&allMemberLeave[acc.key])||0;
+      const leaveLog=allLeaveLog&&allLeaveLog[acc.key]?Object.values(allLeaveLog[acc.key]).sort((a,b)=>(b.date||'').localeCompare(a.date||'')):[];
+      const prizeLeave=prizes.filter(([k,p])=>p&&!p.deducted&&p.name==='연차').length;
+      const totalLeave=manualLeave+prizeLeave;
+
+      const accId='acc_'+acc.key;
+      html+=`<div class="card" style="margin-top:${html?'0':'12'}px">`;
+      html+=`<div onclick="toggleLeaveAcc('${accId}')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;">`;
+      html+=`<div style="display:flex;align-items:center;gap:10px">`;
+      html+=`<div style="width:28px;height:28px;border-radius:50%;background:${gColor};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:white">${gName.charAt(0)}</div>`;
+      html+=`<div><div style="font-size:14px;font-weight:800">${escH(acc.name)}</div>`;
+      html+=`<div style="font-size:11px;color:var(--text3)">연차 잔여 ${totalLeave}일</div></div></div>`;
+      html+=`<span style="color:var(--accent);font-size:16px" id="arr_${accId}">▼</span>`;
+      html+=`</div>`;
+
+      html+=`<div id="${accId}" style="display:none;border-top:1px solid var(--border)">`;
+
+      // 연차 내역
+      html+=`<div style="padding:10px 16px 4px;font-size:12px;font-weight:800;color:var(--accent)">🏖️ 연차 내역</div>`;
+      if(leaveLog.length>0){
+        leaveLog.forEach(l=>{
+          html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 16px;border-bottom:1px solid var(--border)">`;
+          html+=`<div><span style="color:${l.type==='deduct'?'var(--red)':'var(--green)'}; font-weight:700">${l.type==='deduct'?'-':'+'}${l.amount}일 ${l.type==='deduct'?'차감':'지급'}</span>`;
+          if(l.memo)html+=` <span style="font-size:11px;color:var(--gold)">📝 ${escH(l.memo)}</span>`;
+          html+=`</div><span style="font-size:11px;color:var(--text3)">${l.date||''}</span></div>`;
+        });
+      }else{
+        html+=`<div style="padding:8px 16px;font-size:13px;color:var(--text3)">내역 없음</div>`;
+      }
+
+      // 경품 연차
+      const prizeLeaveItems=prizes.filter(([k,p])=>p&&p.name==='연차');
+      if(prizeLeaveItems.length>0){
+        html+=`<div style="padding:10px 16px 4px;font-size:12px;font-weight:800;color:var(--accent)">🎰 경품 연차</div>`;
+        prizeLeaveItems.forEach(([k,p])=>{
+          const isDeducted=!!p.deducted;
+          html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 16px;border-bottom:1px solid var(--border);${isDeducted?'opacity:0.5':''}">`;
+          html+=`<div style="font-size:13px;${isDeducted?'text-decoration:line-through;color:var(--text3)':''}">🏖️ 연차${isDeducted?' (차감됨)':''}</div>`;
+          html+=`<div style="font-size:11px;color:var(--text3)">`;
+          if(p.time)html+=`지급 ${new Date(p.time).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'}).replace('. ','/')}`;
+          if(isDeducted&&p.deductDate)html+=` · <span style="color:var(--red)">차감 ${p.deductDate}</span>`;
+          html+=`</div></div>`;
+        });
+      }
+
+      // 투피드 경품
+      const tfItems=prizes.filter(([k,p])=>p&&p.name==='투피드');
+      if(tfItems.length>0){
+        html+=`<div style="padding:10px 16px 4px;font-size:12px;font-weight:800;color:var(--accent)">🍔 투피드</div>`;
+        tfItems.forEach(([k,p])=>{
+          const isDeducted=!!p.deducted;
+          html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 16px;border-bottom:1px solid var(--border);${isDeducted?'opacity:0.5':''}">`;
+          html+=`<div style="font-size:13px;${isDeducted?'text-decoration:line-through;color:var(--text3)':''}">🍔 투피드${isDeducted?' (차감됨)':''}</div>`;
+          html+=`<div style="font-size:11px;color:var(--text3)">`;
+          if(p.time)html+=`지급 ${new Date(p.time).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'}).replace('. ','/')}`;
+          if(p.memo)html+=` · <span style="color:var(--gold)">만료 ${escH(p.memo)}</span>`;
+          if(isDeducted&&p.deductDate)html+=` · <span style="color:var(--red)">차감 ${p.deductDate}</span>`;
+          html+=`</div></div>`;
+        });
+      }
+
+      html+=`</div></div>`;
+    }
+  }
+
+  el.innerHTML=html||'<div class="empty"><div class="empty-icon">📭</div>데이터 없음</div>';
+}
+
+function toggleLeaveAcc(id){
+  const el=document.getElementById(id);
+  const arr=document.getElementById('arr_'+id);
+  if(!el)return;
+  const isOpen=el.style.display!=='none';
+  el.style.display=isOpen?'none':'block';
+  if(arr)arr.textContent=isOpen?'▼':'▲';
+}
+
+// ── 공지 드롭다운 ──
+let _noticeEditMode=false;
+
+function openNoticeDetail(nid,title,body,createdAt){
+  document.getElementById('noticeDetailId').value=nid;
+  document.getElementById('noticeDetailTitle').textContent=title;
+  document.getElementById('noticeDetailBody').textContent=body||'';
+  document.getElementById('noticeDetailMeta').textContent=fmtDate(createdAt);
+  document.getElementById('noticeEditArea').style.display='none';
+  document.getElementById('noticeDetailBody').style.display='';
+  document.getElementById('noticeEditBtn').style.display='';
+  document.getElementById('noticeSaveBtn').style.display='none';
+  _noticeEditMode=false;
+  document.getElementById('noticeDetailOverlay').classList.add('active');
+}
+function closeNoticeDetail(){document.getElementById('noticeDetailOverlay').classList.remove('active');}
+
+function toggleNoticeEdit(){
+  _noticeEditMode=!_noticeEditMode;
+  const nid=document.getElementById('noticeDetailId').value;
+  if(_noticeEditMode){
+    document.getElementById('noticeEditTitle').value=document.getElementById('noticeDetailTitle').textContent;
+    document.getElementById('noticeEditBody').value=document.getElementById('noticeDetailBody').textContent;
+    document.getElementById('noticeEditArea').style.display='block';
+    document.getElementById('noticeDetailBody').style.display='none';
+    document.getElementById('noticeEditBtn').style.display='none';
+    document.getElementById('noticeSaveBtn').style.display='';
+  }else{
+    document.getElementById('noticeEditArea').style.display='none';
+    document.getElementById('noticeDetailBody').style.display='';
+    document.getElementById('noticeEditBtn').style.display='';
+    document.getElementById('noticeSaveBtn').style.display='none';
+  }
+}
+
+async function saveNoticeEdit(){
+  const nid=document.getElementById('noticeDetailId').value;
+  const title=document.getElementById('noticeEditTitle').value.trim();
+  const body=document.getElementById('noticeEditBody').value.trim();
+  if(!title){showToast('제목을 입력하세요');return;}
+  await dbSet(`notices/${nid}/title`,title);
+  await dbSet(`notices/${nid}/body`,body);
+  document.getElementById('noticeDetailTitle').textContent=title;
+  document.getElementById('noticeDetailBody').textContent=body;
+  toggleNoticeEdit();
+  showToast('✅ 수정됨');loadNoticePage();
+}
+
+async function delNoticeFromDetail(){
+  const nid=document.getElementById('noticeDetailId').value;
+  if(!confirm('삭제하시겠습니까?'))return;
+  await dbSet(`notices/${nid}/deleted`,true);
+  closeNoticeDetail();showToast('🗑️ 삭제됨');loadNoticePage();
 }
 
 // ── UTILS ──
