@@ -455,7 +455,7 @@ async function loadHome(){
       if(nlist.length>0){
         nlist.forEach(([nid,n])=>{
           const preview=n.body?(n.body.length>30?n.body.slice(0,30)+'...':n.body):'';
-          html+=`<div class="card" onclick="openNoticeDetail('${nid}','${escH(n.title).replace(/'/g,"\'")}','${(n.body||'').replace(/\n/g,' ').replace(/'/g,"\'").slice(0,500)}',${n.createdAt||0})" style="cursor:pointer;margin-top:8px">`;
+          html+=`<div class="card" onclick="openNoticeDetailById('${nid}')" style="cursor:pointer;margin-top:8px">`;
           html+=`<div style="padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px">`;
           html+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">${escH(n.title)}</div>`;
           if(preview)html+=`<div style="font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(preview)}</div>`;
@@ -949,18 +949,7 @@ async function loadNoticePage(){
   if(list.length===0){el.innerHTML='<div style="padding:12px 16px;font-size:13px;color:var(--text3)">공지 없음</div>';return;}
   el.innerHTML=list.map(([nid,n])=>{
     const preview=n.body?(n.body.length>30?n.body.slice(0,30)+'...':n.body):'';
-    return `<div onclick="openNoticeDetail('${nid}','${escH(n.title).replace(/'/g,'\\\'')
-      }','${(n.body||'').replace(/\n/g,' ').replace(/'/g,'\\\'').slice(0,500)}',${n.createdAt||0})" 
-      style="padding:12px 16px;border-top:1px solid var(--border);cursor:pointer;active:background:var(--surface2)">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700">${escH(n.title)}</div>
-          ${preview?`<div style="font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(preview)}</div>`:''}
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(n.createdAt)}</div>
-        </div>
-        <span style="color:var(--text3);font-size:14px;flex-shrink:0">›</span>
-      </div>
-    </div>`;
+    return `<div onclick="openNoticeDetailById('${nid}')" style="padding:12px 16px;border-top:1px solid var(--border);cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">${escH(n.title)}</div>${preview?`<div style="font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(preview)}</div>`:''}<div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(n.createdAt)}</div></div><span style="color:var(--text3);font-size:14px">›</span></div></div>`;
   }).join('');
 }
 async function delNotice(nid){if(!confirm('삭제?'))return;await dbSet(`notices/${nid}/deleted`,true);showToast('🗑️ 삭제됨');loadNoticePage();}
@@ -1257,6 +1246,12 @@ function toggleLeaveAcc(id){
 
 // ── 공지 드롭다운 ──
 let _noticeEditMode=false;
+
+async function openNoticeDetailById(nid){
+  const n=await dbGet(`notices/${nid}`);
+  if(!n)return;
+  openNoticeDetail(nid,n.title,n.body||'',n.createdAt);
+}
 
 function openNoticeDetail(nid,title,body,createdAt){
   document.getElementById('noticeDetailId').value=nid;
