@@ -195,10 +195,10 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
 
   <div class="nav">
     <button class="nav-btn active" onclick="goTab('home')" data-tab="home">🏠 홈</button>
+    <button class="nav-btn" onclick="goTab('notice')" data-tab="notice">📢 공지</button>
     <button class="nav-btn" onclick="goTab('calendar')" data-tab="calendar">🗓 캘린더</button>
     <button class="nav-btn" onclick="goTab('leave')" data-tab="leave">🏖️ 연차</button>
     <button class="nav-btn admin-only" onclick="goTab('status')" data-tab="status" style="display:none">📊 현황</button>
-    <button class="nav-btn admin-only" onclick="goTab('notice')" data-tab="notice" style="display:none">📢 공지</button>
     <button class="nav-btn admin-only" onclick="goTab('settings')" data-tab="settings" style="display:none">⚙️ 설정</button>
   </div>
 
@@ -245,7 +245,7 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
   <div class="page" id="pageNotice">
     <div class="stitle" style="margin-top:12px">📢 공지사항</div>
     <div class="card">
-      <div style="padding:14px 16px">
+      <div id="noticeWriteArea" style="padding:14px 16px;display:none">
         <button class="btn-sm pri" style="width:100%" onclick="openNoticeModal()">+ 공지 작성</button>
       </div>
       <div id="noticeAdminList"></div>
@@ -349,8 +349,8 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px" id="lockModalDesc">비밀번호를 입력하세요</div>
     <input type="hidden" id="lockTargetGroupId">
     <div class="fl">
-      <label>4자리 비밀번호</label>
-      <input class="fi" id="lockPwInput" type="password" maxlength="4" inputmode="numeric" placeholder="●●●●" style="text-align:center;font-size:24px;letter-spacing:8px">
+      <label id="lockPwLabel">4자리 비밀번호</label>
+      <input class="fi" id="lockPwInput" type="password" maxlength="20" inputmode="numeric" placeholder="●●●●" style="text-align:center;font-size:24px;letter-spacing:8px" onkeyup="if(event.key==='Enter')confirmGroupLock()">
     </div>
     <div class="btn-row">
       <button class="btn-sec" onclick="closeGroupLockModal()">취소</button>
@@ -403,7 +403,7 @@ async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{met
 const VOTE_TYPES=['출근','연차','2인1조','투피드','재능기부','열정페이'];
 function getKSTDate(){const d=new Date();d.setHours(d.getHours()+9);return d.toISOString().slice(0,10);}
 const todayStr=getKSTDate();
-let CU=null,groups={},members={},activeGroup='notice',activeStatusGroup='all',voteSettingsGroup='',calY,calM,calSel;
+let CU=null,groups={},members={},activeGroup='',activeStatusGroup='all',voteSettingsGroup='',calY,calM,calSel;
 
 // ── LOGIN ──
 (function(){const s=localStorage.getItem('crew31User');if(s){try{CU=JSON.parse(s);window.addEventListener('DOMContentLoaded',enterApp);}catch{localStorage.removeItem('crew31User');}}})();
@@ -431,6 +431,9 @@ async function enterApp(){
   document.getElementById('hName').textContent=CU.name;
   document.getElementById('hRole').textContent=CU.role==='admin'?'인사팀':'사원';
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=CU.role==='admin'?'':'none');
+  // 공지 작성 버튼: 인사팀만
+  const nwa=document.getElementById('noticeWriteArea');
+  if(nwa)nwa.style.display=CU.role==='admin'?'block':'none';
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   await loadGroups();
   goTab('home');
@@ -443,19 +446,28 @@ async function loadGroups(){
     const def={g1:{name:'좋아요',color:'#FF7F6E'},g2:{name:'댓글',color:'#FFB347'},g3:{name:'시크릿',color:'#5DB88A'}};
     await dbSet('groups',def);groups=def;
   }else groups=g;
+  // 첫 번째 그룹 자동 선택
+  if(!activeGroup||!groups[activeGroup])activeGroup=Object.keys(groups)[0]||'';
   renderAllGroupTabs();
 }
 
 function renderAllGroupTabs(){
-  renderGroupTabsFor('homeGroupTabs','all','setHomeGroup');
+  renderGroupTabsFor('homeGroupTabs',activeGroup);
   renderGroupTabsFor('statusGroupTabs',activeStatusGroup,'setStatusGroup');
   renderVoteGroupTabs();
 }
 
 function renderGroupTabsFor(containerId,activeGid,fn){
   const el=document.getElementById(containerId);if(!el)return;
-  el.innerHTML=`<button class="gtab ${activeGid==='notice'?'active':''}" onclick="${fn}('notice',this)">📢 공지</button>`
-    +Object.entries(groups).map(([id,g])=>`<button class="gtab ${activeGid===id?'active':''}" data-gid="${id}" onclick="checkGroupLock('${id}',this)">${escH(g.name)}${g.lock?'🔒':''}</button>`).join('');
+  const isStatus=!!fn; // fn 있으면 현황 탭 (전체 포함)
+  let html='';
+  if(isStatus){
+    html=`<button class="gtab ${activeGid==='all'?'active':''}" onclick="${fn}('all',this)">전체</button>`;
+    html+=Object.entries(groups).map(([id,g])=>`<button class="gtab ${activeGid===id?'active':''}" data-gid="${id}" onclick="${fn}('${id}',this)">${escH(g.name)}</button>`).join('');
+  }else{
+    html=Object.entries(groups).map(([id,g])=>`<button class="gtab ${activeGid===id?'active':''}" data-gid="${id}" onclick="checkGroupLock('${id}',this)">${escH(g.name)}${g.lock?'🔒':''}</button>`).join('');
+  }
+  el.innerHTML=html;
 }
 
 function renderVoteGroupTabs(){
@@ -464,7 +476,7 @@ function renderVoteGroupTabs(){
   if(!voteSettingsGroup&&Object.keys(groups).length>0)voteSettingsGroup=Object.keys(groups)[0];
 }
 
-function setHomeGroup(gid,btn){activeGroup=gid;document.querySelectorAll('#homeGroupTabs .gtab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');loadHome();}
+function setHomeGroup(gid,btn){activeGroup=gid;document.querySelectorAll('#homeGroupTabs .gtab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');else{const b=document.querySelector(`#homeGroupTabs .gtab[data-gid="${gid}"]`);if(b)b.classList.add('active');}loadHome();}
 function setStatusGroup(gid,btn){activeStatusGroup=gid;document.querySelectorAll('#statusGroupTabs .gtab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');loadStatus();}
 function setVoteSettingsGroup(id,btn){voteSettingsGroup=id;document.querySelectorAll('#voteGroupTabs .gtab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');loadVoteManageList();}
 
@@ -474,30 +486,6 @@ async function loadHome(){
   el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   const [votes,links,notices]=await Promise.all([dbGet('votes'),dbGet('links'),dbGet('notices')]);
   let html='';
-
-  // 공지 탭이면 공지만 표시
-  if(activeGroup==='notice'){
-    if(notices){
-      const nlist=Object.entries(notices).filter(([k,n])=>!n.deleted).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
-      if(nlist.length>0){
-        nlist.forEach(([nid,n])=>{
-          const preview=n.body?(n.body.length>30?n.body.slice(0,30)+'...':n.body):'';
-          html+=`<div class="card" onclick="openNoticeDetailById('${nid}')" style="cursor:pointer;margin-top:8px">`;
-          html+=`<div style="padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px">`;
-          html+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">${escH(n.title)}</div>`;
-          if(preview)html+=`<div style="font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(preview)}</div>`;
-          html+=`<div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(n.createdAt)}</div></div>`;
-          html+=`<span style="color:var(--text3);font-size:16px;flex-shrink:0">›</span></div></div>`;
-        });
-      }else{
-        html='<div class="empty"><div class="empty-icon">📭</div>공지 없음</div>';
-      }
-    }else{
-      html='<div class="empty"><div class="empty-icon">📭</div>공지 없음</div>';
-    }
-    el.innerHTML=html;
-    return;
-  }
 
   // 그룹 탭이면 투표만 표시
   const voteList=votes?Object.entries(votes)
@@ -960,7 +948,7 @@ function cleanInstagramUrl(url){
 async function submitLink(){
   const vid=document.getElementById('linkVoteId').value;
   const nick=document.getElementById('linkNick').value.trim();
-  const url=document.getElementById('linkUrl').value.trim();
+  let url=document.getElementById('linkUrl').value.trim();
   const note=document.getElementById('linkNote').value.trim();
   if(!nick){showToast('닉네임을 입력하세요');return;}
   url=cleanInstagramUrl(url);
@@ -1389,6 +1377,17 @@ function openGroupLockModal(groupId,action){
   document.getElementById('lockPwInput').value='';
   const g=groups[groupId];
   const gName=g?.name||'그룹';
+  const isAdmin=CU?.role==='admin';
+  // 인사팀: 무제한 비번 / 사원: 4자리
+  const pwInput=document.getElementById('lockPwInput');
+  const pwLabel=document.getElementById('lockPwLabel');
+  if(isAdmin){
+    pwInput.maxLength=50;pwInput.inputMode='text';
+    pwLabel.textContent='비밀번호 (자유 입력)';
+  }else{
+    pwInput.maxLength=4;pwInput.inputMode='numeric';
+    pwLabel.textContent='4자리 비밀번호';
+  }
   if(action==='lock'){
     document.getElementById('lockModalTitle').textContent='🔒 잠금 설정';
     document.getElementById('lockModalDesc').textContent=`${gName} 탭에 사용할 비밀번호를 입력하세요`;
@@ -1407,7 +1406,10 @@ function closeGroupLockModal(){document.getElementById('groupLockModal').classLi
 async function confirmGroupLock(){
   const gid=document.getElementById('lockTargetGroupId').value;
   const pw=document.getElementById('lockPwInput').value;
-  if(pw.length!==4||!/^\d{4}$/.test(pw)){showToast('4자리 숫자를 입력하세요');return;}
+  const isAdmin=CU?.role==='admin';
+  // 사원: 4자리 숫자만, 인사팀: 무제한
+  if(!isAdmin&&(pw.length!==4||!/^\d{4}$/.test(pw))){showToast('4자리 숫자를 입력하세요');return;}
+  if(!pw){showToast('비밀번호를 입력하세요');return;}
   const g=await dbGet(`groups/${gid}`);
 
   if(_lockAction==='lock'){
