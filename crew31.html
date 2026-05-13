@@ -375,7 +375,7 @@ async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{met
 
 const VOTE_TYPES=['출근','연차','2인1조','투피드','재능기부','열정페이'];
 const todayStr=new Date().toISOString().slice(0,10);
-let CU=null,groups={},members={},activeGroup='all',activeStatusGroup='all',voteSettingsGroup='',calY,calM,calSel;
+let CU=null,groups={},members={},activeGroup='notice',activeStatusGroup='all',voteSettingsGroup='',calY,calM,calSel;
 
 // ── LOGIN ──
 (function(){const s=localStorage.getItem('crew31User');if(s){try{CU=JSON.parse(s);window.addEventListener('DOMContentLoaded',enterApp);}catch{localStorage.removeItem('crew31User');}}})();
@@ -426,7 +426,7 @@ function renderAllGroupTabs(){
 
 function renderGroupTabsFor(containerId,activeGid,fn){
   const el=document.getElementById(containerId);if(!el)return;
-  el.innerHTML=`<button class="gtab ${activeGid==='all'?'active':''}" onclick="${fn}('all',this)">전체</button>`
+  el.innerHTML=`<button class="gtab ${activeGid==='notice'?'active':''}" onclick="${fn}('notice',this)">📢 공지</button>`
     +Object.entries(groups).map(([id,g])=>`<button class="gtab ${activeGid===id?'active':''}" onclick="${fn}('${id}',this)">${escH(g.name)}</button>`).join('');
 }
 
@@ -447,28 +447,38 @@ async function loadHome(){
   const [votes,links,notices]=await Promise.all([dbGet('votes'),dbGet('links'),dbGet('notices')]);
   let html='';
 
-  // 공지 (최근 2건)
-  if(notices){
-    const nlist=Object.entries(notices).filter(([k,n])=>!n.deleted).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)).slice(0,2);
-    if(nlist.length>0){
-      html+='<div class="stitle">📢 공지</div><div class="card">';
-      nlist.forEach(([,n])=>{
-        html+=`<div style="padding:11px 16px;border-bottom:1px solid var(--border)">`;
-        html+=`<div style="font-size:13px;font-weight:700">${escH(n.title)}</div>`;
-        if(n.body)html+=`<div style="font-size:12px;color:var(--text2);margin-top:3px;line-height:1.5">${escH(n.body)}</div>`;
-        html+=`</div>`;
-      });
-      html+='</div>';
+  // 공지 탭이면 공지만 표시
+  if(activeGroup==='notice'){
+    if(notices){
+      const nlist=Object.entries(notices).filter(([k,n])=>!n.deleted).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
+      if(nlist.length>0){
+        nlist.forEach(([nid,n])=>{
+          const preview=n.body?(n.body.length>30?n.body.slice(0,30)+'...':n.body):'';
+          html+=`<div class="card" onclick="openNoticeDetail('${nid}','${escH(n.title).replace(/'/g,"\'")}','${(n.body||'').replace(/\n/g,' ').replace(/'/g,"\'").slice(0,500)}',${n.createdAt||0})" style="cursor:pointer;margin-top:8px">`;
+          html+=`<div style="padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px">`;
+          html+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">${escH(n.title)}</div>`;
+          if(preview)html+=`<div style="font-size:12px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(preview)}</div>`;
+          html+=`<div style="font-size:11px;color:var(--text3);margin-top:3px">${fmtDate(n.createdAt)}</div></div>`;
+          html+=`<span style="color:var(--text3);font-size:16px;flex-shrink:0">›</span></div></div>`;
+        });
+      }else{
+        html='<div class="empty"><div class="empty-icon">📭</div>공지 없음</div>';
+      }
+    }else{
+      html='<div class="empty"><div class="empty-icon">📭</div>공지 없음</div>';
     }
+    el.innerHTML=html;
+    return;
   }
 
+  // 그룹 탭이면 투표만 표시
   const voteList=votes?Object.entries(votes)
     .filter(([k,v])=>!v.deleted)
-    .filter(([k,v])=>activeGroup==='all'||v.groupId===activeGroup)
+    .filter(([k,v])=>v.groupId===activeGroup)
     .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)):[];
 
-  if(voteList.length===0&&!notices){
-    html+='<div class="empty"><div class="empty-icon">📭</div>투표가 없습니다</div>';
+  if(voteList.length===0){
+    html='<div class="empty"><div class="empty-icon">📭</div>투표가 없습니다</div>';
   }
 
   voteList.forEach(([vid,v])=>{
@@ -573,8 +583,9 @@ async function castVote(vid,optIdx){
   const optName=(v.options||[])[optIdx]||'';
   await dbSet(`calendar/${todayStr}/${CU.key}/${vid}`,{groupId:v.groupId,groupName:gName,option:optName,voteTitle:v.title,time:Date.now()});
 
-  // 오락실 연동 (연차/경품 자동 차감)
-  await syncWithGame(v.groupId,gName,optName);
+  // 오락실 연동 - 업무시작/출근 투표일 때만 차감
+  const isStartVote=v.title.includes('시작')||v.title.includes('출근');
+  if(isStartVote)await syncWithGame(v.groupId,gName,optName);
 
   showToast('✅ 투표 완료!');
   loadHome();
@@ -1024,7 +1035,7 @@ async function loadLeave(){
   const GAME_GROUPS=['좋아요','댓글','시크릿'];
   let targetAccounts=[];
   if(CU?.role==='admin'){
-    // 인사팀: 전체 멤버 연차 현황
+    // 인사팀: 좋아요/댓글/시크릿 그룹별로 묶기
     targetAccounts=Object.entries(gameMembers).map(([k,m])=>({key:k,name:m.name}));
   }else{
     // 사원: 본인 닉네임 포함된 계정들 (좋아요불주먹, 댓글불주먹, 시크릿불주먹)
@@ -1123,6 +1134,11 @@ async function loadLeave(){
       }
 
       html+=`</div></div>`;
+    }
+
+    // 인사팀 그룹 컨테이너 닫기
+    if(CU?.role==='admin'){
+      html+=`</div>`;
     }
   }
 
