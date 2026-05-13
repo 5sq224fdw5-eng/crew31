@@ -1094,7 +1094,7 @@ async function loadLeave(){
     for(const acc of accs){
       const prizes=allMemberPrizes&&allMemberPrizes[acc.key]?Object.entries(allMemberPrizes[acc.key]):[];
       const manualLeave=(allMemberLeave&&allMemberLeave[acc.key])||0;
-      const leaveLog=allLeaveLog&&allLeaveLog[acc.key]?Object.values(allLeaveLog[acc.key]).sort((a,b)=>(b.date||'').localeCompare(a.date||'')):[];
+      const leaveLog=allLeaveLog&&allLeaveLog[acc.key]?Object.values(allLeaveLog[acc.key]).sort((a,b)=>{const dd=(b.date||'').localeCompare(a.date||'');return dd!==0?dd:(b.time||0)-(a.time||0);}):[];
       const prizeLeave=prizes.filter(([k,p])=>p&&!p.deducted&&p.name==='연차').length;
       const totalLeave=manualLeave+prizeLeave;
 
@@ -1192,7 +1192,7 @@ async function adminLeaveAdjust(gameKey, sign){
 
   if(sign>0){
     // 적립
-    await gamePush(`leaveLog/${gameKey}`,{type:'give',amount,date:today,memo});
+    await gamePush(`leaveLog/${gameKey}`,{type:'give',amount,date:today,memo,time:Date.now()});
     const cur=await gameGet(`memberLeave/${gameKey}`)||0;
     await gameSet(`memberLeave/${gameKey}`,cur+amount);
     showToast(`✅ +${amount}일 적립 완료!`);
@@ -1203,7 +1203,7 @@ async function adminLeaveAdjust(gameKey, sign){
     const memberPrizes=await gameGet(`memberPrizes/${gameKey}`);
     const prizeLeave=memberPrizes?Object.values(memberPrizes).filter(p=>p&&!p.deducted&&p.name==='연차').length:0;
     if(cur+prizeLeave<amount){showToast('연차 잔여가 부족합니다');return;}
-    await gamePush(`leaveLog/${gameKey}`,{type:'deduct',amount,date:today,memo});
+    await gamePush(`leaveLog/${gameKey}`,{type:'deduct',amount,date:today,memo,time:Date.now()});
     let remaining=amount;
     if(cur>0){
       const fromManual=Math.min(cur,remaining);
