@@ -45,10 +45,10 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
 .nav::-webkit-scrollbar{display:none;}
 .nav-btn{flex:none;padding:10px 14px;font-size:13px;font-weight:700;color:var(--text3);background:none;border:none;border-bottom:2.5px solid transparent;white-space:nowrap;transition:all 0.15s;}
 .nav-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
-.gtabs{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none;}
+.gtabs{display:flex;background:rgba(255,255,255,0.9);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,200,180,0.4);overflow-x:auto;scrollbar-width:none;position:sticky;top:100px;z-index:98;}
 .gtabs::-webkit-scrollbar{display:none;}
-.gtab{flex:none;padding:7px 18px;border-radius:20px;font-size:13px;font-weight:700;border:1.5px solid var(--border);background:white;color:var(--text2);transition:all 0.2s;}
-.gtab.active{background:linear-gradient(135deg,#FF9F7A,#FF7F6E);color:white;border-color:transparent;box-shadow:0 3px 12px rgba(255,127,110,0.3);}
+.gtab{flex:none;padding:10px 16px;font-size:13px;font-weight:700;color:var(--text3);background:none;border:none;border-bottom:2.5px solid transparent;white-space:nowrap;transition:all 0.15s;cursor:pointer;}
+.gtab.active{color:var(--accent);border-bottom-color:var(--accent);}
 .page{display:none;padding-bottom:80px;}
 .page.active{display:block;}
 .card{background:rgba(255,255,255,0.92);border-radius:20px;box-shadow:var(--shadow);margin:0 16px 12px;overflow:hidden;border:1px solid rgba(255,210,200,0.5);}
@@ -64,7 +64,7 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
 .vopt:last-child{margin-bottom:0;}
 .vopt.selected{border-color:var(--accent);background:rgba(255,127,110,0.06);}
 .vopt.closed{cursor:default;}
-.vbar{position:absolute;left:0;top:0;bottom:0;background:rgba(255,127,110,0.08);transition:width 0.4s;z-index:0;border-radius:12px;}
+.vbar{position:absolute;left:0;top:0;bottom:0;background:rgba(255,127,110,0.08);transition:width 0.4s;z-index:0;border-radius:12px;pointer-events:none;}
 .vopt-label{flex:1;font-size:14px;font-weight:600;position:relative;z-index:1;}
 .vopt-cnt{font-size:12px;font-weight:700;color:var(--text2);position:relative;z-index:1;}
 .vopt-chk{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;position:relative;z-index:1;}
@@ -194,8 +194,8 @@ input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
   </div>
 
   <div class="nav">
-    <button class="nav-btn active" onclick="goTab('home')" data-tab="home">🏠 홈</button>
-    <button class="nav-btn" onclick="goTab('notice')" data-tab="notice">📢 공지</button>
+    <button class="nav-btn active" onclick="goTab('notice')" data-tab="notice">📢 공지</button>
+    <button class="nav-btn" onclick="goTab('home')" data-tab="home">🏠 투표</button>
     <button class="nav-btn" onclick="goTab('calendar')" data-tab="calendar">🗓 캘린더</button>
     <button class="nav-btn" onclick="goTab('leave')" data-tab="leave">🏖️ 연차</button>
     <button class="nav-btn admin-only" onclick="goTab('status')" data-tab="status" style="display:none">📊 현황</button>
@@ -436,7 +436,7 @@ async function enterApp(){
   if(nwa)nwa.style.display=CU.role==='admin'?'block':'none';
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   await loadGroups();
-  goTab('home');
+  goTab('notice');
 }
 
 // ── GROUPS ──
@@ -481,20 +481,32 @@ function setStatusGroup(gid,btn){activeStatusGroup=gid;document.querySelectorAll
 function setVoteSettingsGroup(id,btn){voteSettingsGroup=id;document.querySelectorAll('#voteGroupTabs .gtab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');loadVoteManageList();}
 
 // ── HOME ──
+let _cachedHomeData={votes:null,links:null};
+
+// 카드만 다시 그리기 (Firebase 재요청 없음)
+function renderVoteCards(){
+  const el=document.getElementById('homeContent');
+  if(!el||!_cachedHomeData.votes)return;
+  renderVoteHTML(el,_cachedHomeData.votes,_cachedHomeData.links);
+}
+
 async function loadHome(){
   const el=document.getElementById('homeContent');
   el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  const [votes,links,notices]=await Promise.all([dbGet('votes'),dbGet('links'),dbGet('notices')]);
-  let html='';
+  const [votes,links]=await Promise.all([dbGet('votes'),dbGet('links')]);
+  _cachedHomeData={votes,links};
+  renderVoteHTML(el,votes,links);
+}
 
-  // 그룹 탭이면 투표만 표시
+function renderVoteHTML(el,votes,links){
+  let html='';
   const voteList=votes?Object.entries(votes)
-    .filter(([k,v])=>!v.deleted)
-    .filter(([k,v])=>v.groupId===activeGroup)
+    .filter(([k,v])=>!v.deleted&&v.groupId===activeGroup)
     .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)):[];
 
   if(voteList.length===0){
-    html='<div class="empty"><div class="empty-icon">📭</div>투표가 없습니다</div>';
+    el.innerHTML='<div class="empty"><div class="empty-icon">📭</div>투표가 없습니다</div>';
+    return;
   }
 
   voteList.forEach(([vid,v])=>{
@@ -502,8 +514,12 @@ async function loadHome(){
     const gName=groups[v.groupId]?.name||'';
     const deadline=new Date(v.deadline);
     const isClosed=v.closed||deadline<=new Date();
-    const myVote=CU?.key&&v.responses?v.responses[CU.key]:null;
-    const totalVoters=v.responses?Object.keys(v.responses).length:0;
+    // 낙관적 업데이트: _optimisticVotes 우선, 없으면 서버값
+    const _ov=_optimisticVotes[vid];
+    const myVote=(_ov!==undefined)?(_ov===-1?null:_ov):(CU?.key&&v.responses?v.responses[CU.key]??null:null);
+    // 낙관적일 때 투표수 +1 보정
+    const isOptimistic=_ov!==undefined&&_ov!==-1&&!(CU?.key&&v.responses&&v.responses[CU.key]!==undefined);
+    const totalVoters=(v.responses?Object.keys(v.responses).length:0)+(isOptimistic?1:0);
     const diffH=Math.floor((deadline-new Date())/3600000);
     const ddStr=deadline.toLocaleDateString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
@@ -519,11 +535,12 @@ async function loadHome(){
 
     html+=`<div class="vcard-opts">`;
     (v.options||[]).forEach((opt,i)=>{
-      const cnt=v.responses?Object.values(v.responses).filter(r=>r===i).length:0;
+      let cnt=v.responses?Object.values(v.responses).filter(r=>r===i).length:0;
+      if(isOptimistic&&myVote===i)cnt++;
       const pct=totalVoters>0?Math.round(cnt/totalVoters*100):0;
       const isSel=myVote===i;
       const canVote=!isClosed&&CU?.role==='member'&&myVote===null;
-      html+=`<div class="vopt${isSel?' selected':''}${isClosed||myVote!==null?' closed':''}" ${canVote?`onclick="castVote('${vid}',${i},this)"`:''}>`;
+      html+=`<div class="vopt${isSel?' selected':''}${isClosed||myVote!==null?' closed':''}" ${canVote?`onclick="castVote('${vid}',${i})"`:''}>`;
       if(isClosed||myVote!==null)html+=`<div class="vbar" style="width:${pct}%"></div>`;
       html+=`<div class="vopt-chk">${isSel?'✓':''}</div>`;
       html+=`<div class="vopt-label">${escH(opt)}</div>`;
@@ -588,32 +605,55 @@ async function loadHome(){
 }
 
 // ── VOTE ACTIONS ──
+// 낙관적 업데이트: 로컬에 즉시 반영하고 Firebase는 백그라운드로
+let _optimisticVotes={}; // {vid: optIdx}
+
 async function castVote(vid,optIdx){
   if(!CU?.key){showToast('로그인이 필요합니다');return;}
-  const v=await dbGet(`votes/${vid}`);
-  if(!v||v.closed||new Date(v.deadline)<=new Date()){showToast('투표가 종료되었습니다');return;}
-  await dbSet(`votes/${vid}/responses/${CU.key}`,optIdx);
 
-  // 캘린더 기록
+  // ① 즉시 UI 반영 (낙관적 업데이트)
+  _optimisticVotes[vid]=optIdx;
+  showToast('✅ 투표 완료!');
+  renderVoteCards(); // 전체 reload 없이 카드만 빠르게 갱신
+
+  // ② 백그라운드 검증 + 저장
+  const v=await dbGet(`votes/${vid}`);
+  if(!v||v.closed||new Date(v.deadline)<=new Date()){
+    delete _optimisticVotes[vid];
+    showToast('투표가 종료되었습니다');
+    loadHome();
+    return;
+  }
   const gName=groups[v.groupId]?.name||'';
   const optName=(v.options||[])[optIdx]||'';
-  await dbSet(`calendar/${todayStr}/${CU.key}/${vid}`,{groupId:v.groupId,groupName:gName,option:optName,voteTitle:v.title,time:Date.now()});
 
-  // 오락실 연동 - 업무시작/출근 투표일 때만 차감
-  const isStartVote=v.title.includes('시작')||v.title.includes('출근');
-  if(isStartVote)await syncWithGame(v.groupId,gName,optName);
-
-  showToast('✅ 투표 완료!');
-  loadHome();
+  // 병렬 저장
+  Promise.all([
+    dbSet(`votes/${vid}/responses/${CU.key}`,optIdx),
+    dbSet(`calendar/${todayStr}/${CU.key}/${vid}`,{groupId:v.groupId,groupName:gName,option:optName,voteTitle:v.title,time:Date.now()})
+  ]).then(()=>{
+    // 오락실 연동 백그라운드
+    const isStartVote=v.title.includes('시작')||v.title.includes('출근');
+    if(isStartVote)syncWithGame(v.groupId,gName,optName);
+    loadHome(); // 서버 확정 후 최종 반영
+  });
 }
 
 async function resetVote(vid){
   if(!CU?.key)return;
   if(!confirm('투표를 수정하시겠습니까? 기존 선택이 취소됩니다.'))return;
-  await dbDel(`votes/${vid}/responses/${CU.key}`);
-  await dbDel(`calendar/${todayStr}/${CU.key}/${vid}`);
+  // 낙관적: 즉시 UI에서 제거
+  _optimisticVotes[vid]=-1; // -1 = 취소 표시
+  renderVoteCards();
   showToast('투표가 초기화됐어요. 다시 선택해주세요!');
-  loadHome();
+  // 백그라운드 삭제
+  Promise.all([
+    dbDel(`votes/${vid}/responses/${CU.key}`),
+    dbDel(`calendar/${todayStr}/${CU.key}/${vid}`)
+  ]).then(()=>{
+    delete _optimisticVotes[vid];
+    loadHome();
+  });
 }
 
 async function toggleClose(vid,close){
