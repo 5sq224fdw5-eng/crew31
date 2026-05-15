@@ -193,28 +193,7 @@ button{cursor:pointer;}
 <body>
 <div class="toast" id="toast"></div>
 
-<!-- ══ LOGIN ══ -->
-
-<div id="loginPage">
-  <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;">
-    <div class="login-profile-area">
-      <div class="login-logo">📋</div>
-      <div class="login-title">crew31</div>
-      <div class="login-sub">(주) 떠리원 사무실</div>
-      <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
-        style="margin-top:14px;display:flex;align-items:center;gap:6px;background:rgba(108,53,222,0.12);border:1.5px solid rgba(108,53,222,0.2);color:#6C35DE;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
-        🎡 오락실 바로가기
-      </a>
-    </div>
-    <div class="login-card" style="width:100%;">
-      <div class="login-sec">
-        <div class="login-label">👤 사원으로 시작</div>
-        <input class="fi" id="loginName" placeholder="이름 입력" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" onkeyup="if(event.key==='Enter')doLogin('member')">
-        <button class="login-btn member" onclick="doLogin('member')">입장하기</button>
-      </div>
-      <div class="login-sec">
-        <div class="login-label">🔑 인사팀으로 시작</div>
-        <input class="fi" id="loginPw" type="password" placeholder="비밀번호" onkeyup="if(event.key==='Enter')doLogin('admin')">
+event.key==='Enter')doLogin('admin')">
         <button class="login-btn admin" onclick="doLogin('admin')">인사팀 입장</button>
       </div>
     </div>
