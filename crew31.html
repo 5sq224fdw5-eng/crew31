@@ -1611,9 +1611,9 @@ const DEDUCT_OPTIONS=['출근','업무시작','라이브시작'];
 const shouldDeduct=DEDUCT_OPTIONS.some(o=>optionName.includes(o));
 if(!shouldDeduct)return;
 const DEDUCT_AMOUNT=10;
-const currentCoins=mm.coins||0;
+const currentCoins=mm.stock||0;
 if(currentCoins<DEDUCT_AMOUNT){showToast('⚠️ 오락실 코인 부족');return;}
-await gameSet(`members/${mk}/coins`,currentCoins-DEDUCT_AMOUNT);
+await gameSet(`members/${mk}/stock`,currentCoins-DEDUCT_AMOUNT);
 await gamePush(`coinLog`,{memberKey:mk,name:gameNick,amount:-DEDUCT_AMOUNT,reason:`crew31 투표: ${optionName}`,time:Date.now()});
 }catch(e){console.error('syncWithGame error',e);}
 }
@@ -1712,13 +1712,12 @@ let html='<div style="padding:14px 0 60px">';
 targetAccounts.forEach(({key:mk,name:gNick})=>{
 const m=gameMembers[mk];if(!m)return;
 const prizes=allMemberPrizes?.[mk]?Object.values(allMemberPrizes[mk]).filter(p=>!p.deleted):[];
-const leaveInfo=allMemberLeave?.[mk]||{total:0,used:0};
-const leaveLeft=(leaveInfo.total||0)-(leaveInfo.used||0);
+const leaveLeft=allMemberLeave?.[mk]||0;
 html+=`<div class="card" style="margin:0 14px 12px">`;
 html+=`<div style="padding:14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)">`;
 html+=`<div style="width:36px;height:36px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white">${gNick[0]}</div>`;
 html+=`<div style="flex:1"><div style="font-size:14px;font-weight:800">${escH(gNick)}</div>`;
-html+=`<div style="font-size:11px;color:var(--text3)">코인 ${m.coins||0}개 · 연차 ${leaveLeft}일 남음</div></div></div>`;
+html+=`<div style="font-size:11px;color:var(--text3)">코인 ${m.stock||0}개 · 연차 ${leaveLeft}일</div></div></div>`;
 if(prizes.length>0){
 html+=`<div style="padding:10px 14px">`;
 html+=`<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">🎁 경품 내역</div>`;
