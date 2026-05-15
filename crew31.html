@@ -903,6 +903,19 @@ loadChatMemberCount();
 }
 }
 
+
+function toggleMemberGroup(gName, headerEl){
+  const el=document.getElementById('group_'+gName);
+  const arrow=document.getElementById('arrow_'+gName);
+  if(!el)return;
+  if(el.style.display==='none'){
+    el.style.display='';
+    if(arrow)arrow.textContent='▾';
+  }else{
+    el.style.display='none';
+    if(arrow)arrow.textContent='▸';
+  }
+}
 function backToChatList(){
 _currentChatRoom=null;
 clearInterval(window._chatPoll);
@@ -1073,10 +1086,13 @@ let html='<div style="padding-bottom:60px">';
   if(!list||list.length===0)return;
   const gid=Object.keys(groups).find(id=>groups[id].name===gName);
   const color=groups[gid]?.color||'#FF9F7A';
-  html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px">`;
+  const isOpen=true;
+  html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleMemberGroup('${gName}',this)">`;
   html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
-  html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)}</span>`;
+  html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)} (${list.length})</span>`;
+  html+=`<span style="margin-left:auto;font-size:11px;color:var(--text3)" id="arrow_${gName}">▾</span>`;
   html+=`</div>`;
+  html+=`<div id="group_${gName}">`;
   list.forEach(({key:k,realName,gameName,color})=>{
     const isMe=realName===CU?.name;
     html+=`<div class="member-item" onclick="openDMWithMember('${k}','${escH(realName)}')">`;
@@ -1090,6 +1106,7 @@ let html='<div style="padding-bottom:60px">';
     }
     html+=`</div>`;
   });
+  html+=`</div>`;
 });
 html+='</div>';
 mb.innerHTML=html;
