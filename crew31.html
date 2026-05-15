@@ -1046,63 +1046,55 @@ function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrol
 // ══════════════════════════════════════════════
 async function loadMembersPage(){
 const mb=document.getElementById('mainBody');
-const [mems,grps]=await Promise.all([dbGet('members'),dbGet('groups')]);
-members=mems||{};
+mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+const gameMembers=await gameGet('members');
+if(!gameMembers){mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
 
-if(!mems||Object.keys(mems).length===0){
-mb.innerHTML='<div class="empty"><div class="empty-icon">👥</div>등록된 멤버가 없습니다</div>';
-return;
-}
+const GAME_GROUPS=['좋아요','댓글','시크릿'];
+// 부서별로 그룹핑
+const byGroup={};
+GAME_GROUPS.forEach(g=>{byGroup[g]=[];});
+byGroup['기타']=[];
 
-// 부서별로 그룹핑 (멤버에 groupId 필드가 있으면)
-// 없으면 그냥 전체 리스트
-let html='<div style="padding:14px 0 60px">';
-
-// 부서별 섹션
-if(grps){
-Object.entries(grps).forEach(([gid,g])=>{
-const deptMembers=Object.entries(mems).filter(([k,m])=>m.groupId===gid);
-if(deptMembers.length===0)return;
-html+=`<div style="padding:8px 16px 4px"><div style="font-size:11px;font-weight:700;color:var(--text3);display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${g.color||'#FF7F6E'};display:inline-block"></span>${escH(g.name)}</div></div>`;
-deptMembers.forEach(([k,m])=>{html+=memberRow(k,m,gid,g);});
+Object.entries(gameMembers).forEach(([k,m])=>{
+  if(!m.name)return;
+  const cleanName=m.name.replace(/^\*/,'');
+  const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
+  const realName=group?cleanName.replace(group,''):cleanName;
+  const gColor=groups[Object.keys(groups).find(gid=>groups[gid].name===group)]?.color||'#FF9F7A';
+  const entry={key:k,gameName:m.name,realName,group:group||'기타',color:gColor};
+  if(group)byGroup[group].push(entry);
+  else byGroup['기타'].push(entry);
 });
-// 부서 미배정
-const unassigned=Object.entries(mems).filter(([k,m])=>!m.groupId);
-if(unassigned.length>0){
-html+=`<div style="padding:8px 16px 4px"><div style="font-size:11px;font-weight:700;color:var(--text3)">미배정</div></div>`;
-unassigned.forEach(([k,m])=>{html+=memberRow(k,m,null,null);});
-}
-}else{
-Object.entries(mems).forEach(([k,m])=>{html+=memberRow(k,m,null,null);});
-}
 
+let html='<div style="padding-bottom:60px">';
+[...GAME_GROUPS,'기타'].forEach(gName=>{
+  const list=byGroup[gName];
+  if(!list||list.length===0)return;
+  const gid=Object.keys(groups).find(id=>groups[id].name===gName);
+  const color=groups[gid]?.color||'#FF9F7A';
+  html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px">`;
+  html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
+  html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)}</span>`;
+  html+=`</div>`;
+  list.forEach(({key:k,realName,gameName,color})=>{
+    const isMe=realName===CU?.name;
+    html+=`<div class="member-item" onclick="openDMWithMember('${k}','${escH(realName)}')">`;
+    html+=`<div class="member-avatar" style="background:linear-gradient(135deg,${color},${color}bb)">`;
+    html+=`${(realName||'?')[0]}`;
+    html+=`<div class="member-online-dot"></div></div>`;
+    html+=`<div style="flex:1"><div style="font-size:14px;font-weight:700">${escH(realName)}</div>`;
+    html+=`<div style="font-size:11px;color:var(--text3)">${escH(gName)}</div></div>`;
+    if(!isMe){
+      html+=`<button class="btn-sm sec" onclick="event.stopPropagation();openDMWithMember('${k}','${escH(realName)}')" style="font-size:12px">💬 DM</button>`;
+    }
+    html+=`</div>`;
+  });
+});
 html+='</div>';
 mb.innerHTML=html;
 }
 
-function memberRow(k,m,gid,g){
-const color=g?.color||'#FF9F7A';
-const initial=(m.name||'?')[0];
-let html=`<div class="member-item" onclick="openDMWithMember('${k}','${escH(m.name||'')}')">`;
-html+=`<div class="member-avatar" style="background:linear-gradient(135deg,${color},${color}bb)">`;
-html+=initial;
-html+=`<div class="member-online-dot"></div>`;
-html+=`</div>`;
-html+=`<div style="flex:1"><div style="font-size:14px;font-weight:700">${escH(m.name||'')}</div>`;
-if(g)html+=`<div style="font-size:11px;color:var(--text3)">${escH(g.name)}</div>`;
-html+=`</div>`;
-if(k!==CU?.key){
-html+=`<button class="btn-sm sec" onclick="event.stopPropagation();openDMWithMember('${k}','${escH(m.name||'')}')" style="font-size:12px">💬 DM</button>`;
-}
-html+=`</div>`;
-return html;
-}
-
-function openDMWithMember(memberKey,name){
-if(memberKey===CU?.key){showToast('자신에게는 DM을 보낼 수 없어요');return;}
-_currentChatRoom={type:'dm',id:memberKey,name:`${name}님과 대화`};
-goTab('chat');
-}
 
 // ══════════════════════════════════════════════
 // ── DEPT PAGE (부서별 투표) ──
