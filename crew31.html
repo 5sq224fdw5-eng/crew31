@@ -41,46 +41,49 @@ button{cursor:pointer;}
 #app{height:100vh;flex-direction:row;}
 
 /* ── 사이드바 ── */
-.sidebar{width:60px;min-width:60px;max-width:60px;overflow:hidden;background:var(--sidebar);display:flex;flex-direction:column;height:100vh;overflow:hidden;flex-shrink:0;}
-.sidebar.collapsed{width:0!important;min-width:0!important;max-width:0!important;}
+.sidebar{width:60px;min-width:60px;max-width:60px;background:var(--sidebar);display:flex;flex-direction:column;height:100vh;flex-shrink:0;overflow:hidden;}
 
 /* 프로필 영역 */
-.sb-profile{padding:16px 14px 12px;border-bottom:1px solid rgba(255,255,255,0.07);}
-.sb-logo{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
-.sb-logo-icon{width:28px;height:28px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;}
-.sb-logo-text{font-family:'Nunito',sans-serif;font-size:16px;font-weight:900;color:white;}
-.sb-user{display:flex;align-items:center;gap:10px;}
-.sb-avatar{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white;flex-shrink:0;position:relative;}
+.sb-profile{padding:10px 0 8px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;align-items:center;gap:6px;}
+.sb-logo{display:flex;align-items:center;justify-content:center;}
+.sb-logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.sb-logo-text{display:none;}
+.sb-user{display:flex;align-items:center;justify-content:center;}
+.sb-avatar{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:white;position:relative;}
 .sb-avatar.admin-av{background:linear-gradient(135deg,#FFB347,#FF9F7A);}
-.online-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;background:#5DB88A;border:2px solid var(--sidebar);}
-.sb-user-info{flex:1;min-width:0;}
-.sb-name{font-size:13px;font-weight:700;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sb-role{font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;}
-.sb-logout{background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.5);padding:5px 8px;border-radius:8px;font-size:11px;white-space:nowrap;}
-.sb-logout:hover{background:rgba(255,127,110,0.2);color:#FF9F7A;}
+.online-dot{position:absolute;bottom:-1px;right:-1px;width:8px;height:8px;border-radius:50%;background:#5DB88A;border:2px solid var(--sidebar);}
+.sb-user-info{display:none;}
+.sb-name{display:none;}
+.sb-role{display:none;}
+.sb-logout{display:none;}
+
+/* 나가기 버튼 (아이콘) */
+.sb-logout-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;width:100%;border:none;background:none;color:rgba(255,255,255,0.4);font-size:10px;font-weight:600;cursor:pointer;transition:all 0.12s;}
+.sb-logout-btn:hover{background:rgba(255,92,92,0.15);color:#FF9F7A;}
+.sb-logout-btn span:first-child{font-size:18px;}
 
 /* 메뉴 */
-.sb-menu{flex:1;overflow-y:auto;padding:8px 0;scrollbar-width:none;}
+.sb-menu{flex:1;overflow-y:auto;padding:4px 0;scrollbar-width:none;}
 .sb-menu::-webkit-scrollbar{display:none;}
 .sb-section{padding:2px 0;}
 .sb-section-label{display:none;}
-.sb-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 0;max-width:60px;overflow:hidden;border-radius:0;cursor:pointer;transition:all 0.12s;color:rgba(255,255,255,0.6);font-size:13px;font-weight:600;width:100%;border:none;background:none;text-align:left;position:relative;}
+.sb-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;width:60px;border-radius:0;cursor:pointer;transition:all 0.12s;color:rgba(255,255,255,0.55);font-size:10px;font-weight:600;border:none;background:none;position:relative;overflow:hidden;}
 .sb-item:hover{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);}
 .sb-item.active{background:rgba(255,127,110,0.2);color:#FF9F7A;font-weight:700;}
 .sb-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0;}
-.sb-item-icon{font-size:18px;text-align:center;}
-.sb-badge{background:#FF5C5C;color:white;font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;}
+.sb-item-icon{font-size:18px;}
+.sb-badge{background:#FF5C5C;color:white;font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;min-width:16px;text-align:center;}
 
 /* 부서 서브메뉴 */
-.sb-sub{padding-left:0;}
-.sb-sub-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;max-width:60px;overflow:hidden;cursor:pointer;color:rgba(255,255,255,0.45);font-size:12px;font-weight:600;width:100%;border:none;background:none;text-align:left;transition:all 0.12s;}
+.sb-sub-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;width:60px;cursor:pointer;color:rgba(255,255,255,0.4);font-size:9px;font-weight:600;border:none;background:none;transition:all 0.12s;}
 .sb-sub-item:hover{color:rgba(255,255,255,0.8);background:rgba(255,255,255,0.04);}
 .sb-sub-item.active{color:#FF9F7A;font-weight:700;}
 .sb-dept-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 
 /* 오락실 버튼 */
-.sb-game{margin:8px 10px;background:rgba(108,53,222,0.2);border:1px solid rgba(108,53,222,0.3);color:#A78BFA;padding:9px 12px;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;}
+.sb-game{margin:6px 6px;background:rgba(108,53,222,0.2);border:1px solid rgba(108,53,222,0.3);color:#A78BFA;padding:7px 4px;border-radius:8px;font-size:9px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;}
 .sb-game:hover{background:rgba(108,53,222,0.3);}
+.sb-game-icon{font-size:18px;}
 
 /* ── 메인 콘텐츠 ── */
 .main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg);}
@@ -236,72 +239,57 @@ button{cursor:pointer;}
   <div class="sidebar">
     <!-- 프로필 -->
     <div class="sb-profile">
-      <div class="sb-logo">
-        <div class="sb-logo-icon">📋</div>
-        <div class="sb-logo-text">crew31</div>
-      </div>
+      <div class="sb-logo"><div class="sb-logo-icon">📋</div></div>
       <div class="sb-user">
-        <div class="sb-avatar" id="sbAvatar">
-          <div class="online-dot"></div>
-        </div>
-        <div class="sb-user-info">
-          <div class="sb-name" id="sbName">-</div>
-          <div class="sb-role" id="sbRole">-</div>
-        </div>
-        <button class="sb-logout" onclick="logout()">나가기</button>
+        <div class="sb-avatar" id="sbAvatar"><div class="online-dot"></div></div>
       </div>
     </div>
 
 <!-- 메뉴 -->
 <div class="sb-menu">
-
-  <div class="sb-section"><div class="sb-section-label">커뮤니케이션</div></div>
   <button class="sb-item" data-tab="notice" onclick="goTab('notice')">
-    <span class="sb-item-icon">📢</span> 공지사항
+    <span class="sb-item-icon">📢</span>공지
   </button>
   <button class="sb-item" data-tab="chat" onclick="goTab('chat')">
-    <span class="sb-item-icon">💬</span> 채팅
+    <span class="sb-item-icon">💬</span>채팅
     <span id="chatBadge" style="display:none" class="sb-badge"></span>
   </button>
   <button class="sb-item" data-tab="noti" onclick="goTab('noti')">
-    <span class="sb-item-icon">🔔</span> 알림
+    <span class="sb-item-icon">🔔</span>알림
     <span id="notiBadge" style="display:none" class="sb-badge"></span>
   </button>
-
-  <div class="sb-section" style="margin-top:6px"><div class="sb-section-label">업무분장</div></div>
   <button class="sb-item" data-tab="home" onclick="goTab('home')">
-    <span class="sb-item-icon">💼</span> 전체 투표
+    <span class="sb-item-icon">💼</span>투표
   </button>
   <div id="deptSubMenu"></div>
-
-  <div class="sb-section" style="margin-top:6px"><div class="sb-section-label">근태관리</div></div>
   <button class="sb-item" data-tab="calendar" onclick="goTab('calendar')">
-    <span class="sb-item-icon">🗓</span> 캘린더
+    <span class="sb-item-icon">🗓</span>달력
   </button>
   <button class="sb-item" data-tab="leave" onclick="goTab('leave')">
-    <span class="sb-item-icon">🏖️</span> 연차·경품
+    <span class="sb-item-icon">🏖️</span>연차
   </button>
-
-  <div class="sb-section" style="margin-top:6px"><div class="sb-section-label">멤버</div></div>
   <button class="sb-item" data-tab="members" onclick="goTab('members')">
-    <span class="sb-item-icon">👥</span> 멤버 목록
+    <span class="sb-item-icon">👥</span>멤버
   </button>
-
   <div id="adminMenu" style="display:none">
-    <div class="sb-section" style="margin-top:6px"><div class="sb-section-label">관리</div></div>
     <button class="sb-item" data-tab="status" onclick="goTab('status')">
-      <span class="sb-item-icon">📋</span> 현황
+      <span class="sb-item-icon">📋</span>현황
     </button>
     <button class="sb-item" data-tab="settings" onclick="goTab('settings')">
-      <span class="sb-item-icon">⚙️</span> 설정
+      <span class="sb-item-icon">⚙️</span>설정
     </button>
   </div>
 </div>
 
 <!-- 오락실 -->
 <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank" class="sb-game">
-  🎡 오락실 바로가기
+  <span class="sb-game-icon">🎡</span>오락실
 </a>
+
+<!-- 나가기 -->
+<button class="sb-logout-btn" onclick="logout()">
+  <span>🚪</span>나가기
+</button>
 
   </div>
 
@@ -1039,6 +1027,30 @@ function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrol
 async function loadMembersPage(){
 const mb=document.getElementById('mainBody');
 mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+const isAdmin=CU?.role==='admin';
+
+// ── 관리자: 멤버 추가/수정/삭제 ──
+let adminHtml='';
+if(isAdmin){
+  const crewMembers=await dbGet('members')||{};
+  adminHtml+=`<div style="background:white;border-radius:16px;margin:12px 14px 8px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
+  adminHtml+=`<div style="font-size:13px;font-weight:800;margin-bottom:10px">👥 멤버 관리</div>`;
+  adminHtml+=`<div style="display:flex;gap:8px;margin-bottom:10px">`;
+  adminHtml+=`<input id="newMemberName" class="fi" placeholder="새 멤버 이름" style="flex:1;padding:9px 12px;font-size:13px">`;
+  adminHtml+=`<button onclick="addMember()" style="padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer">추가</button>`;
+  adminHtml+=`</div>`;
+  Object.entries(crewMembers).sort(([,a],[,b])=>(a.name||'').localeCompare(b.name||'','ko')).forEach(([k,m])=>{
+    adminHtml+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">`;
+    adminHtml+=`<span style="font-size:13px;font-weight:600">${escH(m.name||k)}</span>`;
+    adminHtml+=`<div style="display:flex;gap:5px">`;
+    adminHtml+=`<button onclick="editMemberName('${k}','${escH(m.name||'')}',true)" style="font-size:11px;padding:4px 10px;background:var(--surface2);border:none;border-radius:8px;cursor:pointer;font-weight:700">✏️</button>`;
+    adminHtml+=`<button onclick="deleteMember('${k}',true)" style="font-size:11px;padding:4px 10px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;cursor:pointer;font-weight:700">🗑</button>`;
+    adminHtml+=`</div></div>`;
+  });
+  adminHtml+=`</div>`;
+  adminHtml+=`<div style="font-size:11px;font-weight:700;color:var(--text3);padding:6px 16px 4px">오락실 멤버</div>`;
+}
+
 const gameMembers=await gameGet('members');
 if(!gameMembers){mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
 const GAME_GROUPS=['좋아요','댓글','시크릿'];
@@ -1050,9 +1062,9 @@ Object.entries(gameMembers).forEach(([k,m])=>{
   const realName=group?cleanName.replace(group,''):cleanName;
   const gid=Object.keys(groups).find(id=>groups[id].name===group);
   const color=groups[gid]?.color||'#FF9F7A';
-  (byGroup[group||'기타']).push({key:k,realName,group:group||'기타',color});
+  (byGroup[group||'기타']).push({key:k,realName,group:group||'기타',color,gameKey:k});
 });
-let html='<div style="padding-bottom:60px">';
+let html='<div style="padding-bottom:60px">'+adminHtml;
 [...GAME_GROUPS,'기타'].forEach(gName=>{
   const list=byGroup[gName];if(!list||list.length===0)return;
   const gid=Object.keys(groups).find(id=>groups[id].name===gName);
@@ -1076,21 +1088,6 @@ html+='</div>';
 mb.innerHTML=html;
 }
 
-async function openDMWithMember(targetKey,targetName){
-  if(!targetKey||!targetName)return;
-  const myKey=CU?.key||'admin';
-  const roomId=[myKey,targetKey].sort().join('_');
-  _currentChatRoom={type:'dm',id:roomId,name:targetName+' DM',targetKey,targetName};
-  sessionStorage.setItem('joined_dm:'+roomId,'1');
-  goTab('chat');
-}
-
-// ── 채팅 뒤로가기 ──
-function backToChatList(){
-  _currentChatRoom=null;
-  clearInterval(window._chatPoll);
-  loadChatTab();
-}
 </script>
 
 <script>
@@ -1132,12 +1129,10 @@ async function loadLeave(){
     return;
   }
 
-  // Firebase에서 오는 memberPrizes 정규화 (배열 또는 객체)
   const allMemberPrizes={};
   if(rawPrizes){
     Object.entries(rawPrizes).forEach(([mk,val])=>{
       if(!val)return;
-      // 배열이면 그대로, 객체면 values 추출
       allMemberPrizes[mk]=Array.isArray(val)?val:Object.values(val);
     });
   }
@@ -1156,7 +1151,6 @@ async function loadLeave(){
     const color=groups[gid]?.color||'#FF9F7A';
     const stock=m.stock||0;
     const leave=allMemberLeave?.[k]||0;
-    // prizes: [{emoji, name, time, deducted, ...}]
     const prizes=(allMemberPrizes[k]||[]).filter(p=>p&&(p.name||p.emoji));
     (byGroup[group||'기타']).push({key:k,realName,color,stock,leave,prizes});
   });
@@ -1177,16 +1171,34 @@ async function loadLeave(){
 
     list.forEach(({key:k,realName,color,stock,leave,prizes})=>{
       html+=`<div style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
-      html+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:${prizes.length?10:0}px">`;
+      html+=`<div style="display:flex;align-items:center;gap:10px">`;
       html+=`<div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${color},${color}bb);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white">${(realName||'?')[0]}</div>`;
-      html+=`<div><div style="font-size:14px;font-weight:800">${escH(realName)}</div>`;
+      html+=`<div style="flex:1"><div style="font-size:14px;font-weight:800">${escH(realName)}</div>`;
       html+=`<div style="font-size:11px;color:var(--text3)">코인 ${stock}개 · 연차 ${leave}일</div></div></div>`;
 
+      // 관리자: 연차 지급/차감 버튼
+      if(isAdmin){
+        html+=`<div style="display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">`;
+        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);align-self:center;margin-right:2px">🏖️ 연차</div>`;
+        html+=`<button onclick="quickLeave('${k}','${escH(realName)}',1)" style="flex:1;padding:7px;background:rgba(93,184,138,0.12);color:var(--green);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">+1일</button>`;
+        html+=`<button onclick="quickLeave('${k}','${escH(realName)}',3)" style="flex:1;padding:7px;background:rgba(93,184,138,0.12);color:var(--green);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">+3일</button>`;
+        html+=`<button onclick="quickLeave('${k}','${escH(realName)}',-1)" style="flex:1;padding:7px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">-1일</button>`;
+        html+=`<button onclick="customLeave('${k}','${escH(realName)}')" style="flex:1;padding:7px;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">직접</button>`;
+        html+=`</div>`;
+
+        // 경품 지급 버튼
+        html+=`<div style="display:flex;gap:6px;margin-top:6px">`;
+        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);align-self:center;margin-right:2px">🎁 경품</div>`;
+        html+=`<button onclick="quickPrize('${k}','${escH(realName)}','🏖️','연차')" style="flex:1;padding:7px;background:rgba(255,179,71,0.12);color:var(--gold);border:none;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer">🏖️연차</button>`;
+        html+=`<button onclick="quickPrize('${k}','${escH(realName)}','☕','투피드')" style="flex:1;padding:7px;background:rgba(255,179,71,0.12);color:var(--gold);border:none;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer">☕투피드</button>`;
+        html+=`<button onclick="customPrize('${k}','${escH(realName)}')" style="flex:1;padding:7px;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer">직접</button>`;
+        html+=`</div>`;
+      }
+
+      // 경품 내역
       if(prizes.length){
-        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🎁 경품 내역</div>`;
+        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:10px 0 6px">🎁 경품 내역</div>`;
         prizes.forEach((p,pidx)=>{
-          // deducted:true = 이미 차감된 것 (사용완료 처리됨)
-          // deducted:false 또는 없음 = 미사용 (보유중)
           const isUsed=p.deducted===true;
           const prizeName=p.name||(p.emoji||'경품');
           const prizeEmoji=p.emoji||'🎁';
@@ -1214,6 +1226,47 @@ async function loadLeave(){
 
   html+='</div>';
   mb.innerHTML=html;
+}
+
+// 연차 빠른 지급/차감
+async function quickLeave(gameKey,name,days){
+  const cur=await gameGet(`memberLeave/${gameKey}`)||0;
+  const next=Math.max(0,cur+days);
+  await gameSet(`memberLeave/${gameKey}`,next);
+  showToast(`${name}: 연차 ${days>0?'+':''}${days}일 → ${next}일`);
+  loadLeave();
+}
+
+// 연차 직접 입력
+async function customLeave(gameKey,name){
+  const input=prompt(`${name}의 연차 변경\n현재: ${await gameGet(`memberLeave/${gameKey}`)||0}일\n변경할 일수를 입력하세요 (예: +2, -1, 5)`);
+  if(!input)return;
+  const num=parseFloat(input.replace('+',''));
+  if(isNaN(num)){showToast('올바른 숫자를 입력하세요');return;}
+  const isRelative=input.startsWith('+')||input.startsWith('-');
+  const cur=await gameGet(`memberLeave/${gameKey}`)||0;
+  const next=isRelative?Math.max(0,cur+num):Math.max(0,num);
+  await gameSet(`memberLeave/${gameKey}`,next);
+  showToast(`${name}: 연차 → ${next}일`);
+  loadLeave();
+}
+
+// 경품 빠른 지급
+async function quickPrize(gameKey,name,emoji,prizeName){
+  const raw=await gameGet(`memberPrizes/${gameKey}`);
+  const arr=Array.isArray(raw)?[...raw]:(raw?Object.values(raw):[]);
+  arr.push({emoji,name:prizeName,time:Date.now(),deducted:false,memo:''});
+  await gameSet(`memberPrizes/${gameKey}`,arr);
+  showToast(`✅ ${name}에게 ${emoji}${prizeName} 지급!`);
+  loadLeave();
+}
+
+// 경품 직접 입력
+async function customPrize(gameKey,name){
+  const emoji=prompt(`${name}에게 지급할 경품 이모지를 입력하세요\n예: 🎁 ☕ 🍕`)||'🎁';
+  const prizeName=prompt(`경품 이름을 입력하세요`);
+  if(!prizeName)return;
+  await quickPrize(gameKey,name,emoji.trim(),prizeName.trim());
 }
 
 async function togglePrizeUsed(memberKey, prizeIdx, newDeducted){
