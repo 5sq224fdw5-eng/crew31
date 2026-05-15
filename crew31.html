@@ -41,52 +41,52 @@ button{cursor:pointer;}
 #app{height:100vh;flex-direction:row;}
 
 /* ── 사이드바 ── */
-.sidebar{width:180px;min-width:180px;background:var(--sidebar);display:flex;flex-direction:column;height:100vh;overflow:hidden;flex-shrink:0;transition:width 0.25s ease,min-width 0.25s ease;}
-.sidebar.collapsed{width:0;min-width:0;}
+.sidebar{width:60px;min-width:60px;background:var(--sidebar);display:flex;flex-direction:column;height:100vh;overflow:hidden;flex-shrink:0;transition:width 0.25s ease,min-width 0.25s ease;}
+.sidebar.collapsed{width:0!important;min-width:0!important;}
 .sb-toggle{width:36px;height:36px;background:var(--sidebar);border:none;border-radius:10px;color:white;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
-.sb-toggle.open{left:188px;}
-@media(max-width:600px){.sidebar{width:160px;min-width:160px;}.sidebar.collapsed{width:0;min-width:0;}.sb-toggle.open{left:168px;}}
+
+@media(max-width:600px){.sidebar.collapsed{width:0!important;min-width:0!important;}}
 @media(max-width:600px){
 .sidebar{width:200px;min-width:200px;}
-.sidebar.collapsed{width:0;min-width:0;}
+.sidebar.collapsed{width:0!important;min-width:0!important;}
 }
 
 /* 프로필 영역 */
-.sb-profile{padding:16px 14px 12px;border-bottom:1px solid rgba(255,255,255,0.07);}
-.sb-logo{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.sb-profile{padding:10px 6px 8px;border-bottom:1px solid rgba(255,255,255,0.07);}
+.sb-logo{display:none;}
 .sb-logo-icon{width:28px;height:28px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;}
 .sb-logo-text{font-family:'Nunito',sans-serif;font-size:16px;font-weight:900;color:white;}
-.sb-user{display:flex;align-items:center;gap:10px;}
+.sb-user{display:flex;flex-direction:column;align-items:center;gap:4px;}
 .sb-avatar{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white;flex-shrink:0;position:relative;}
 .sb-avatar.admin-av{background:linear-gradient(135deg,#FFB347,#FF9F7A);}
 .online-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;background:#5DB88A;border:2px solid var(--sidebar);}
-.sb-user-info{flex:1;min-width:0;}
+.sb-user-info{display:none;}
 .sb-name{font-size:13px;font-weight:700;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sb-role{font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;}
-.sb-logout{background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.5);padding:5px 8px;border-radius:8px;font-size:11px;white-space:nowrap;}
+.sb-logout{background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.5);padding:3px 6px;border-radius:6px;font-size:10px;white-space:nowrap;}
 .sb-logout:hover{background:rgba(255,127,110,0.2);color:#FF9F7A;}
 
 /* 메뉴 */
 .sb-menu{flex:1;overflow-y:auto;padding:8px 0;scrollbar-width:none;}
 .sb-menu::-webkit-scrollbar{display:none;}
-.sb-section{padding:6px 14px 2px;}
-.sb-section-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.3);letter-spacing:0.8px;text-transform:uppercase;}
-.sb-item{display:flex;align-items:center;gap:9px;padding:9px 14px;border-radius:0;cursor:pointer;transition:all 0.12s;color:rgba(255,255,255,0.6);font-size:13px;font-weight:600;width:100%;border:none;background:none;text-align:left;position:relative;}
+.sb-section{padding:4px 0 0;}
+.sb-section-label{display:none;}
+.sb-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px;border-radius:0;cursor:pointer;transition:all 0.12s;color:rgba(255,255,255,0.6);font-size:10px;font-weight:600;width:100%;border:none;background:none;text-align:center;position:relative;}
 .sb-item:hover{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);}
 .sb-item.active{background:rgba(255,127,110,0.2);color:#FF9F7A;font-weight:700;}
 .sb-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0;}
-.sb-item-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
-.sb-badge{margin-left:auto;background:#FF5C5C;color:white;font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;}
+.sb-item-icon{font-size:18px;width:24px;text-align:center;}
+.sb-badge{background:#FF5C5C;color:white;font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;}
 
 /* 부서 서브메뉴 */
 .sb-sub{padding-left:0;}
-.sb-sub-item{display:flex;align-items:center;gap:8px;padding:7px 14px 7px 40px;cursor:pointer;color:rgba(255,255,255,0.45);font-size:12px;font-weight:600;width:100%;border:none;background:none;text-align:left;transition:all 0.12s;}
+.sb-sub-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 4px;cursor:pointer;color:rgba(255,255,255,0.45);font-size:9px;font-weight:600;width:100%;border:none;background:none;text-align:center;transition:all 0.12s;}
 .sb-sub-item:hover{color:rgba(255,255,255,0.8);background:rgba(255,255,255,0.04);}
 .sb-sub-item.active{color:#FF9F7A;font-weight:700;}
 .sb-dept-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 
 /* 오락실 버튼 */
-.sb-game{margin:8px 10px;background:rgba(108,53,222,0.2);border:1px solid rgba(108,53,222,0.3);color:#A78BFA;padding:9px 12px;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;}
+.sb-game{margin:6px 4px;background:rgba(108,53,222,0.2);border:1px solid rgba(108,53,222,0.3);color:#A78BFA;padding:7px 4px;border-radius:8px;font-size:9px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px;}
 .sb-game:hover{background:rgba(108,53,222,0.3);}
 
 /* ── 메인 콘텐츠 ── */
@@ -243,67 +243,72 @@ button{cursor:pointer;}
   <div class="sidebar" id="sidebar">
     <!-- 프로필 -->
     <div class="sb-profile">
-      <div class="sb-logo">
-        <div class="sb-logo-icon">📋</div>
-        <div class="sb-logo-text">crew31</div>
-      </div>
-      <div class="sb-user">
-        <div class="sb-avatar" id="sbAvatar">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div class="sb-avatar" id="sbAvatar" style="width:32px;height:32px;font-size:13px;">
           <div class="online-dot"></div>
         </div>
-        <div class="sb-user-info">
-          <div class="sb-name" id="sbName">-</div>
-          <div class="sb-role" id="sbRole">-</div>
-        </div>
-        <button class="sb-logout" onclick="logout()">나가기</button>
+        <button class="sb-logout" onclick="logout()" style="font-size:9px;padding:2px 4px;width:48px;">나가기</button>
       </div>
     </div>
 
 <!-- 메뉴 -->
-<div class="sb-menu">
+<div class="sb-menu" style="overflow:hidden;">
 
-  <div class="sb-section"><div class="sb-section-label">커뮤니케이션</div></div>
-  <button class="sb-item active" data-tab="notice" onclick="goTab('notice')">
-    <span class="sb-item-icon">📢</span> 공지사항
+  <button class="sb-item active" data-tab="notice" onclick="goTab('notice')" style="padding:10px 0;">
+    <span class="sb-item-icon">📢</span>
+    <span style="font-size:9px;color:inherit;white-space:nowrap;overflow:hidden;width:56px;text-align:center;display:block;text-overflow:clip;">공지</span>
   </button>
-  <button class="sb-item" data-tab="chat" onclick="goTab('chat')">
-    <span class="sb-item-icon">💬</span> 채팅
+  <button class="sb-item" data-tab="chat" onclick="goTab('chat')" style="padding:10px 0;">
+    <span class="sb-item-icon">💬</span>
+    <span style="font-size:9px;color:inherit;white-space:nowrap;overflow:hidden;width:56px;text-align:center;display:block;">채팅</span>
     <span id="chatBadge" style="display:none" class="sb-badge"></span>
   </button>
 
-  <div class="sb-section" style="margin-top:6px"><div class="sb-section-label">업무분장</div></div>
-  <button class="sb-item" data-tab="home" onclick="goTab('home')">
-    <span class="sb-item-icon">💼</span> 전체 투표
+  <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 8px;"></div>
+
+  <button class="sb-item" data-tab="home" onclick="goTab('home')" style="padding:10px 0;">
+    <span class="sb-item-icon">💼</span>
+    <span style="font-size:9px;color:inherit;width:56px;text-align:center;display:block;">전체투표</span>
   </button>
   <div id="deptSubMenu"></div>
 
-  <div class="sb-section" style="margin-top:6px"><div class="sb-section-label">근태관리</div></div>
-  <button class="sb-item" data-tab="calendar" onclick="goTab('calendar')">
-    <span class="sb-item-icon">🗓</span> 캘린더
+  <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 8px;"></div>
+
+  <button class="sb-item" data-tab="calendar" onclick="goTab('calendar')" style="padding:10px 0;">
+    <span class="sb-item-icon">🗓</span>
+    <span style="font-size:9px;color:inherit;width:56px;text-align:center;display:block;">캘린더</span>
   </button>
-  <button class="sb-item" data-tab="leave" onclick="goTab('leave')">
-    <span class="sb-item-icon">🏖️</span> 연차·경품
+  <button class="sb-item" data-tab="leave" onclick="goTab('leave')" style="padding:10px 0;">
+    <span class="sb-item-icon">🏖️</span>
+    <span style="font-size:9px;color:inherit;width:56px;text-align:center;display:block;">연차</span>
   </button>
 
-  <div class="sb-section" style="margin-top:6px"><div class="sb-section-label">멤버</div></div>
-  <button class="sb-item" data-tab="members" onclick="goTab('members')">
-    <span class="sb-item-icon">👥</span> 멤버 목록
+  <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 8px;"></div>
+
+  <button class="sb-item" data-tab="members" onclick="goTab('members')" style="padding:10px 0;">
+    <span class="sb-item-icon">👥</span>
+    <span style="font-size:9px;color:inherit;width:56px;text-align:center;display:block;">멤버</span>
   </button>
 
   <div id="adminMenu" style="display:none">
-    <div class="sb-section" style="margin-top:6px"><div class="sb-section-label">관리</div></div>
-    <button class="sb-item" data-tab="status" onclick="goTab('status')">
-      <span class="sb-item-icon">📋</span> 현황
+    <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 8px;"></div>
+    <button class="sb-item" data-tab="status" onclick="goTab('status')" style="padding:10px 0;">
+      <span class="sb-item-icon">📋</span>
+      <span style="font-size:9px;color:inherit;width:56px;text-align:center;display:block;">현황</span>
     </button>
-    <button class="sb-item" data-tab="settings" onclick="goTab('settings')">
-      <span class="sb-item-icon">⚙️</span> 설정
+    <button class="sb-item" data-tab="settings" onclick="goTab('settings')" style="padding:10px 0;">
+      <span class="sb-item-icon">⚙️</span>
+      <span style="font-size:9px;color:inherit;width:56px;text-align:center;display:block;">설정</span>
     </button>
   </div>
 </div>
 
+</div>
+
 <!-- 오락실 -->
-<a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank" class="sb-game">
-  🎡 오락실 바로가기
+<a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank" class="sb-game" style="margin:6px 4px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;text-decoration:none;">
+  <span style="font-size:18px;">🎡</span>
+  <span>오락실</span>
 </a>
 
   </div><!-- /sidebar -->
@@ -574,9 +579,10 @@ function renderDeptSubMenu(){
   if(!el)return;
   el.innerHTML=Object.entries(groups).map(([id,g])=>{
     const isActive=_currentTab==='dept'&&_currentDept===id;
-    return `<button class="sb-sub-item${isActive?' active':''}" onclick="goDept('${id}')">
-      <span class="sb-dept-dot" style="background:${g.color||'#FF7F6E'}"></span>
-      ${escH(g.name)}${g.lock?'🔒':''}
+    const nm=g.name.length>3?g.name.slice(0,3):g.name;
+    return `<button class="sb-sub-item${isActive?' active':''}" onclick="goDept('${id}')" style="padding:7px 0;display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;border:none;background:none;cursor:pointer;transition:all 0.12s;">
+      <span style="width:8px;height:8px;border-radius:50%;background:${g.color||'#FF7F6E'};display:inline-block;"></span>
+      <span style="font-size:9px;color:${isActive?'#FF9F7A':'rgba(255,255,255,0.45)'};font-weight:${isActive?700:600};width:56px;text-align:center;white-space:nowrap;overflow:hidden;">${escH(nm)}${g.lock?'🔒':''}</span>
     </button>`;
   }).join('');
 }
