@@ -58,6 +58,9 @@ button{cursor:pointer;}
 .sb-role{font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px;}
 .sb-logout{background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.5);padding:5px 8px;border-radius:8px;font-size:11px;white-space:nowrap;}
 .sb-logout:hover{background:rgba(255,127,110,0.2);color:#FF9F7A;}
+/* 60px 사이드바: 나가기 아이콘 버튼 */
+.sb-logout-icon{display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 0;width:100%;border:none;background:none;color:rgba(255,255,255,0.45);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.12s;}
+.sb-logout-icon:hover{background:rgba(255,127,110,0.15);color:#FF9F7A;}
 
 /* 메뉴 */
 .sb-menu{flex:1;overflow-y:auto;padding:8px 0;scrollbar-width:none;}
@@ -234,21 +237,11 @@ button{cursor:pointer;}
   <!-- ▌사이드바 ▌ -->
 
   <div class="sidebar">
-    <!-- 프로필 -->
-    <div class="sb-profile">
-      <div class="sb-logo">
-        <div class="sb-logo-icon">📋</div>
-        <div class="sb-logo-text">crew31</div>
-      </div>
-      <div class="sb-user">
-        <div class="sb-avatar" id="sbAvatar">
-          <div class="online-dot"></div>
-        </div>
-        <div class="sb-user-info">
-          <div class="sb-name" id="sbName">-</div>
-          <div class="sb-role" id="sbRole">-</div>
-        </div>
-        <button class="sb-logout" onclick="logout()">나가기</button>
+    <!-- 프로필 (60px 아이콘 전용) -->
+    <div class="sb-profile" style="padding:12px 0 8px;display:flex;flex-direction:column;align-items:center;gap:6px;border-bottom:1px solid rgba(255,255,255,0.07);">
+      <div style="width:32px;height:32px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">📋</div>
+      <div class="sb-avatar" id="sbAvatar" style="width:32px;height:32px;border-radius:10px;font-size:14px;position:relative;">
+        <div class="online-dot"></div>
       </div>
     </div>
 
@@ -299,7 +292,13 @@ button{cursor:pointer;}
   🎡 오락실 바로가기
 </a>
 
-  </div>
+  <!-- 나가기 아이콘 버튼 (항상 보임) -->
+  <button class="sb-logout-icon" onclick="logout()" title="나가기">
+    <span style="font-size:18px">🚪</span>
+    <span>나가기</span>
+  </button>
+
+  </div><!-- /sidebar -->
 
   <!-- ▌메인 ▌ -->
 
@@ -846,7 +845,7 @@ const mb=document.getElementById('mainBody');
 const isAdmin=CU?.role==='admin';
 if(!_currentChatRoom){
   let html='<div style="padding-bottom:60px">';
-  html+=`<div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--text3)">채팅방</div>`;
+  html+=`<div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--text3)">그룹 채팅</div>`;
   const allJoined=isJoined({type:'all',id:'all'});
   html+=`<div class="chat-room-item" onclick="selectChatRoom('all','all','전체 채팅')">`;
   html+=`<div class="chat-room-avatar" style="background:linear-gradient(135deg,#FF9F7A,#FF7F6E);color:white">💬</div>`;
@@ -863,6 +862,9 @@ if(!_currentChatRoom){
     if(isAdmin)html+=`<button onclick="event.stopPropagation();toggleChatLock('dept','${gid}')" style="font-size:11px;padding:4px 8px;border-radius:8px;border:none;cursor:pointer;background:${g.lock?'rgba(255,92,92,0.1)':'var(--surface2)'};color:${g.lock?'var(--red)':'var(--text2)'};margin-right:4px">${g.lock?'🔒':'🔓'}</button>`;
     html+=`<span style="font-size:20px;color:var(--text3)">›</span></div>`;
   });
+  // DM 섹션
+  html+=`<div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--text3);margin-top:4px">💬 1:1 DM</div>`;
+  html+=`<div style="padding:8px 16px;font-size:13px;color:var(--text3)">멤버 목록에서 DM 버튼을 눌러 대화를 시작하세요.</div>`;
   html+='</div>';
   mb.innerHTML=html;return;
 }
@@ -1072,8 +1074,11 @@ async function openDMWithMember(targetKey,targetName){
   if(!targetKey||!targetName)return;
   const myKey=CU?.key||'admin';
   const roomId=[myKey,targetKey].sort().join('_');
-  _currentChatRoom={type:'dm',id:roomId,name:targetName+' DM',targetKey,targetName};
-  sessionStorage.setItem('joined_dm:'+roomId,'1');
+  _currentChatRoom={type:'dm',id:roomId,name:`💬 ${targetName}`,targetKey,targetName};
+  // DM은 비밀번호 없이 자동 입장
+  setJoined(_currentChatRoom,true);
+  // 첫 입장 메시지
+  const path=getChatPath(_currentChatRoom);
   goTab('chat');
 }
 
@@ -1085,59 +1090,583 @@ function backToChatList(){
 }
 </script>
 
-</body>
-</htmlasync function loadLeave(){
-const mb=document.getElementById('mainBody');
-mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-const [gameMembers,allMemberPrizes,allMemberLeave]=await Promise.all([
-  gameGet('members'),gameGet('memberPrizes'),gameGet('memberLeave')
-]);
-if(!gameMembers){mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
-const GAME_GROUPS=['좋아요','댓글','시크릿'];
-const byGroup={};GAME_GROUPS.forEach(g=>{byGroup[g]=[];});byGroup['기타']=[];
-Object.entries(gameMembers).forEach(([k,m])=>{
-  if(!m.name)return;
-  const cleanName=m.name.replace(/^\*/,'');
-  const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
-  const realName=group?cleanName.replace(group,''):cleanName;
-  const gid=Object.keys(groups).find(id=>groups[id].name===group);
-  const color=groups[gid]?.color||'#FF9F7A';
-  const stock=m.stock||0;const leave=allMemberLeave?.[k]||0;
-  const prizes=allMemberPrizes?.[k]?Object.entries(allMemberPrizes[k]):[];
-  (byGroup[group||'기타']).push({key:k,realName,color,stock,leave,prizes});
-});
-const isAdmin=CU?.role==='admin';
-let html='<div style="padding-bottom:60px">';
-[...GAME_GROUPS,'기타'].forEach(gName=>{
-  const list=byGroup[gName];if(!list||list.length===0)return;
-  const gid=Object.keys(groups).find(id=>groups[id].name===gName);
-  const color=groups[gid]?.color||'#FF9F7A';
-  html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleLeaveGroup('${gName}')">`;
-  html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
-  html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)} (${list.length})</span>`;
-  html+=`<span style="margin-left:auto;font-size:11px;color:var(--text3)" id="larrow_${gName}">▸</span></div>`;
-  html+=`<div id="lgroup_${gName}" style="display:none">`;
-  list.forEach(({key:k,realName,color,stock,leave,prizes})=>{
-    html+=`<div style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
-    html+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:${prizes.length?10:0}px">`;
-    html+=`<div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${color},${color}bb);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white">${(realName||'?')[0]}</div>`;
-    html+=`<div><div style="font-size:14px;font-weight:800">${escH(realName)}</div><div style="font-size:11px;color:var(--text3)">코인 ${stock}개 · 연차 ${leave}일</div></div></div>`;
-    if(prizes.length){
-      html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🎁 경품 내역</div>`;
-      prizes.forEach(([pid,p])=>{
-        const used=p.used||false;
-        html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">`;
-        html+=`<span style="font-size:13px">${escH(p.name||p.emoji||'경품')}</span>`;
-        if(isAdmin)html+=`<button onclick="togglePrizeUsed('${k}','${pid}',${!used})" style="font-size:11px;padding:3px 10px;border-radius:10px;border:none;cursor:pointer;background:${used?'var(--surface2)':'var(--green)'};color:${used?'var(--text3)':'white'};font-weight:700">${used?'미사용':'사용완료'}</button>`;
-        else html+=`<span style="font-size:11px;padding:3px 10px;border-radius:10px;background:${used?'var(--surface2)':'rgba(93,184,138,0.15)'};color:${used?'var(--text3)':'var(--green)'};font-weight:700">${used?'미사용':'사용완료'}</span>`;
-        html+=`</div>`;
-      });
-    }
+<script>
+// ══════════════════════════════════════════════
+// ── MEMBER GROUP TOGGLE ──
+// ══════════════════════════════════════════════
+function toggleMemberGroup(gName){
+  const el=document.getElementById('group_'+gName);
+  const arrow=document.getElementById('arrow_'+gName);
+  if(!el)return;
+  const open=el.style.display==='none'||el.style.display==='';
+  el.style.display=open?'block':'none';
+  if(arrow)arrow.textContent=open?'▾':'▸';
+}
+
+function toggleLeaveGroup(gName){
+  const el=document.getElementById('lgroup_'+gName);
+  const arrow=document.getElementById('larrow_'+gName);
+  if(!el)return;
+  const open=el.style.display==='none'||el.style.display==='';
+  el.style.display=open?'block':'none';
+  if(arrow)arrow.textContent=open?'▾':'▸';
+}
+
+// ══════════════════════════════════════════════
+// ── LEAVE PAGE (FULL) ──
+// ══════════════════════════════════════════════
+async function loadLeave(){
+  const mb=document.getElementById('mainBody');
+  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const [gameMembers,allMemberPrizes,allMemberLeave]=await Promise.all([
+    gameGet('members'),gameGet('memberPrizes'),gameGet('memberLeave')
+  ]);
+  if(!gameMembers){mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
+  const GAME_GROUPS=['좋아요','댓글','시크릿'];
+  const byGroup={};GAME_GROUPS.forEach(g=>{byGroup[g]=[];});byGroup['기타']=[];
+  Object.entries(gameMembers).forEach(([k,m])=>{
+    if(!m.name)return;
+    const cleanName=m.name.replace(/^\*/,'');
+    const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
+    const realName=group?cleanName.replace(group,''):cleanName;
+    const gid=Object.keys(groups).find(id=>groups[id].name===group);
+    const color=groups[gid]?.color||'#FF9F7A';
+    const stock=m.stock||0;const leave=allMemberLeave?.[k]||0;
+    const prizes=allMemberPrizes?.[k]?Object.entries(allMemberPrizes[k]):[];
+    (byGroup[group||'기타']).push({key:k,realName,color,stock,leave,prizes});
+  });
+  const isAdmin=CU?.role==='admin';
+  let html='<div style="padding-bottom:60px">';
+  [...GAME_GROUPS,'기타'].forEach(gName=>{
+    const list=byGroup[gName];if(!list||list.length===0)return;
+    const gid=Object.keys(groups).find(id=>groups[id].name===gName);
+    const color=groups[gid]?.color||'#FF9F7A';
+    html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleLeaveGroup('${gName}')">`;
+    html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
+    html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)} (${list.length})</span>`;
+    html+=`<span style="margin-left:auto;font-size:11px;color:var(--text3)" id="larrow_${gName}">▸</span></div>`;
+    html+=`<div id="lgroup_${gName}" style="display:none">`;
+    list.forEach(({key:k,realName,color,stock,leave,prizes})=>{
+      html+=`<div style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
+      html+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:${prizes.length?10:0}px">`;
+      html+=`<div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${color},${color}bb);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white">${(realName||'?')[0]}</div>`;
+      html+=`<div><div style="font-size:14px;font-weight:800">${escH(realName)}</div><div style="font-size:11px;color:var(--text3)">코인 ${stock}개 · 연차 ${leave}일</div></div></div>`;
+      if(prizes.length){
+        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🎁 경품 내역</div>`;
+        prizes.forEach(([pid,p])=>{
+          const used=p.used||false;
+          html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">`;
+          html+=`<span style="font-size:13px">${escH(p.name||p.emoji||'경품')}</span>`;
+          if(isAdmin)html+=`<button onclick="togglePrizeUsed('${k}','${pid}',${!used})" style="font-size:11px;padding:3px 10px;border-radius:10px;border:none;cursor:pointer;background:${used?'var(--surface2)':'var(--green)'};color:${used?'var(--text3)':'white'};font-weight:700">${used?'미사용':'사용완료'}</button>`;
+          else html+=`<span style="font-size:11px;padding:3px 10px;border-radius:10px;background:${used?'var(--surface2)':'rgba(93,184,138,0.15)'};color:${used?'var(--text3)':'var(--green)'};font-weight:700">${used?'미사용':'사용완료'}</span>`;
+          html+=`</div>`;
+        });
+      }
+      html+=`</div>`;
+    });
     html+=`</div>`;
   });
-  html+=`</div>`;
-});
-html+='</div>';
-mb.innerHTML=html;
+  html+='</div>';
+  mb.innerHTML=html;
 }
->
+
+async function togglePrizeUsed(memberKey,prizeId,newVal){
+  await gameSet(`memberPrizes/${memberKey}/${prizeId}/used`,newVal);
+  showToast(newVal?'✅ 사용완료 처리':'↩️ 미사용으로 변경');
+  loadLeave();
+}
+
+// ══════════════════════════════════════════════
+// ── GROUP LOCK MODAL ──
+// ══════════════════════════════════════════════
+function openGroupLockModal(gid,action){
+  _lockAction={gid,action};
+  const g=groups[gid];
+  const isLocked=!!g?.lock;
+  document.getElementById('lockTargetGroupId').value=gid;
+  if(action==='enter'){
+    document.getElementById('lockModalTitle').textContent='🔒 비밀번호 입력';
+    document.getElementById('lockModalDesc').textContent=`${g?.name||''} 그룹은 잠겨있습니다.`;
+    document.getElementById('lockPwLabel').textContent='비밀번호';
+  } else if(action==='lock'){
+    document.getElementById('lockModalTitle').textContent='🔒 잠금 설정';
+    document.getElementById('lockModalDesc').textContent='새 비밀번호를 입력하세요.';
+    document.getElementById('lockPwLabel').textContent='새 비밀번호 (4자리)';
+  } else if(action==='unlock'){
+    document.getElementById('lockModalTitle').textContent='🔓 잠금 해제';
+    document.getElementById('lockModalDesc').textContent='현재 비밀번호를 입력하세요.';
+    document.getElementById('lockPwLabel').textContent='현재 비밀번호';
+  }
+  document.getElementById('lockPwInput').value='';
+  document.getElementById('groupLockModal').classList.add('active');
+}
+
+function closeGroupLockModal(){
+  document.getElementById('groupLockModal').classList.remove('active');
+  _lockAction=null;
+}
+
+async function confirmGroupLock(){
+  const pw=document.getElementById('lockPwInput').value;
+  if(!pw){showToast('비밀번호를 입력하세요');return;}
+  const action=_lockAction;
+  if(!action)return;
+  const {gid}=action;
+
+  if(action.action==='enter'){
+    if(groups[gid]?.lock!==pw){showToast('비밀번호가 틀렸습니다');return;}
+    sessionStorage.setItem('unlockedGroup_'+gid,'1');
+    closeGroupLockModal();
+    if(_pendingDept){const d=_pendingDept;_pendingDept=null;goDept(d);}
+  } else if(action.action==='lock'){
+    if(pw.length<4){showToast('4자리 이상 입력하세요');return;}
+    await dbSet(`groups/${gid}/lock`,pw);
+    groups[gid].lock=pw;
+    showToast('🔒 잠금 설정됨');
+    closeGroupLockModal();
+    renderDeptSubMenu();
+    loadChatTab();
+  } else if(action.action==='unlock'){
+    if(groups[gid]?.lock!==pw){showToast('비밀번호가 틀렸습니다');return;}
+    await dbSet(`groups/${gid}/lock`,null);
+    groups[gid].lock=null;
+    showToast('🔓 잠금 해제됨');
+    closeGroupLockModal();
+    renderDeptSubMenu();
+    loadChatTab();
+  }
+}
+
+// ══════════════════════════════════════════════
+// ── CHAT LOCK (관리자) ──
+// ══════════════════════════════════════════════
+async function toggleChatLock(type,id){
+  if(CU?.role!=='admin'){showToast('관리자만 가능합니다');return;}
+  if(type==='dept'){
+    const g=groups[id];
+    if(!g)return;
+    if(g.lock){
+      // 잠금 해제
+      await dbSet(`groups/${id}/lock`,null);
+      groups[id].lock=null;
+      showToast('🔓 채팅 잠금 해제됨');
+    } else {
+      // 잠금 설정 모달
+      openGroupLockModal(id,'lock');
+      return;
+    }
+  } else if(type==='all'){
+    // 전체 채팅 잠금은 별도 플래그
+    const cur=await dbGet('chatLock/all');
+    if(cur){
+      await dbSet('chatLock/all',null);
+      showToast('🔓 전체 채팅 잠금 해제됨');
+    } else {
+      await dbSet('chatLock/all',true);
+      showToast('🔒 전체 채팅 잠금됨');
+    }
+  }
+  loadChatTab();
+}
+
+// ══════════════════════════════════════════════
+// ── DM (1:1 채팅) ──
+// ══════════════════════════════════════════════
+async function sendDM(){
+  const inp=document.getElementById('dmInput');
+  const body=inp?.value.trim();
+  if(!body||!_currentChatRoom)return;
+  inp.value='';
+  const msg={body,senderName:CU.name,senderKey:CU.key||'admin',senderRole:CU.role,time:Date.now()};
+  const path=getChatPath(_currentChatRoom);
+  await dbPush(path,msg);
+  await fetchChatMessages();
+}
+
+// ══════════════════════════════════════════════
+// ── HOME (전체 투표) ──
+// ══════════════════════════════════════════════
+async function loadHome(){
+  const mb=document.getElementById('mainBody');
+  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const isAdmin=CU?.role==='admin';
+  if(isAdmin){
+    setMainHeader('💼 전체 투표','모든 부서 투표 현황',
+      `<button class="btn-sm pri" onclick="openVoteModal(null,'all')">+ 투표 만들기</button>`);
+  }
+  const votes=await dbGet('votes');
+  if(!votes||Object.keys(votes).length===0){
+    mb.innerHTML='<div class="empty"><div class="empty-icon">📋</div>등록된 투표가 없습니다</div>';
+    return;
+  }
+  const list=Object.entries(votes).filter(([k,v])=>!v.deleted).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
+  let html='<div style="padding:14px 0 80px">';
+  for(const [vid,v] of list){html+=await renderVoteCard(vid,v);}
+  html+='</div>';
+  mb.innerHTML=html;
+}
+
+// ══════════════════════════════════════════════
+// ── DEPT PAGE ──
+// ══════════════════════════════════════════════
+async function loadDeptPage(gid){
+  const mb=document.getElementById('mainBody');
+  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const isAdmin=CU?.role==='admin';
+  if(isAdmin){
+    setMainHeader(`💼 ${groups[gid]?.name||''} 업무`,groups[gid]?.name+' 부서 투표·링크',
+      `<button class="btn-sm pri" onclick="openVoteModal(null,'${gid}')">+ 투표 만들기</button>`);
+  }
+  const votes=await dbGet('votes');
+  const list=votes?Object.entries(votes).filter(([k,v])=>!v.deleted&&(v.group===gid||v.group==='all')).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)):[];
+  if(list.length===0){
+    mb.innerHTML='<div class="empty"><div class="empty-icon">📋</div>이 부서의 투표가 없습니다</div>';
+    return;
+  }
+  let html='<div style="padding:14px 0 80px">';
+  for(const [vid,v] of list){html+=await renderVoteCard(vid,v);}
+  html+='</div>';
+  mb.innerHTML=html;
+}
+
+// ══════════════════════════════════════════════
+// ── VOTE CARD ──
+// ══════════════════════════════════════════════
+async function renderVoteCard(vid,v){
+  const isAdmin=CU?.role==='admin';
+  const opts=v.options||[];
+  const responses=v.responses||{};
+  const myVote=responses[CU?.key||'admin'];
+  const totalVotes=Object.keys(responses).length;
+  const now=Date.now();
+  const deadline=v.deadline?new Date(v.date+'T'+v.time).getTime():0;
+  const isClosed=v.closed||(deadline&&now>deadline);
+  const gName=groups[v.group]?.name||'전체';
+  const gColor=groups[v.group]?.color||'var(--accent)';
+
+  let html=`<div class="card" style="margin:0 14px 16px">`;
+  html+=`<div style="padding:14px 14px 10px;border-bottom:1px solid var(--border)">`;
+  html+=`<div style="display:flex;align-items:flex-start;gap:8px">`;
+  html+=`<div style="flex:1"><div style="font-size:15px;font-weight:800">${escH(v.title||'')}</div>`;
+  html+=`<div style="font-size:11px;color:var(--text3);margin-top:3px">`;
+  html+=`<span style="background:${gColor}22;color:${gColor};padding:2px 7px;border-radius:10px;font-weight:700;margin-right:5px">${escH(gName)}</span>`;
+  if(v.date)html+=`📅 ${v.date}`;
+  if(v.time)html+=` ${v.time} 마감`;
+  html+=`</div></div>`;
+  if(isAdmin){
+    html+=`<div style="display:flex;gap:4px">`;
+    html+=`<button class="vbtn edit" onclick="openVoteModal('${vid}')">✏️</button>`;
+    html+=`<button class="vbtn ${isClosed?'open':'close'}" onclick="toggleVoteClose('${vid}',${!isClosed})">${isClosed?'열기':'닫기'}</button>`;
+    html+=`<button class="vbtn del" onclick="delVote('${vid}')">🗑</button>`;
+    html+=`</div>`;
+  }
+  html+=`</div></div>`;
+
+  html+=`<div style="padding:12px 14px">`;
+  opts.forEach((opt,i)=>{
+    const cnt=Object.values(responses).filter(r=>r===i).length;
+    const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
+    const isMe=myVote===i;
+    const closed=isClosed||!!myVote!==false&&myVote!==undefined;
+    html+=`<div class="vopt${isMe?' selected':''}${isClosed?' closed':''}" onclick="${isClosed||myVote!==undefined?'':'castVote(\''+vid+'\','+i+')'}">`;
+    html+=`<div class="vbar" style="width:${pct}%"></div>`;
+    html+=`<div class="vopt-chk">${isMe?'✓':''}</div>`;
+    html+=`<div class="vopt-label">${escH(opt)}</div>`;
+    html+=`<div class="vopt-cnt">${cnt}명 ${pct}%</div>`;
+    html+=`</div>`;
+  });
+  if(myVote!==undefined&&!isClosed){
+    html+=`<div style="text-align:center;margin-top:6px"><span class="voted-badge">✅ 투표 완료 (${escH(opts[myVote]||'')})</span></div>`;
+  }
+  if(isClosed){
+    html+=`<div style="text-align:center;margin-top:6px"><span class="closed-badge">🔒 마감된 투표 · 총 ${totalVotes}명 참여</span></div>`;
+  }
+  html+=`</div></div>`;
+  return html;
+}
+
+async function castVote(vid,optIdx){
+  if(!CU?.key){showToast('로그인 후 투표하세요');return;}
+  const v=await dbGet(`votes/${vid}`);
+  if(!v){showToast('투표 없음');return;}
+  if(v.responses?.[CU.key]!==undefined){showToast('이미 투표하셨습니다');return;}
+  await dbSet(`votes/${vid}/responses/${CU.key}`,optIdx);
+  showToast('✅ 투표 완료!');
+  if(_currentTab==='home')loadHome();
+  else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+async function toggleVoteClose(vid,close){
+  await dbSet(`votes/${vid}/closed`,close);
+  showToast(close?'🔒 마감됨':'🔓 재개됨');
+  if(_currentTab==='home')loadHome();
+  else loadDeptPage(_currentDept);
+}
+
+async function delVote(vid){
+  if(!confirm('투표를 삭제하시겠습니까?'))return;
+  await dbSet(`votes/${vid}/deleted`,true);
+  showToast('🗑️ 삭제됨');
+  if(_currentTab==='home')loadHome();
+  else loadDeptPage(_currentDept);
+}
+
+// ── 투표 모달 ──
+async function openVoteModal(vid,defaultGroup){
+  document.getElementById('editVoteId').value=vid||'';
+  const sel=document.getElementById('voteGroup');
+  sel.innerHTML=`<option value="all">전체</option>`+Object.entries(groups).map(([id,g])=>`<option value="${id}">${escH(g.name)}</option>`).join('');
+  if(vid){
+    const v=await dbGet(`votes/${vid}`);
+    if(v){
+      document.getElementById('voteTitle').value=v.title||'';
+      document.getElementById('voteDate').value=v.date||'';
+      document.getElementById('voteTime').value=v.time||'22:00';
+      sel.value=v.group||'all';
+      _editOptList=v.options||[];
+    }
+  } else {
+    document.getElementById('voteTitle').value='';
+    document.getElementById('voteDate').value=todayStr;
+    document.getElementById('voteTime').value='22:00';
+    if(defaultGroup)sel.value=defaultGroup;
+    _editOptList=['출근','재택','휴가'];
+  }
+  renderOptList();
+  document.getElementById('voteModal').classList.add('active');
+}
+let _editOptList=['출근','재택','휴가'];
+
+function renderOptList(){
+  document.getElementById('optList').innerHTML=_editOptList.map((o,i)=>
+    `<div style="display:flex;gap:6px;margin-bottom:6px">
+      <input class="fi" value="${escH(o)}" oninput="_editOptList[${i}]=this.value" style="flex:1;padding:8px 12px">
+      <button class="btn-sm sec" onclick="_editOptList.splice(${i},1);renderOptList()">✕</button>
+    </div>`
+  ).join('');
+}
+
+function addOpt(){_editOptList.push('');renderOptList();}
+
+async function saveVote(){
+  const title=document.getElementById('voteTitle').value.trim();
+  const date=document.getElementById('voteDate').value;
+  const time=document.getElementById('voteTime').value;
+  const group=document.getElementById('voteGroup').value;
+  const vid=document.getElementById('editVoteId').value;
+  if(!title){showToast('제목을 입력하세요');return;}
+  const options=_editOptList.filter(o=>o.trim());
+  if(options.length<2){showToast('선택지를 2개 이상 입력하세요');return;}
+  const data={title,date,time,group,options,createdAt:Date.now(),createdBy:CU.name};
+  if(vid){await dbSet(`votes/${vid}`,{...await dbGet(`votes/${vid}`),...data});}
+  else{await dbPush('votes',data);}
+  showToast('✅ 저장됨');
+  closeVoteModal();
+  if(_currentTab==='home')loadHome();
+  else loadDeptPage(_currentDept);
+}
+
+function closeVoteModal(){document.getElementById('voteModal').classList.remove('active');}
+
+// ══════════════════════════════════════════════
+// ── CALENDAR ──
+// ══════════════════════════════════════════════
+async function renderCalendar(){
+  const mb=document.getElementById('mainBody');
+  const isAdmin=CU?.role==='admin';
+  const y=calY,m=calM;
+  const first=new Date(y,m,1).getDay();
+  const days=new Date(y,m+1,0).getDate();
+  const evts=await dbGet('calEvents')||{};
+  const evList=Object.entries(evts).filter(([k,e])=>!e.deleted);
+
+  let html='<div style="padding-bottom:60px">';
+  // 월 네비
+  html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 8px">`;
+  html+=`<button onclick="calNav(-1)" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text2)">‹</button>`;
+  html+=`<div style="font-size:16px;font-weight:800">${y}년 ${m+1}월</div>`;
+  html+=`<button onclick="calNav(1)" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text2)">›</button>`;
+  html+=`</div>`;
+  // 요일 헤더
+  html+=`<div class="cal-head">`;
+  ['일','월','화','수','목','금','토'].forEach((d,i)=>{
+    html+=`<div class="cal-dh" style="color:${i===0?'var(--red)':i===6?'var(--blue)':'var(--text3)'}">${d}</div>`;
+  });
+  html+=`</div>`;
+  // 날짜 그리드
+  html+=`<div class="cal-grid">`;
+  for(let i=0;i<first;i++)html+=`<div></div>`;
+  for(let d=1;d<=days;d++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=ds===todayStr;
+    const isSel=ds===calSel;
+    const dayEvts=evList.filter(([k,e])=>e.date===ds);
+    const dow=(first+d-1)%7;
+    html+=`<div class="cal-cell${isToday?' today':''}${isSel?' selected':''}" onclick="calSelect('${ds}')">`;
+    html+=`<div class="cal-dn${dow===0?' sun':dow===6?' sat':''}">${d}</div>`;
+    if(dayEvts.length)html+=`<div class="cal-dot"></div>`;
+    html+=`</div>`;
+  }
+  html+=`</div>`;
+
+  // 선택 날짜 이벤트
+  if(calSel){
+    const selEvts=evList.filter(([k,e])=>e.date===calSel);
+    html+=`<div style="padding:0 14px 10px">`;
+    html+=`<div style="font-size:13px;font-weight:800;color:var(--text2);margin-bottom:8px">${calSel} 일정</div>`;
+    if(selEvts.length===0)html+=`<div style="font-size:13px;color:var(--text3)">일정 없음</div>`;
+    selEvts.forEach(([eid,e])=>{
+      html+=`<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:8px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">`;
+      html+=`<div><div style="font-size:14px;font-weight:700">${escH(e.title||'')}</div><div style="font-size:11px;color:var(--text3)">${escH(e.desc||'')}</div></div>`;
+      if(isAdmin)html+=`<button class="vbtn del" onclick="delCalEvent('${eid}')">🗑</button>`;
+      html+=`</div>`;
+    });
+    if(isAdmin){
+      html+=`<div style="margin-top:8px;display:flex;gap:8px">`;
+      html+=`<input id="calEvtTitle" class="fi" placeholder="일정 제목" style="flex:1;padding:8px 12px">`;
+      html+=`<button class="btn-sm pri" onclick="addCalEvent()">추가</button>`;
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  }
+  html+='</div>';
+  mb.innerHTML=html;
+}
+
+function calNav(dir){calM+=dir;if(calM>11){calM=0;calY++;}else if(calM<0){calM=11;calY--;}renderCalendar();}
+function calSelect(ds){calSel=ds;renderCalendar();}
+
+async function addCalEvent(){
+  const title=document.getElementById('calEvtTitle')?.value.trim();
+  if(!title||!calSel){showToast('제목을 입력하세요');return;}
+  await dbPush('calEvents',{title,date:calSel,createdBy:CU.name,createdAt:Date.now()});
+  showToast('✅ 일정 추가됨');
+  renderCalendar();
+}
+
+async function delCalEvent(eid){
+  if(!confirm('삭제하시겠습니까?'))return;
+  await dbSet(`calEvents/${eid}/deleted`,true);
+  showToast('🗑️ 삭제됨');
+  renderCalendar();
+}
+
+// ══════════════════════════════════════════════
+// ── STATUS ──
+// ══════════════════════════════════════════════
+async function loadStatus(){
+  const mb=document.getElementById('mainBody');
+  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const votes=await dbGet('votes');
+  const memberData=await dbGet('members');
+  if(!votes){mb.innerHTML='<div class="empty"><div class="empty-icon">📋</div>투표 없음</div>';return;}
+  const list=Object.entries(votes).filter(([k,v])=>!v.deleted).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
+  let html='<div style="padding:14px 0 80px">';
+  list.forEach(([vid,v])=>{
+    const opts=v.options||[];
+    const responses=v.responses||{};
+    const total=Object.keys(responses).length;
+    const gName=v.group==='all'?'전체':(groups[v.group]?.name||v.group);
+    html+=`<div class="card" style="margin:0 14px 16px;padding:14px">`;
+    html+=`<div style="font-size:14px;font-weight:800;margin-bottom:4px">${escH(v.title||'')}</div>`;
+    html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">${escH(gName)} · ${total}명 참여 · ${v.date||''}</div>`;
+    opts.forEach((opt,i)=>{
+      const cnt=Object.values(responses).filter(r=>r===i).length;
+      const pct=total?Math.round(cnt/total*100):0;
+      // 이름 목록
+      const names=memberData?Object.entries(responses).filter(([k,r])=>r===i).map(([k])=>memberData[k]?.name||k).join(', '):'';
+      html+=`<div style="margin-bottom:8px">`;
+      html+=`<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:3px"><span>${escH(opt)}</span><span style="color:var(--accent)">${cnt}명 ${pct}%</span></div>`;
+      html+=`<div style="background:var(--border);border-radius:4px;height:6px;margin-bottom:3px"><div style="background:var(--accent);height:6px;border-radius:4px;width:${pct}%"></div></div>`;
+      if(names)html+=`<div style="font-size:11px;color:var(--text3)">${escH(names)}</div>`;
+      html+=`</div>`;
+    });
+    html+=`</div>`;
+  });
+  html+='</div>';
+  mb.innerHTML=html;
+}
+
+// ══════════════════════════════════════════════
+// ── SETTINGS ──
+// ══════════════════════════════════════════════
+async function loadSettings(){
+  const mb=document.getElementById('mainBody');
+  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const memberData=await dbGet('members')||{};
+  let html='<div style="padding-bottom:60px">';
+
+  // 멤버 관리
+  html+=`<div class="setting-section">`;
+  html+=`<div class="setting-section-title">👥 멤버 관리</div>`;
+  html+=`<div style="display:flex;gap:8px;margin-bottom:12px"><input id="newMemberName" class="fi" placeholder="이름" style="flex:1;padding:8px 12px"><button class="btn-sm pri" onclick="addMember()">추가</button></div>`;
+  Object.entries(memberData).forEach(([k,m])=>{
+    html+=`<div class="setting-row"><span style="font-size:14px;font-weight:600">${escH(m.name||k)}</span>`;
+    html+=`<div style="display:flex;gap:6px"><button class="btn-sm sec" onclick="editMemberName('${k}','${escH(m.name||'')}')">✏️</button><button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="deleteMember('${k}')">🗑</button></div></div>`;
+  });
+  html+=`</div>`;
+
+  // 부서 관리
+  html+=`<div class="setting-section">`;
+  html+=`<div class="setting-section-title">🏢 부서 관리</div>`;
+  Object.entries(groups).forEach(([gid,g])=>{
+    html+=`<div class="setting-row"><span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
+    html+=`<div style="display:flex;gap:6px">`;
+    if(g.lock){html+=`<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openGroupLockModal('${gid}','unlock')">🔓 해제</button>`;}
+    else{html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupLockModal('${gid}','lock')">🔒 잠금</button>`;}
+    html+=`</div></div>`;
+  });
+  html+=`</div>`;
+
+  html+='</div>';
+  mb.innerHTML=html;
+}
+
+async function addMember(){
+  const name=document.getElementById('newMemberName')?.value.trim();
+  if(!name){showToast('이름을 입력하세요');return;}
+  await dbPush('members',{name,createdAt:Date.now()});
+  showToast('✅ 추가됨');
+  loadSettings();
+}
+
+async function deleteMember(key){
+  if(!confirm('멤버를 삭제하시겠습니까?'))return;
+  await dbDel(`members/${key}`);
+  showToast('🗑️ 삭제됨');
+  loadSettings();
+}
+
+async function editMemberName(key,current){
+  const name=prompt('새 이름 입력:',current);
+  if(!name||name===current)return;
+  await dbSet(`members/${key}/name`,name.trim());
+  showToast('✅ 수정됨');
+  loadSettings();
+}
+
+// ══════════════════════════════════════════════
+// ── LINK MODAL ──
+// ══════════════════════════════════════════════
+function openLinkModal(vid){
+  document.getElementById('linkVoteId').value=vid;
+  document.getElementById('linkEditing').value='';
+  document.getElementById('linkNick').value=CU.name||'';
+  document.getElementById('linkUrl').value='';
+  document.getElementById('linkNote').value='';
+  document.getElementById('linkModal').classList.add('active');
+}
+function closeLinkModal(){document.getElementById('linkModal').classList.remove('active');}
+async function submitLink(){
+  const vid=document.getElementById('linkVoteId').value;
+  const nick=document.getElementById('linkNick').value.trim();
+  const url=document.getElementById('linkUrl').value.trim();
+  const note=document.getElementById('linkNote').value.trim();
+  if(!nick||!url){showToast('닉네임과 URL을 입력하세요');return;}
+  await dbPush(`voteLinks/${vid}`,{nick,url,note,submittedBy:CU.name,time:Date.now()});
+  showToast('✅ 링크 제출됨');
+  closeLinkModal();
+}
+</script>
+</body>
+</html>
