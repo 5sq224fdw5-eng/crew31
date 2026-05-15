@@ -843,330 +843,61 @@ async function deleteChat(mid){
 }
 
 function loadChatTab(){
-  const mb=document.getElementById('mainBody');
-  const isAdmin=CU?.role==='admin';
-  let html='<div style="display:flex;height:calc(100vh - 110px)">';
+const mb=document.getElementById('mainBody');
+const isAdmin=CU?.role==='admin';
 
-  // 좌: 채팅방 목록
-  html+=`<div style="width:200px;min-width:200px;border-right:1px solid var(--border);overflow-y:auto;flex-shrink:0;background:white">`;
-  html+=`<div style="padding:10px 14px 8px;font-size:11px;font-weight:700;color:var(--text3);border-bottom:1px solid var(--border);letter-spacing:0.5px">채팅방</div>`;
+if(!_currentChatRoom){
+  let html='<div style="padding-bottom:60px">';
+  html+=`<div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--text3);letter-spacing:0.5px">채팅방</div>`;
 
-  // 전체 채팅
-  const allRoom={type:'all',id:'all',name:'전체 채팅'};
-  const allJoined=isJoined(allRoom);
-  const allActive=_currentChatRoom?.type==='all';
-  html+=`<div class="chat-room-item${allActive?' active':''}" onclick="selectChatRoom('all','all','전체 채팅')">`;
+  const allJoined=isJoined({type:'all',id:'all'});
+  html+=`<div class="chat-room-item" onclick="selectChatRoom('all','all','전체 채팅')">`;
   html+=`<div class="chat-room-avatar" style="background:linear-gradient(135deg,#FF9F7A,#FF7F6E);color:white">💬</div>`;
-  html+=`<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">전체 채팅</div>`;
+  html+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">전체 채팅</div>`;
   html+=`<div style="font-size:11px;color:${allJoined?'var(--green)':'var(--text3)'}">${allJoined?'● 입장중':'미입장'}</div></div>`;
-  html+=`</div>`;
+  if(isAdmin)html+=`<button onclick="event.stopPropagation();toggleChatLock('all','all')" style="font-size:11px;padding:4px 8px;border-radius:8px;border:none;cursor:pointer;background:var(--surface2);color:var(--text2);margin-right:4px">🔒</button>`;
+  html+=`<span style="font-size:20px;color:var(--text3)">›</span></div>`;
 
-  // 부서별 채팅
   Object.entries(groups).forEach(([gid,g])=>{
-    const room={type:'dept',id:gid,name:g.name+' 채팅'};
-    const joined=isJoined(room);
-    const isActive=_currentChatRoom?.type==='dept'&&_currentChatRoom?.id===gid;
-    html+=`<div class="chat-room-item${isActive?' active':''}" onclick="selectChatRoom('dept','${gid}','${escH(g.name)} 채팅')">`;
-    html+=`<div class="chat-room-avatar" style="background:${g.color||'#FF7F6E'}22;color:${g.color||'#FF7F6E'};font-size:14px;font-weight:800">${escH(g.name[0])}</div>`;
-    html+=`<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">${escH(g.name)}</div>`;
+    const joined=isJoined({type:'dept',id:gid});
+    html+=`<div class="chat-room-item" onclick="selectChatRoom('dept','${gid}','${escH(g.name)} 채팅')">`;
+    html+=`<div class="chat-room-avatar" style="background:${g.color||'#FF7F6E'}22;color:${g.color||'#FF7F6E'};font-size:15px;font-weight:800">${escH(g.name[0])}</div>`;
+    html+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">${escH(g.name)}</div>`;
     html+=`<div style="font-size:11px;color:${joined?'var(--green)':'var(--text3)'}">${joined?'● 입장중':'미입장'}</div></div>`;
-    html+=`</div>`;
+    if(isAdmin)html+=`<button onclick="event.stopPropagation();toggleChatLock('dept','${gid}')" style="font-size:11px;padding:4px 8px;border-radius:8px;border:none;cursor:pointer;background:${g.lock?'rgba(255,92,92,0.1)':'var(--surface2)'};color:${g.lock?'var(--red)':'var(--text2)'};margin-right:4px">${g.lock?'🔒':'🔓'}</button>`;
+    html+=`<span style="font-size:20px;color:var(--text3)">›</span></div>`;
   });
-  html+=`</div>`;
+  html+='</div>';
+  mb.innerHTML=html;
+  return;
+}
 
-  // 우: 채팅창
-  html+=`<div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)">`;
-
-  if(!_currentChatRoom){
-    html+=`<div class="empty" style="margin:auto"><div class="empty-icon">💬</div>채팅방을 선택하세요</div>`;
-  }else{
-    const room=_currentChatRoom;
-    const joined=isJoined(room)||isAdmin;
-    const gColor=room.type==='dept'?(groups[room.id]?.color||'var(--accent)'):'var(--accent)';
-
-    // 채팅방 헤더
-    html+=`<div style="padding:10px 16px;border-bottom:1px solid var(--border);background:white;display:flex;align-items:center;justify-content:space-between">`;
-    html+=`<div><div style="font-size:14px;font-weight:800">${escH(room.name)}</div>`;
-    html+=`<div id="chatMemberCount" style="font-size:11px;color:var(--text3)">참여자 확인 중...</div></div>`;
-    if(joined&&!isAdmin){
-      html+=`<button onclick="leaveChat()" style="background:rgba(255,92,92,0.1);border:none;color:var(--red);padding:7px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">퇴장</button>`;
-    }
-    html+=`</div>`;
-
-    if(!joined){
-      // 입장 전 화면
-      html+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px">`;
-      html+=`<div style="width:64px;height:64px;background:${gColor}22;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:32px">💬</div>`;
-      html+=`<div style="text-align:center"><div style="font-size:16px;font-weight:800">${escH(room.name)}</div>`;
-      html+=`<div style="font-size:13px;color:var(--text3);margin-top:4px">채팅방에 입장하려면 비밀번호를 입력하세요</div></div>`;
-      html+=`<div style="width:100%;max-width:280px">`;
-      html+=`<input id="chatPwInput" class="fi" type="password" placeholder="비밀번호 입력" style="text-align:center;font-size:18px;letter-spacing:6px;margin-bottom:10px" onkeyup="if(event.key==='Enter')joinChat()">`;
-      html+=`<button onclick="joinChat()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);color:white;border:none;border-radius:14px;font-size:15px;font-weight:800">입장하기</button>`;
-      html+=`</div></div>`;
-    }else{
-      // 채팅 메시지 영역
-      html+=`<div id="chatMessages" style="flex:1;overflow-y:auto;padding:12px 14px 8px;display:flex;flex-direction:column;gap:6px"></div>`;
-      // 입력창
-      html+=`<div style="padding:10px 14px 12px;border-top:1px solid var(--border);background:white;display:flex;gap:8px;align-items:flex-end">`;
-      html+=`<textarea id="chatInput" rows="1" placeholder="메시지 입력..." onkeydown="chatKeydown(event)" oninput="autoResize(this)" style="flex:1;border:1.5px solid var(--border);border-radius:18px;padding:9px 14px;font-size:14px;font-family:inherit;resize:none;outline:none;max-height:80px;line-height:1.5;background:var(--cream)"></textarea>`;
-
+const room=_currentChatRoom;
+const joined=isJoined(room)||isAdmin;
+const gColor=room.type==='dept'?(groups[room.id]?.color||'var(--accent)'):'var(--accent)';
+let html='';
+html+=`<div style="padding:10px 16px;border-bottom:1px solid var(--border);background:white;display:flex;align-items:center;gap:10px;flex-shrink:0">`;
+html+=`<button onclick="backToChatList()" style="background:var(--surface2);border:none;border-radius:10px;padding:7px 12px;font-size:14px;font-weight:700;color:var(--text2)">‹ 목록</button>`;
+html+=`<div style="flex:1"><div style="font-size:14px;font-weight:800">${escH(room.name)}</div>`;
+html+=`<div id="chatMemberCount" style="font-size:11px;color:var(--text3)">참여자 확인 중...</div></div>`;
+if(joined&&!isAdmin)html+=`<button onclick="leaveChat()" style="background:rgba(255,92,92,0.1);border:none;color:var(--red);padding:7px 14px;border-radius:10px;font-size:13px;font-weight:700">퇴장</button>`;
+html+=`</div>`;
+if(!joined){
+  html+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px">`;
+  html+=`<div style="width:64px;height:64px;background:${gColor}22;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:32px">💬</div>`;
+  html+=`<div style="text-align:center"><div style="font-size:16px;font-weight:800">${escH(room.name)}</div><div style="font-size:13px;color:var(--text3);margin-top:4px">비밀번호를 입력하세요</div></div>`;
+  html+=`<div style="width:100%;max-width:280px">`;
+  html+=`<input id="chatPwInput" class="fi" type="password" placeholder="비밀번호 입력" style="text-align:center;font-size:18px;letter-spacing:6px;margin-bottom:10px" onkeyup="if(event.key==='Enter')joinChat()">`;
+  html+=`<button onclick="joinChat()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);color:white;border:none;border-radius:14px;font-size:15px;font-weight:800">입장하기</button>`;
+  html+=`</div></div>`;
+}else{
+  html+=`<div id="chatMessages" style="flex:1;overflow-y:auto;padding:12px 14px 8px;display:flex;flex-direction:column;gap:6px"></div>`;
+  html+=`<div style="padding:10px 14px 12px;border-top:1px solid var(--border);background:white;display:flex;gap:8px;align-items:flex-end;flex-shrink:0">`;
+  html+=`<textarea id="chatInput" rows="1" placeholder="메시지 입력..." onkeydown="chatKeydown(event)" oninput="autoResize(this)" style="flex:1;border:1.5px solid var(--border);border-radius:18px;padding:9px 14px;font-size:14px;font-family:inherit;resize:none;outline:none;max-height:80px;line-height:1.5;background:var(--cream)"></textarea>`;
   html+=`<button onclick="sendChat()" style="width:40px;height:40px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border:none;border-radius:50%;color:white;font-size:17px;flex-shrink:0;box-shadow:0 3px 10px rgba(255,127,110,0.3)">➤</button>`;
   html+=`</div>`;
 }
-
-}
-html+=`</div></div>`;
-mb.innerHTML=html;
-
-if(_currentChatRoom&&(isJoined(_currentChatRoom)||CU?.role==='admin')){
-fetchChatMessages();
-clearInterval(window._chatPoll);
-window._chatPoll=setInterval(fetchChatMessages,4000);
-loadChatMemberCount();
-}
-}
-
-async function loadChatMemberCount(){
-const el=document.getElementById('chatMemberCount');
-if(!el||!_currentChatRoom)return;
-const path=getChatPath(_currentChatRoom);
-const presence=await dbGet(`chat_presence/${getRoomKey(_currentChatRoom)}`);
-const cnt=presence?Object.values(presence).filter(p=>p.active).length:0;
-if(el)el.textContent=`참여자 ${cnt}명`;
-}
-
-function selectChatRoom(type,id,name){
-_currentChatRoom={type,id,name};
-loadChatTab();
-}
-
-async function joinChat(){
-if(!_currentChatRoom)return;
-const pw=document.getElementById('chatPwInput')?.value||'';
-// 채팅방 비번 확인 (부서 잠금 비번과 동일)
-if(_currentChatRoom.type==='dept'){
-const g=groups[_currentChatRoom.id];
-if(g?.lock&&g.lock!==pw){showToast('비밀번호가 틀렸습니다');return;}
-}else if(_currentChatRoom.type==='all'){
-// 전체 채팅: 별도 비번 없음 (빈 칸으로 입장 가능)
-}
-// 입장 처리
-setJoined(_currentChatRoom,true);
-// 입장 시스템 메시지 발송
-const path=getChatPath(_currentChatRoom);
-await dbPush(path,{
-body:`${CU.name}님이 입장했습니다`,
-senderName:'시스템',senderKey:'system',senderRole:'system',
-time:Date.now(),system:true
-});
-// presence 등록
-await dbSet(`chat_presence/${getRoomKey(_currentChatRoom)}/${CU.key||'admin'}`,{name:CU.name,active:true,time:Date.now()});
-loadChatTab();
-}
-
-async function leaveChat(){
-if(!_currentChatRoom)return;
-if(!confirm('채팅방에서 퇴장하시겠습니까?'))return;
-const path=getChatPath(_currentChatRoom);
-// 퇴장 시스템 메시지
-await dbPush(path,{
-body:`${CU.name}님이 퇴장했습니다`,
-senderName:'시스템',senderKey:'system',senderRole:'system',
-time:Date.now(),system:true
-});
-// presence 제거
-await dbSet(`chat_presence/${getRoomKey(_currentChatRoom)}/${CU.key||'admin'}`,{name:CU.name,active:false,time:Date.now()});
-setJoined(_currentChatRoom,false);
-clearInterval(window._chatPoll);
-loadChatTab();
-}
-
-async function fetchChatMessages(){
-const el=document.getElementById('chatMessages');
-if(!el||!_currentChatRoom)return;
-const path=getChatPath(_currentChatRoom);
-const msgs=await dbGet(path);
-window._currentMsgData=msgs||{};
-
-if(!msgs){
-el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)">아직 메시지가 없어요</div>';
-return;
-}
-
-const list=Object.entries(msgs)
-.filter(([k,m])=>!m.deleted&&!m.hidden)
-.sort((a,b)=>(a[1].time||0)-(b[1].time||0));
-
-// 뱃지 처리
-const badge=document.getElementById('chatBadge');
-const isOnChat=_currentTab==='chat';
-if(!isOnChat&&list.length>_lastChatCount&&_lastChatCount>0){
-const diff=list.length-_lastChatCount;
-if(badge){badge.style.display='';badge.textContent=diff>99?'99+':diff;}
-}
-if(isOnChat&&badge)badge.style.display='none';
-_lastChatCount=list.length;
-
-const wasAtBottom=el.scrollHeight-el.scrollTop-el.clientHeight<80;
-const isAdmin=CU?.role==='admin';
-let html='';let lastDate='';
-
-list.forEach(([mid,m])=>{
-// 시스템 메시지
-if(m.system){
-html+=`<div style="text-align:center;padding:4px 0"><span style="font-size:11px;color:var(--text3);background:rgba(200,180,175,0.15);padding:4px 12px;border-radius:20px">${escH(m.body||'')}</span></div>`;
-return;
-}
-const isMe=(CU?.role==='admin'&&m.senderRole==='admin')||(m.senderKey===CU?.key);
-const d=new Date(m.time||0);
-const dateStr=d.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'});
-const timeStr=d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-if(dateStr!==lastDate){html+=`<div class="msg-date-sep">${dateStr}</div>`;lastDate=dateStr;}
-const avColor=m.senderRole==='admin'?'linear-gradient(135deg,#FFB347,#FF9F7A)':'linear-gradient(135deg,#FF9F7A,#FF7F6E)';
-
-html+=`<div class="msg-row ${isMe?'me':''}" id="msg_${mid}">`;
-if(!isMe)html+=`<div class="msg-avatar" style="background:${avColor};cursor:default">${(m.senderName||'?')[0]}</div>`;
-html+=`<div class="msg-content">`;
-if(!isMe)html+=`<div class="msg-name">${escH(m.senderName||'')}${m.senderRole==='admin'?' 👑':''}</div>`;
-// 롱프레스 / 우클릭으로 메뉴
-html+=`<div class="msg-bubble ${isMe?'me':'other'}"
-  oncontextmenu="event.preventDefault();showMsgMenu('${mid}',event.clientX,event.clientY)"
-  ontouchstart="_pressTimer=setTimeout(()=>showMsgMenu('${mid}',event.touches[0].clientX,event.touches[0].clientY),600)"
-  ontouchend="clearTimeout(_pressTimer)"
-  ontouchmove="clearTimeout(_pressTimer)"
->${escH(m.body||'')}</div>`;
-html+=`<div class="msg-time">${timeStr}</div>`;
-html+=`</div></div>`;
-
-});
-el.innerHTML=html;
-if(wasAtBottom)el.scrollTop=el.scrollHeight;
-}
-
-async function sendChat(){
-const inp=document.getElementById('chatInput');
-const body=inp?.value.trim();
-if(!body||!_currentChatRoom)return;
-inp.value='';inp.style.height='';
-const msg={body,senderName:CU.name,senderKey:CU.key||'admin',senderRole:CU.role,time:Date.now()};
-const path=getChatPath(_currentChatRoom);
-await dbPush(path,msg);
-await fetchChatMessages();
-}
-
-function chatKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}}
-function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,80)+'px';}
-
-// ══════════════════════════════════════════════
-// ── MEMBERS ──
-// ══════════════════════════════════════════════
-async function loadMembersPage(){
-const mb=document.getElementById('mainBody');
-mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-const gameMembers=await gameGet('members');
-if(!gameMembers){mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
-const GAME_GROUPS=['좋아요','댓글','시크릿'];
-const byGroup={};GAME_GROUPS.forEach(g=>{byGroup[g]=[];});byGroup['기타']=[];
-Object.entries(gameMembers).forEach(([k,m])=>{
-  if(!m.name)return;
-  const cleanName=m.name.replace(/^\*/,'');
-  const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
-  const realName=group?cleanName.replace(group,''):cleanName;
-  const gid=Object.keys(groups).find(id=>groups[id].name===group);
-  const color=groups[gid]?.color||'#FF9F7A';
-  (byGroup[group||'기타']).push({key:k,realName,group:group||'기타',color});
-});
-let html='<div style="padding-bottom:60px">';
-[...GAME_GROUPS,'기타'].forEach(gName=>{
-  const list=byGroup[gName];if(!list||list.length===0)return;
-  const gid=Object.keys(groups).find(id=>groups[id].name===gName);
-  const color=groups[gid]?.color||'#FF9F7A';
-  html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleMemberGroup('${gName}')">`;
-  html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
-  html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)} (${list.length})</span>`;
-  html+=`<span style="margin-left:auto;font-size:11px;color:var(--text3)" id="arrow_${gName}">▾</span></div>`;
-  html+=`<div id="group_${gName}">`;
-  list.forEach(({key:k,realName,color})=>{
-    const isMe=realName===CU?.name;
-    html+=`<div class="member-item">`;
-    html+=`<div class="member-avatar" style="background:linear-gradient(135deg,${color},${color}bb)">${(realName||'?')[0]}<div class="member-online-dot"></div></div>`;
-    html+=`<div style="flex:1"><div style="font-size:14px;font-weight:700">${escH(realName)}</div><div style="font-size:11px;color:var(--text3)">${escH(gName)}</div></div>`;
-    if(!isMe)html+=`<button class="btn-sm sec" onclick="openDMWithMember('${k}','${escH(realName)}')" style="font-size:12px">💬 DM</button>`;
-    html+=`</div>`;
-  });
-  html+=`</div>`;
-});
-html+='</div>';
-mb.innerHTML=html;
-}
-
-async function openDMWithMember(targetKey,targetName){
-  if(!targetKey||!targetName)return;
-  const myKey=CU?.key||'admin';
-  const roomId=[myKey,targetKey].sort().join('_');
-  _currentChatRoom={type:'dm',id:roomId,name:targetName+' DM',targetKey,targetName};
-  sessionStorage.setItem('joined_dm:'+roomId,'1');
-  goTab('chat');
-}
-</script>
-
-</body>
-</htmlasync function loadLeave(){
-const mb=document.getElementById('mainBody');
-mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-const [gameMembers,allMemberPrizes,allMemberLeave]=await Promise.all([
-  gameGet('members'),gameGet('memberPrizes'),gameGet('memberLeave')
-]);
-if(!gameMembers){mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
-const GAME_GROUPS=['좋아요','댓글','시크릿'];
-const byGroup={};GAME_GROUPS.forEach(g=>{byGroup[g]=[];});byGroup['기타']=[];
-Object.entries(gameMembers).forEach(([k,m])=>{
-  if(!m.name)return;
-  const cleanName=m.name.replace(/^\*/,'');
-  const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
-  const realName=group?cleanName.replace(group,''):cleanName;
-  const gid=Object.keys(groups).find(id=>groups[id].name===group);
-  const color=groups[gid]?.color||'#FF9F7A';
-  const stock=m.stock||0;
-  const leave=allMemberLeave?.[k]||0;
-  const prizes=allMemberPrizes?.[k]?Object.entries(allMemberPrizes[k]):[];
-  (byGroup[group||'기타']).push({key:k,realName,color,stock,leave,prizes});
-});
-const isAdmin=CU?.role==='admin';
-let html='<div style="padding-bottom:60px">';
-[...GAME_GROUPS,'기타'].forEach(gName=>{
-  const list=byGroup[gName];if(!list||list.length===0)return;
-  const gid=Object.keys(groups).find(id=>groups[id].name===gName);
-  const color=groups[gid]?.color||'#FF9F7A';
-  html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleLeaveGroup('${gName}')">`;
-  html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
-  html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)} (${list.length})</span>`;
-  html+=`<span style="margin-left:auto;font-size:11px;color:var(--text3)" id="larrow_${gName}">▾</span></div>`;
-  html+=`<div id="lgroup_${gName}">`;
-  list.forEach(({key:k,realName,color,stock,leave,prizes})=>{
-    html+=`<div style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
-    html+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:${prizes.length?10:0}px">`;
-    html+=`<div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${color},${color}bb);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white">${(realName||'?')[0]}</div>`;
-    html+=`<div><div style="font-size:14px;font-weight:800">${escH(realName)}</div><div style="font-size:11px;color:var(--text3)">코인 ${stock}개 · 연차 ${leave}일</div></div></div>`;
-    if(prizes.length){
-      html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🎁 경품 내역</div>`;
-      prizes.forEach(([pid,p])=>{
-        const used=p.used||false;
-        html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">`;
-        html+=`<span style="font-size:13px">${escH(p.name||p.emoji||'경품')}</span>`;
-        if(isAdmin){
-          html+=`<button onclick="togglePrizeUsed('${k}','${pid}',${!used})" style="font-size:11px;padding:3px 10px;border-radius:10px;border:none;cursor:pointer;background:${used?'var(--surface2)':'var(--green)'};color:${used?'var(--text3)':'white'};font-weight:700">${used?'미사용':'사용완료'}</button>`;
-        }else{
-          html+=`<span style="font-size:11px;padding:3px 10px;border-radius:10px;background:${used?'var(--surface2)':'rgba(93,184,138,0.15)'};color:${used?'var(--text3)':'var(--green)'};font-weight:700">${used?'미사용':'사용완료'}</span>`;
-        }
-        html+=`</div>`;
-      });
-    }
-    html+=`</div>`;
-  });
-  html+=`</div>`;
-});
-html+='</div>';
-mb.innerHTML=html;
+mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 110px)">${html}</div>`;
+if(joined||isAdmin){fetchChatMessages();clearInterval(window._chatPoll);window._chatPoll=setInterval(fetchChatMessages,4000);loadChatMemberCount();}
 }
 >
