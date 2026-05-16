@@ -199,8 +199,6 @@ button{cursor:pointer;}
 </style>
 
 <!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
 </head>
 <body>
 <div class="toast" id="toast"></div>
@@ -447,93 +445,64 @@ const GAME_DB='https://gacha-31-default-rtdb.firebaseio.com';
 // ══════════════════════════════════════════════
 // ── FCM 초기화 ──
 // ══════════════════════════════════════════════
-const FCM_VAPID='BD_1YqkUC9zZWpmyvzdZ5Zl6zrtBhUnAdvLJyymHalpG9bDpWoGpLwj6HZR-SgFSPDfS7vKVpdvQBtXJATkSgCI';
-const FCM_SERVER_KEY=''; // 클라이언트 → FCM REST API 직접 호출용 (없어도 됨, 토큰 기반)
-let _fcmToken=null;
-let _messaging=null;
+// ── Web Push (Cloudflare Workers 연동) ──
+// ══════════════════════════════════════════════
+const PUSH_VAPID_PUBLIC='BG78RcN8A7JqKrxERb0Cit0ukOL1NpsI1VPSMD6GJ-d_Vu8gTIWb93GsX_xMvU7jlYeTlkjLM1IJs98czLJ2iwQ';
+const PUSH_SERVER='https://crew31-push.ys1004dm.workers.dev';
 
-firebase.initializeApp({
-  apiKey:'AIzaSyAKE1gsLlu46-ppKHmEorN8ock-NQcE-UM',
-  authDomain:'gacha-31.firebaseapp.com',
-  databaseURL:'https://gacha-31-default-rtdb.firebaseio.com',
-  projectId:'gacha-31',
-  storageBucket:'gacha-31.firebasestorage.app',
-  messagingSenderId:'645061087845',
-  appId:'1:645061087845:web:0999afd0efffdf9ca22c8c'
-});
+let _pushReady=false;
 
-async function initFCM(){
+async function initWebPush(){
   try{
-    if(!('serviceWorker' in navigator)||!('Notification' in window))return;
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)){
+      showToast('이 브라우저는 푸시 알림을 지원하지 않습니다');return;
+    }
     // 서비스워커 등록
-    const reg=await navigator.serviceWorker.register('/firebase-messaging-sw.js',{scope:'/'});
-    _messaging=firebase.messaging();
-    // 권한 요청
+    const reg=await navigator.serviceWorker.register(
+      'https://5sq224fdw5-eng.github.io/crew31-sw.js',
+      {scope:'/'}
+    );
+    await navigator.serviceWorker.ready;
+    // 알림 권한 요청
     const perm=await Notification.requestPermission();
-    if(perm!=='granted')return;
-    // FCM 토큰 발급
-    _fcmToken=await _messaging.getToken({vapidKey:FCM_VAPID,serviceWorkerRegistration:reg});
-    if(!_fcmToken)return;
-    // 내 토큰을 Firebase에 저장 (다른 사람들이 나한테 알림 보낼 때 사용)
-    const tokenKey=CU?.key||CU?.name||'admin';
-    await dbSet(`fcmTokens/${tokenKey}`,{token:_fcmToken,name:CU?.name,updatedAt:Date.now()});
-    // 포그라운드 메시지 수신 (앱이 열려있을 때)
-    _messaging.onMessage(payload=>{
-      const {title,body}=payload.notification||{};
-      showToast(`🔔 ${title||''}: ${body||''}`);
-      updateNotiBadge();
+    if(perm!=='granted'){showToast('알림 권한이 거부됐습니다');return;}
+    // 기존 구독 확인
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      // 새로 구독
+      sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlBase64ToUint8(PUSH_VAPID_PUBLIC)
+      });
+    }
+    // 서버에 구독 등록
+    const userKey=CU?.key||CU?.name||'guest';
+    await fetch(`${PUSH_SERVER}/subscribe`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({subscription:sub.toJSON(),userKey,userName:CU?.name||'게스트'})
     });
-    console.log('FCM 초기화 완료');
-  }catch(e){console.warn('FCM 초기화 실패:',e);}
+    _pushReady=true;
+    showToast('✅ 푸시 알림이 활성화됐습니다!');
+    loadNotiPage();
+  }catch(e){
+    console.warn('Web Push 초기화 실패:',e);
+    showToast('푸시 알림 설정 실패: '+e.message);
+  }
 }
 
-// 특정 사용자들한테 FCM 알림 보내기
-// targetKeys: ['key1','key2'] 또는 null(전체)
-async function sendFCMNotification({title,body,targetKeys=null,data={}}){
-  try{
-    // 토큰 목록 가져오기
-    const allTokens=await dbGet('fcmTokens');
-    if(!allTokens)return;
-    const tokens=[];
-    Object.entries(allTokens).forEach(([k,v])=>{
-      if(!v?.token)return;
-      if(targetKeys&&!targetKeys.includes(k))return;
-      if(k===(CU?.key||CU?.name||'admin'))return; // 본인 제외
-      tokens.push(v.token);
-    });
-    if(tokens.length===0)return;
-    // FCM HTTP v1 API는 서버키 필요 → 대신 RTDB에 알림 큐 저장
-    // 각 수신자의 RTDB에 알림 데이터 기록 → 클라이언트 폴링으로 수신
-    for(const [k,v] of Object.entries(allTokens)){
-      if(!v?.token)continue;
-      if(targetKeys&&!targetKeys.includes(k))continue;
-      if(k===(CU?.key||CU?.name||'admin'))continue;
-      await dbPush(`fcmQueue/${k}`,{title,body,data,from:CU?.name,time:Date.now(),read:false});
-    }
-  }catch(e){console.warn('FCM 발송 오류:',e);}
+function urlBase64ToUint8(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
 }
 
-// 내 알림 큐 폴링 (30초마다)
-let _fcmQueueSeen=0;
-async function pollFCMQueue(){
-  if(!CU)return;
-  const myKey=CU?.key||CU?.name||'admin';
-  try{
-    const queue=await dbGet(`fcmQueue/${myKey}`);
-    if(!queue)return;
-    const items=Object.entries(queue).filter(([k,v])=>!v.read&&v.time>_fcmQueueSeen);
-    for(const [qk,v] of items){
-      // 인앱 알림 목록에 추가
-      pushNoti({icon:'🔔',title:v.title||'알림',body:v.body||'',tab:v.data?.tab||'notice',ts:v.time});
-      // 읽음 처리
-      await dbSet(`fcmQueue/${myKey}/${qk}/read`,true);
-    }
-    if(items.length>0){
-      _fcmQueueSeen=Date.now();
-      updateNotiBadge();
-    }
-  }catch(e){}
-}
+// 비활성화된 stub (FCM 제거)
+let _fcmToken=null;
+async function initFCM(){}
+async function sendFCMNotification(){}
+async function pollFCMQueue(){}
 const todayStr=new Date().toISOString().slice(0,10);
 
 let CU=null,groups={},members={},calY,calM,calSel;
@@ -1721,8 +1690,9 @@ function renderVoteCard(vid,v){
   }
   html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
   html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-  html+=`<input id="linkNote_${vid}" placeholder="메모" style="width:70px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-  html+=`<button onclick="submitVoteLink('${vid}')" style="padding:8px 12px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">제출</button>`;
+  html+=`<input id="linkNote_${vid}" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+  html+=`</div>`;
+  html+=`<button onclick="submitVoteLink('${vid}')" style="width:100%;margin-top:6px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
   html+=`</div></div>`;
 
   html+=`</div></div>`;
@@ -1730,9 +1700,16 @@ function renderVoteCard(vid,v){
 }
 
 async function submitVoteLink(vid){
-  const url=document.getElementById(`linkUrl_${vid}`)?.value.trim();
+  let url=document.getElementById(`linkUrl_${vid}`)?.value.trim();
   const note=document.getElementById(`linkNote_${vid}`)?.value.trim()||'';
   if(!url){showToast('URL을 입력하세요');return;}
+  // 인스타 링크 자동 정리
+  // 1. reel → p 변환
+  url=url.replace(/instagram\.com\/reel\//,'instagram.com/p/');
+  // 2. ? 이하 파라미터 제거
+  url=url.replace(/\?.*$/,'');
+  // 3. 끝에 / 없으면 추가
+  if(!url.endsWith('/'))url+='/';
   const nick=CU?.name||'익명';
   await dbSet(`votes/${vid}/links/${CU?.key||'admin'}`,{nick,url,note,time:Date.now()});
   showToast('✅ 링크 제출됨!');
@@ -2140,13 +2117,12 @@ async function loadNotiPage(){
 
   // 알림 설명 + 삭제 버튼
   html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 2px">`;
-  const fcmReady=!!_fcmToken;
   html+=`<div style="font-size:11px;color:var(--text3)">앱 내 알림 · 30초마다 자동 갱신</div>`;
-  html+=`<div style="font-size:11px;margin-top:2px;color:${fcmReady?'var(--green)':'var(--text3)'}">`;
-  html+=fcmReady?`🔔 백그라운드 푸시 알림 활성화됨`:`📴 푸시 알림 비활성화 (아래 허용 버튼 클릭)`;
+  html+=`<div style="font-size:11px;margin-top:2px;color:${_pushReady?'var(--green)':'var(--text3)'}">`;
+  html+=_pushReady?`🔔 백그라운드 푸시 알림 활성화됨`:`📴 백그라운드 푸시 비활성화`;
   html+=`</div>`;
-  if(!fcmReady){
-    html+=`<button onclick="initFCM().then(loadNotiPage)" style="margin-top:6px;font-size:12px;padding:6px 14px;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700">🔔 푸시 알림 허용</button>`;
+  if(!_pushReady){
+    html+=`<button onclick="initWebPush()" style="margin-top:6px;font-size:12px;padding:6px 14px;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700">🔔 푸시 알림 허용</button>`;
   }
   html+=`<button onclick="clearNotiList()" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:4px 8px">🗑 전체 삭제</button>`;
   html+=`</div>`;
