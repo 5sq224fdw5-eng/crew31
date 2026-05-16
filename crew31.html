@@ -1148,30 +1148,9 @@ const mb=document.getElementById('mainBody');
 mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
 const isAdmin=CU?.role==='admin';
 
-// ── 관리자: 멤버 추가/수정/삭제 ──
-let adminHtml='';
-if(isAdmin){
-  const crewMembers=await dbGet('members')||{};
-  adminHtml+=`<div style="background:white;border-radius:16px;margin:12px 14px 8px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
-  adminHtml+=`<div style="font-size:13px;font-weight:800;margin-bottom:10px">👥 멤버 관리</div>`;
-  adminHtml+=`<div style="display:flex;gap:8px;margin-bottom:10px">`;
-  adminHtml+=`<input id="newMemberName" class="fi" placeholder="새 멤버 이름" style="flex:1;padding:9px 12px;font-size:13px">`;
-  adminHtml+=`<button onclick="addMember()" style="padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer">추가</button>`;
-  adminHtml+=`</div>`;
-  Object.entries(crewMembers).sort(([,a],[,b])=>(a.name||'').localeCompare(b.name||'','ko')).forEach(([k,m])=>{
-    adminHtml+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">`;
-    adminHtml+=`<span style="font-size:13px;font-weight:600">${escH(m.name||k)}</span>`;
-    adminHtml+=`<div style="display:flex;gap:5px">`;
-    adminHtml+=`<button onclick="editMemberName('${k}','${escH(m.name||'')}',true)" style="font-size:11px;padding:4px 10px;background:var(--surface2);border:none;border-radius:8px;cursor:pointer;font-weight:700">✏️</button>`;
-    adminHtml+=`<button onclick="deleteMember('${k}',true)" style="font-size:11px;padding:4px 10px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;cursor:pointer;font-weight:700">🗑</button>`;
-    adminHtml+=`</div></div>`;
-  });
-  adminHtml+=`</div>`;
-  adminHtml+=`<div style="font-size:11px;font-weight:700;color:var(--text3);padding:6px 16px 4px">오락실 멤버</div>`;
-}
-
 const gameMembers=await gameGet('members');
 if(!gameMembers){mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
+
 const GAME_GROUPS=['좋아요','댓글','시크릿'];
 const byGroup={};GAME_GROUPS.forEach(g=>{byGroup[g]=[];});byGroup['기타']=[];
 Object.entries(gameMembers).forEach(([k,m])=>{
@@ -1181,31 +1160,76 @@ Object.entries(gameMembers).forEach(([k,m])=>{
   const realName=group?cleanName.replace(group,''):cleanName;
   const gid=Object.keys(groups).find(id=>groups[id].name===group);
   const color=groups[gid]?.color||'#FF9F7A';
-  (byGroup[group||'기타']).push({key:k,realName,group:group||'기타',color,gameKey:k});
+  (byGroup[group||'기타']).push({key:k,realName,group:group||'기타',color});
 });
-let html='<div style="padding-bottom:60px">'+adminHtml;
+
+let html=`<div style="padding-bottom:80px">`;
+// 고정 검색창
+html+=`<div style="padding:10px 14px 8px">`;
+html+=`<input id="memberSearch" type="text" placeholder="🔍 이름으로 검색..." oninput="filterMembers()" style="width:100%;padding:11px 16px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;background:white;outline:none;box-sizing:border-box">`;
+html+=`</div>`;
+// 검색 결과 영역
+html+=`<div id="searchResults" style="display:none;padding:0 14px"></div>`;
+// 그룹별 드롭다운
+html+=`<div id="groupList">`;
 [...GAME_GROUPS,'기타'].forEach(gName=>{
   const list=byGroup[gName];if(!list||list.length===0)return;
   const gid=Object.keys(groups).find(id=>groups[id].name===gName);
   const color=groups[gid]?.color||'#FF9F7A';
-  html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleMemberGroup('${gName}')">`;
-  html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
-  html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)} (${list.length})</span>`;
-  html+=`<span style="margin-left:auto;font-size:11px;color:var(--text3)" id="arrow_${gName}">▸</span></div>`;
-  html+=`<div id="group_${gName}" style="display:none">`;
-  list.forEach(({key:k,realName,color})=>{
-    const isMe=realName===CU?.name;
-    html+=`<div class="member-item">`;
-    html+=`<div class="member-avatar" style="background:linear-gradient(135deg,${color},${color}bb)">${(realName||'?')[0]}<div class="member-online-dot"></div></div>`;
-    html+=`<div style="flex:1"><div style="font-size:14px;font-weight:700">${escH(realName)}</div><div style="font-size:11px;color:var(--text3)">${escH(gName)}</div></div>`;
-    if(!isMe)html+=`<button class="btn-sm sec" onclick="openDMWithMember('${k}','${escH(realName)}')" style="font-size:12px">💬 DM</button>`;
-    html+=`</div>`;
-  });
+  html+=`<div style="margin:0 14px 8px;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);background:white">`;
+  html+=`<div onclick="toggleMemberGroup2('${gName}')" style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer">`;
+  html+=`<span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>`;
+  html+=`<span style="font-size:14px;font-weight:800;flex:1">${escH(gName)}</span>`;
+  html+=`<span style="font-size:12px;color:var(--text3);margin-right:6px">${list.length}명</span>`;
+  html+=`<span id="garrow_${gName}" style="font-size:14px;color:var(--text3)">▸</span>`;
   html+=`</div>`;
+  html+=`<div id="glist_${gName}" style="display:none;border-top:1px solid var(--border)">`;
+  html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)">`;
+  list.sort((a,b)=>a.realName.localeCompare(b.realName,'ko')).forEach(({key:k,realName,color})=>{
+    const isMe=realName===CU?.name;
+    html+=`<div style="background:white;padding:12px;display:flex;align-items:center;gap:8px">`;
+    html+=`<div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,${color},${color}aa);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:white;flex-shrink:0">${(realName||'?')[0]}</div>`;
+    html+=`<div style="flex:1;min-width:0">`;
+    html+=`<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(realName)}</div>`;
+    if(!isMe)html+=`<div onclick="openDMWithMember('${k}','${escH(realName)}')" style="font-size:11px;color:var(--accent);font-weight:700;cursor:pointer;margin-top:1px">💬 DM</div>`;
+    html+=`</div></div>`;
+  });
+  html+=`</div></div></div>`;
 });
-html+='</div>';
+html+=`</div></div>`;
 mb.innerHTML=html;
 }
+
+function toggleMemberGroup2(gName){
+  const el=document.getElementById('glist_'+gName);
+  const arrow=document.getElementById('garrow_'+gName);
+  if(!el)return;
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  if(arrow)arrow.textContent=open?'▾':'▸';
+}
+
+function filterMembers(){
+  const q=(document.getElementById('memberSearch')?.value||'').toLowerCase().trim();
+  const searchEl=document.getElementById('searchResults');
+  const groupEl=document.getElementById('groupList');
+  if(!searchEl||!groupEl)return;
+  if(!q){searchEl.style.display='none';groupEl.style.display='block';return;}
+  groupEl.style.display='none';
+  searchEl.style.display='block';
+  const allItems=[];
+  document.querySelectorAll('[id^="glist_"] > div > div').forEach(el=>{
+    const nameEl=el.querySelector('div > div > div:first-child');
+    if(!nameEl)return;
+    if(nameEl.textContent.toLowerCase().includes(q)) allItems.push(el.outerHTML);
+  });
+  if(allItems.length===0){
+    searchEl.innerHTML=`<div style="text-align:center;padding:30px;color:var(--text3)">검색 결과 없음</div>`;
+  }else{
+    searchEl.innerHTML=`<div style="font-size:11px;color:var(--text3);padding:4px 0 8px">${allItems.length}명</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`+allItems.join('')+`</div>`;
+  }
+}
+
 
 async function openDMWithMember(targetKey,targetName){
   if(!targetKey||!targetName)return;
