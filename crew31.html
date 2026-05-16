@@ -503,19 +503,20 @@ async function enterApp(){
   document.getElementById('loginPage').style.display='none';
   document.getElementById('app').style.display='flex';
 
-  // 사이드바 프로필
+  // 사이드바 아바타
   const initial=(CU.name||'?')[0];
   const sbAv=document.getElementById('sbAvatar');
-  sbAv.innerHTML=`${initial}<div class="online-dot"></div>`;
-  if(CU.role==='admin')sbAv.classList.add('admin-av');
-  document.getElementById('sbName').textContent=CU.name;
-  document.getElementById('sbRole').textContent=CU.role==='admin'?'인사팀':'사원';
-  document.getElementById('adminMenu').style.display=CU.role==='admin'?'block':'none';
+  if(sbAv){
+    sbAv.innerHTML=`${initial}<div class="online-dot"></div>`;
+    if(CU.role==='admin')sbAv.classList.add('admin-av');
+    else sbAv.classList.remove('admin-av');
+  }
+  const adminMenu=document.getElementById('adminMenu');
+  if(adminMenu)adminMenu.style.display=CU.role==='admin'?'block':'none';
 
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
   try{goTab('notice');}catch(e){console.error('goTab error',e);}
-  // 알림 폴링 시작
   setTimeout(()=>startNotiPolling(),2000);
 }
 
@@ -621,11 +622,9 @@ async function loadNoticePage(){
   const mb=document.getElementById('mainBody');
   const isAdmin=CU?.role==='admin';
 
-  // 헤더 액션
-  if(isAdmin){
-    setMainHeader('📢 공지사항','공지 및 피드',
-      `<button class="btn-sm pri" onclick="openNoticeModal('feed')">+ 공지 작성</button>`);
-  }
+  setMainHeader('📢 공지사항','공지 및 피드',
+    isAdmin?`<button class="btn-sm pri" onclick="openNoticeModal('feed')">+ 공지 작성</button>`:''
+  );
 
   const notices=await dbGet('notices');
   const noticeComments=await dbGet('noticeComments');
@@ -837,9 +836,11 @@ async function deleteChat(mid){
   fetchChatMessages();
 }
 
-function loadChatTab(){
+async function loadChatTab(){
 const mb=document.getElementById('mainBody');
 const isAdmin=CU?.role==='admin';
+// groups 없으면 재로드
+if(!groups||Object.keys(groups).length===0)await loadGroups();
 if(!_currentChatRoom){
   let html='<div style="padding-bottom:60px">';
   html+=`<div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--text3)">채팅방</div>`;
@@ -1117,6 +1118,7 @@ function toggleLeaveGroup(gName){
 async function loadLeave(){
   const mb=document.getElementById('mainBody');
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const isAdmin=CU?.role==='admin';
 
   const [gameMembers, rawPrizes, allMemberLeave] = await Promise.all([
     gameGet('members'),
@@ -1147,6 +1149,10 @@ async function loadLeave(){
     const cleanName=m.name.replace(/^\*/,'');
     const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
     const realName=group?cleanName.replace(group,''):cleanName;
+
+    // 사원이면 본인 이름 매칭되는 것만
+    if(!isAdmin&&realName!==CU?.name)return;
+
     const gid=Object.keys(groups).find(id=>groups[id].name===group);
     const color=groups[gid]?.color||'#FF9F7A';
     const stock=m.stock||0;
@@ -1155,7 +1161,6 @@ async function loadLeave(){
     (byGroup[group||'기타']).push({key:k,realName,color,stock,leave,prizes});
   });
 
-  const isAdmin=CU?.role==='admin';
   let html='<div style="padding-bottom:60px">';
 
   [...GAME_GROUPS,'기타'].forEach(gName=>{
@@ -1558,8 +1563,41 @@ function renderVoteCard(vid,v){
   if(isClosed){
     html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${totalVotes}명 참여</span></div>`;
   }
+
+  // 링크 제출 섹션
+  const links=v.links?Object.values(v.links):[];
+  html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">`;
+  html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🔗 링크 제출</div>`;
+  if(links.length>0){
+    links.forEach(l=>{
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">`;
+      html+=`<span style="font-size:12px;font-weight:700;min-width:60px">${escH(l.nick||'')}</span>`;
+      html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(l.url||'')}</a>`;
+      if(l.note)html+=`<span style="font-size:11px;color:var(--text3)">${escH(l.note)}</span>`;
+      html+=`</div>`;
+    });
+  }else{
+    html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:6px">아직 제출된 링크가 없습니다</div>`;
+  }
+  html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
+  html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+  html+=`<input id="linkNote_${vid}" placeholder="메모" style="width:70px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+  html+=`<button onclick="submitVoteLink('${vid}')" style="padding:8px 12px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">제출</button>`;
+  html+=`</div></div>`;
+
   html+=`</div></div>`;
   return html;
+}
+
+async function submitVoteLink(vid){
+  const url=document.getElementById(`linkUrl_${vid}`)?.value.trim();
+  const note=document.getElementById(`linkNote_${vid}`)?.value.trim()||'';
+  if(!url){showToast('URL을 입력하세요');return;}
+  const nick=CU?.name||'익명';
+  await dbSet(`votes/${vid}/links/${CU?.key||'admin'}`,{nick,url,note,time:Date.now()});
+  showToast('✅ 링크 제출됨!');
+  if(_currentTab==='home')loadHome();
+  else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
 async function castVote(vid,optIdx){
@@ -1962,31 +2000,13 @@ async function _initSeenIfEmpty(){
 async function loadNotiPage(){
   markAllRead();
   const mb=document.getElementById('mainBody');
-  const perm=('Notification' in window)?Notification.permission:'unsupported';
   const list=getNotiList();
 
   let html=`<div style="padding-bottom:60px">`;
 
-  // 브라우저 알림 권한 카드
-  html+=`<div style="background:white;border-radius:16px;margin:12px 14px 6px;padding:14px 16px;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
-  html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
-  html+=`<div>`;
-  html+=`<div style="font-size:13px;font-weight:800">📳 브라우저 알림</div>`;
-  if(perm==='granted'){
-    html+=`<div style="font-size:11px;color:var(--green);margin-top:2px">✅ 활성화됨 · 백그라운드 알림 수신 중</div>`;
-  }else if(perm==='denied'){
-    html+=`<div style="font-size:11px;color:var(--red);margin-top:2px">🚫 차단됨 · 브라우저 설정에서 허용하세요</div>`;
-  }else{
-    html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">앱을 닫아도 알림을 받을 수 있어요</div>`;
-  }
-  html+=`</div>`;
-  if(perm!=='granted'&&perm!=='denied'){
-    html+=`<button onclick="requestNotiPermission()" style="font-size:12px;padding:7px 14px;border-radius:10px;border:none;cursor:pointer;background:var(--accent);color:white;font-weight:700;white-space:nowrap">허용</button>`;
-  }
-  html+=`</div></div>`;
-
-  // 알림 초기화 버튼
-  html+=`<div style="display:flex;justify-content:flex-end;padding:4px 14px 2px">`;
+  // 알림 설명 + 삭제 버튼
+  html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 2px">`;
+  html+=`<div style="font-size:11px;color:var(--text3)">앱 내 알림 · 30초마다 자동 갱신</div>`;
   html+=`<button onclick="clearNotiList()" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:4px 8px">🗑 전체 삭제</button>`;
   html+=`</div>`;
 
