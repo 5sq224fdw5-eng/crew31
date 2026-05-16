@@ -1296,14 +1296,28 @@ async function loadLeave(){
     if(!list||list.length===0)return;
     const gid=Object.keys(groups).find(id=>groups[id].name===gName);
     const color=groups[gid]?.color||'#FF9F7A';
+
+    // 인사팀 멤버 (관리자 계정 이름 목록)
+    const ADMIN_NAMES=['고인물','에이스','경력직','불주먹','김월루','퇴사각'];
+    // 정렬: 인사팀 가나다 → 일반 사원 가나다
+    const sortedList = [...list].sort((a, b) => {
+      const aIsAdmin = ADMIN_NAMES.includes(a.realName);
+      const bIsAdmin = ADMIN_NAMES.includes(b.realName);
+      if(aIsAdmin && !bIsAdmin) return -1;
+      if(!aIsAdmin && bIsAdmin) return 1;
+      if(aIsAdmin && bIsAdmin) return ADMIN_NAMES.indexOf(a.realName) - ADMIN_NAMES.indexOf(b.realName);
+      return a.realName.localeCompare(b.realName, 'ko');
+    });
+
     html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleLeaveGroup('${gName}')">`;
     html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
     html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)} (${list.length})</span>`;
     html+=`<span style="margin-left:auto;font-size:11px;color:var(--text3)" id="larrow_${gName}">▸</span></div>`;
     html+=`<div id="lgroup_${gName}" style="display:none">`;
 
-    list.forEach(({key:k,realName,color,stock,leave,prizes})=>{
-      html+=`<div style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
+    sortedList.forEach(({key:k,realName,color,stock,leave,prizes})=>{
+      const isAdminMember = ADMIN_NAMES.includes(realName);
+      html+=`<div style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);${isAdminMember?'border:1.5px solid var(--accent)':''}">`;
       html+=`<div style="display:flex;align-items:center;gap:10px">`;
       html+=`<div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${color},${color}bb);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white">${(realName||'?')[0]}</div>`;
       html+=`<div style="flex:1"><div style="font-size:14px;font-weight:800">${escH(realName)}</div>`;
