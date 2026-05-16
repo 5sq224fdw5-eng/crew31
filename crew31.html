@@ -1530,25 +1530,23 @@ async function renderCalendar(){
   const first=new Date(y,m,1).getDay();
   const days=new Date(y,m+1,0).getDate();
 
-  // 공지 이벤트 + 출석 데이터 동시 로드
+  // 공지 이벤트 + 출석 데이터 동시 로드 (전체 한 번에)
   const [evts, allAttendance] = await Promise.all([
     dbGet('calEvents'),
-    isAdmin ? dbGet('attendance') : null
+    dbGet('attendance')  // 관리자/사원 모두 전체 로드 (캐시 효율)
   ]);
   const evList=Object.entries(evts||{}).filter(([k,e])=>!e.deleted);
 
-  // 이번 달 출석 데이터 수집
-  // 사원: 본인 attendance 찾기
-  // 관리자: 전체 그룹 취합
   const monthStr = `${y}-${String(m+1).padStart(2,'0')}`;
-  const dateAttMap = {}; // date → [{name, result, group}]
+  const dateAttMap = {};
 
-  if(isAdmin && allAttendance){
-    // 전체 그룹 순회
+  if(allAttendance){
     Object.entries(allAttendance).forEach(([gid, weeks])=>{
       const gname = groups[gid]?.name || gid;
       Object.entries(weeks).forEach(([wk, members])=>{
         Object.entries(members).forEach(([mname, dates])=>{
+          // 사원이면 본인 것만
+          if(!isAdmin && mname !== CU?.name) return;
           Object.entries(dates).forEach(([date, result])=>{
             if(!date.startsWith(monthStr)) return;
             if(!dateAttMap[date]) dateAttMap[date]=[];
@@ -1557,21 +1555,6 @@ async function renderCalendar(){
         });
       });
     });
-  } else if(!isAdmin && CU?.name){
-    // 본인 출석만
-    for(const [gid] of Object.entries(groups)){
-      const weekKeys = getMonthWeekKeys(y, m);
-      for(const wk of weekKeys){
-        const myAtt = await dbGet(`attendance/${gid}/${wk}/${CU.name}`);
-        if(myAtt){
-          Object.entries(myAtt).forEach(([date, result])=>{
-            if(!date.startsWith(monthStr)) return;
-            if(!dateAttMap[date]) dateAttMap[date]=[];
-            dateAttMap[date].push({name:CU.name, result, group:groups[gid]?.name||gid});
-          });
-        }
-      }
-    }
   }
 
   const resultColor={'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b'};
@@ -2036,7 +2019,6 @@ async function loadStatus() {
 }
 
 async function loadStatusGroup(gid) {
-  // 탭 스타일 업데이트
   Object.keys(groups).forEach(id => {
     const btn = document.getElementById(`statusTab_${id}`);
     if(btn) { btn.style.background = id===gid?'var(--accent)':'var(--surface2)'; btn.style.color = id===gid?'white':'var(--text2)'; }
@@ -2046,7 +2028,6 @@ async function loadStatusGroup(gid) {
   if(!el) return;
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-  // 모든 비동기 데이터 한 번에 로드
   const [votes, attendance, crewMembers] = await Promise.all([
     dbGet('votes'),
     dbGet(`attendance/${gid}`),
@@ -2054,36 +2035,59 @@ async function loadStatusGroup(gid) {
   ]);
 
   const gName = groups[gid]?.name || gid;
-
-  // key → 이름 매핑
   const keyToName = {};
   if(crewMembers) Object.entries(crewMembers).forEach(([k,m]) => { if(m.name) keyToName[k] = m.name; });
 
-  // 해당 그룹 + 전체 투표만 필터
-  const groupVotes = votes ? Object.entries(votes)
-    .filter(([k,v]) => !v.deleted && (v.group === gid || v.group === 'all') && v.date)
-    .sort((a,b) => a[1].date.localeCompare(b[1].date)) : [];
+  const att = attendance || {};
 
-  if(groupVotes.length === 0) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div>${gName} 투표 없음</div>`;
+  // 주차 목록: attendance 데이터 + 투표 날짜 합쳐서
+  const weeks = {}; // mondayStr → {dates: Set, members: {}}
+
+  // 1. attendance 데이터에서 주차 추출
+  Object.entries(att).forEach(([mondayStr, members]) => {
+    if(!weeks[mondayStr]) weeks[mondayStr] = {dates: new Set(), members: {}};
+    Object.entries(members).forEach(([mname, dates]) => {
+      Object.entries(dates).forEach(([date, result]) => {
+        weeks[mondayStr].dates.add(date);
+        if(!weeks[mondayStr].members[mname]) weeks[mondayStr].members[mname] = {};
+        weeks[mondayStr].members[mname][date] = result;
+      });
+    });
+  });
+
+  // 2. 투표 데이터에서 추가 (그룹 전용 투표)
+  if(votes) {
+    Object.entries(votes)
+      .filter(([,v]) => !v.deleted && v.group === gid && v.date)
+      .forEach(([vid, v]) => {
+        const mondayStr = getWeekKey(v.date);
+        if(!weeks[mondayStr]) weeks[mondayStr] = {dates: new Set(), members: {}};
+        weeks[mondayStr].dates.add(v.date);
+        const opts = v.options || [];
+        Object.entries(v.responses || {}).forEach(([mkey, optIdx]) => {
+          const mname = keyToName[mkey] || mkey;
+          if(!weeks[mondayStr].members[mname]) weeks[mondayStr].members[mname] = {};
+          const result = mapVoteResult(opts[optIdx] || '');
+          if(!weeks[mondayStr].members[mname][v.date] || result === '완료') {
+            weeks[mondayStr].members[mname][v.date] = result;
+          }
+        });
+      });
+  }
+
+  if(Object.keys(weeks).length === 0) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div>${gName} 데이터 없음</div>`;
     return;
   }
 
-  // 주차별 그룹핑
-  const weeks = {};
-  groupVotes.forEach(([vid, v]) => {
-    const wk = getWeekKey(v.date);
-    if(!weeks[wk]) weeks[wk] = [];
-    weeks[wk].push([vid, v]);
-  });
-
-  const att = attendance || {};
+  const resultColor = {'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b'};
+  const ADMIN_NAMES = ['고인물','에이스','경력직','불주먹','김월루','퇴사각'];
   let html = '';
 
-  // 주차별 렌더 (forEach → for...of 로 변경, async 안전)
-  for(const [mondayStr, wvotes] of Object.entries(weeks).sort((a,b)=>b[0].localeCompare(a[0]))) {
+  for(const [mondayStr, wdata] of Object.entries(weeks).sort((a,b)=>b[0].localeCompare(a[0]))) {
     const wLabel = getWeekLabel(mondayStr);
-    const dates = [...new Set(wvotes.map(([,v])=>v.date))].sort();
+    const dates = [...wdata.dates].sort();
+    const memberResults = wdata.members;
 
     html += `<div style="background:white;border-radius:16px;margin:8px 14px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
     html += `<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">`;
@@ -2093,34 +2097,8 @@ async function loadStatusGroup(gid) {
     if(CU?.role==='admin') html += `<button onclick="openAttendanceEdit('${gid}','${mondayStr}')" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:var(--surface2);color:var(--text2);font-weight:700">✏️ 수정</button>`;
     html += `</div></div>`;
 
-    // 멤버별 결과 취합 - 해당 그룹 투표만
-    const memberResults = {};
-    const groupOnlyVotes = wvotes.filter(([,v]) => v.group === gid);
-    groupOnlyVotes.forEach(([vid, v]) => {
-      const opts = v.options || [];
-      const responses = v.responses || {};
-      Object.entries(responses).forEach(([mkey, optIdx]) => {
-        const mname = keyToName[mkey] || mkey;
-        if(!memberResults[mkey]) memberResults[mkey] = {name: mname, dates: {}};
-        const result = mapVoteResult(opts[optIdx] || '');
-        if(!memberResults[mkey].dates[v.date] || result === '완료') {
-          memberResults[mkey].dates[v.date] = result;
-        }
-      });
-    });
-
-    // 수동 수정 + 이전 데이터 덮어씌우기
-    if(att[mondayStr]) {
-      Object.entries(att[mondayStr]).forEach(([mkey, dateMap]) => {
-        const mname = keyToName[mkey] || mkey;
-        if(!memberResults[mkey]) memberResults[mkey] = {name: mname, dates: {}};
-        Object.assign(memberResults[mkey].dates, dateMap);
-      });
-    }
-
-    // 테이블 헤더
     html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">`;
-    html += `<tr style="background:var(--surface2)"><th style="padding:6px 8px;text-align:left;font-weight:700">멤버</th>`;
+    html += `<tr style="background:var(--surface2)"><th style="padding:6px 8px;text-align:left;font-weight:700;white-space:nowrap">멤버</th>`;
     dates.forEach(d => {
       const dd = new Date(d);
       const days = ['일','월','화','수','목','금','토'];
@@ -2128,20 +2106,27 @@ async function loadStatusGroup(gid) {
     });
     html += `<th style="padding:6px 8px;text-align:center;font-weight:700">풀참</th></tr>`;
 
-    // 멤버 행
-    const resultColor = {'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','':`#f1f5f9`};
-    Object.entries(memberResults).sort(([,a],[,b])=>a.name.localeCompare(b.name,'ko')).forEach(([mkey, m]) => {
+    // 정렬: 인사팀 먼저, 그다음 가나다
+    const sortedMembers = Object.entries(memberResults).sort(([a],[b]) => {
+      const aA = ADMIN_NAMES.includes(a), bA = ADMIN_NAMES.includes(b);
+      if(aA && !bA) return -1; if(!aA && bA) return 1;
+      if(aA && bA) return ADMIN_NAMES.indexOf(a) - ADMIN_NAMES.indexOf(b);
+      return a.localeCompare(b, 'ko');
+    });
+
+    sortedMembers.forEach(([mname, mdates]) => {
       const fullCount = dates.filter(d => {
-        const r = m.dates[d];
-        return r === '완료' || r === '공게' || r === '봉사' || r === '투피드' || r === '노피드';
+        const r = mdates[d];
+        return ['완료','공게','봉사','투피드','노피드','프패'].includes(r);
       }).length;
       const isFull = fullCount >= 7;
-      html += `<tr style="border-top:1px solid var(--border)">`;
-      html += `<td style="padding:6px 8px;font-weight:600;white-space:nowrap">${escH(m.name)}</td>`;
+      const isAdminM = ADMIN_NAMES.includes(mname);
+      html += `<tr style="border-top:1px solid var(--border);${isAdminM?'background:#fff8f5':''}">`;
+      html += `<td style="padding:6px 8px;font-weight:${isAdminM?'800':'600'};white-space:nowrap;color:${isAdminM?'var(--accent)':'inherit'}">${escH(mname)}</td>`;
       dates.forEach(d => {
-        const r = m.dates[d] || '';
+        const r = mdates[d] || '';
         const bg = resultColor[r] || '#f1f5f9';
-        html += `<td style="padding:4px;text-align:center"><span style="display:inline-block;padding:3px 6px;border-radius:6px;background:${bg}22;color:${bg};font-weight:700;font-size:10px;white-space:nowrap">${r||'-'}</span></td>`;
+        html += `<td style="padding:4px;text-align:center"><span style="display:inline-block;padding:3px 6px;border-radius:6px;background:${r?bg+'22':'#f1f5f9'};color:${r?bg:'#ccc'};font-weight:700;font-size:10px;white-space:nowrap">${r||'-'}</span></td>`;
       });
       html += `<td style="padding:6px 8px;text-align:center;font-weight:800;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':(fullCount+'/7')}</td>`;
       html += `</tr>`;
