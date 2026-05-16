@@ -452,6 +452,25 @@ const PUSH_SERVER='https://crew31-push.ys1004dm.workers.dev';
 
 let _pushReady=false;
 
+// 로그인 시 기존 구독 자동 복원
+async function checkExistingPushSub(){
+  try{
+    if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
+    const reg=await navigator.serviceWorker.getRegistration('https://5sq224fdw5-eng.github.io/crew31-sw.js');
+    if(!reg)return;
+    const sub=await reg.pushManager.getSubscription();
+    if(!sub)return;
+    // 구독 있으면 서버에 재등록 (토큰 갱신)
+    const userKey=CU?.key||CU?.name||'guest';
+    await fetch(`${PUSH_SERVER}/subscribe`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({subscription:sub.toJSON(),userKey,userName:CU?.name||'게스트'})
+    });
+    _pushReady=true;
+  }catch(e){console.warn('checkExistingPushSub:',e);}
+}
+
 async function initWebPush(){
   try{
     if(!('serviceWorker' in navigator)||!('PushManager' in window)){
@@ -581,8 +600,8 @@ async function enterApp(){
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
   try{goTab('notice');}catch(e){console.error('goTab error',e);}
   setTimeout(()=>startNotiPolling(),2000);
-  // FCM 초기화 (백그라운드 푸시)
-  setTimeout(()=>initFCM(),3000);
+  // 기존 푸시 구독 자동 복원
+  setTimeout(()=>checkExistingPushSub(),3000);
 }
 
 // ── 자동 로그인 ──
@@ -1486,7 +1505,6 @@ async function sendDM(){
 // ── CALENDAR ──
 // ══════════════════════════════════════════════
 async function renderCalendar(){
-  // calY, calM 초기화 보호
   if(!calY||!calM&&calM!==0){
     calY=new Date().getFullYear();
     calM=new Date().getMonth();
@@ -1497,8 +1515,52 @@ async function renderCalendar(){
   const y=calY,m=calM;
   const first=new Date(y,m,1).getDay();
   const days=new Date(y,m+1,0).getDate();
-  const evts=await dbGet('calEvents')||{};
-  const evList=Object.entries(evts).filter(([k,e])=>!e.deleted);
+
+  // 공지 이벤트 + 출석 데이터 동시 로드
+  const [evts, allAttendance] = await Promise.all([
+    dbGet('calEvents'),
+    isAdmin ? dbGet('attendance') : null
+  ]);
+  const evList=Object.entries(evts||{}).filter(([k,e])=>!e.deleted);
+
+  // 이번 달 출석 데이터 수집
+  // 사원: 본인 attendance 찾기
+  // 관리자: 전체 그룹 취합
+  const monthStr = `${y}-${String(m+1).padStart(2,'0')}`;
+  const dateAttMap = {}; // date → [{name, result, group}]
+
+  if(isAdmin && allAttendance){
+    // 전체 그룹 순회
+    Object.entries(allAttendance).forEach(([gid, weeks])=>{
+      const gname = groups[gid]?.name || gid;
+      Object.entries(weeks).forEach(([wk, members])=>{
+        Object.entries(members).forEach(([mname, dates])=>{
+          Object.entries(dates).forEach(([date, result])=>{
+            if(!date.startsWith(monthStr)) return;
+            if(!dateAttMap[date]) dateAttMap[date]=[];
+            dateAttMap[date].push({name:mname, result, group:gname});
+          });
+        });
+      });
+    });
+  } else if(!isAdmin && CU?.name){
+    // 본인 출석만
+    for(const [gid] of Object.entries(groups)){
+      const weekKeys = getMonthWeekKeys(y, m);
+      for(const wk of weekKeys){
+        const myAtt = await dbGet(`attendance/${gid}/${wk}/${CU.name}`);
+        if(myAtt){
+          Object.entries(myAtt).forEach(([date, result])=>{
+            if(!date.startsWith(monthStr)) return;
+            if(!dateAttMap[date]) dateAttMap[date]=[];
+            dateAttMap[date].push({name:CU.name, result, group:groups[gid]?.name||gid});
+          });
+        }
+      }
+    }
+  }
+
+  const resultColor={'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b'};
 
   let html='<div style="padding-bottom:60px">';
   html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 8px">`;
@@ -1518,27 +1580,84 @@ async function renderCalendar(){
     const isToday=ds===todayStr;
     const isSel=ds===calSel;
     const dayEvts=evList.filter(([k,e])=>e.date===ds);
+    const dayAtt=dateAttMap[ds]||[];
     const dow=(first+d-1)%7;
     html+=`<div class="cal-cell${isToday?' today':''}${isSel?' selected':''}" onclick="calSelect('${ds}')">`;
     html+=`<div class="cal-dn${dow===0?' sun':dow===6?' sat':''}">${d}</div>`;
-    if(dayEvts.length)html+=`<div class="cal-dot"></div>`;
+    if(dayEvts.length) html+=`<div class="cal-dot"></div>`;
+    // 출석 도트 (결과 색상으로)
+    if(dayAtt.length>0){
+      if(!isAdmin){
+        // 사원: 본인 결과 색상 도트
+        const r=dayAtt[0]?.result||'';
+        const c=resultColor[r]||'var(--accent)';
+        html+=`<div style="width:6px;height:6px;border-radius:50%;background:${c};margin:1px auto"></div>`;
+      } else {
+        // 관리자: 참여 인원수
+        html+=`<div style="font-size:9px;color:var(--accent);font-weight:700;text-align:center">${dayAtt.length}명</div>`;
+      }
+    }
     html+=`</div>`;
   }
   html+=`</div>`;
 
+  // 선택 날짜 상세
   if(calSel){
     const selEvts=evList.filter(([k,e])=>e.date===calSel);
+    const selAtt=dateAttMap[calSel]||[];
     html+=`<div style="padding:0 14px 10px">`;
-    html+=`<div style="font-size:13px;font-weight:800;color:var(--text2);margin:8px 0">${calSel} 일정</div>`;
-    if(selEvts.length===0)html+=`<div style="font-size:13px;color:var(--text3);padding:8px 0">일정 없음</div>`;
-    selEvts.forEach(([eid,e])=>{
-      html+=`<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:8px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">`;
-      html+=`<div><div style="font-size:14px;font-weight:700">${escH(e.title||'')}</div>`;
-      if(e.desc)html+=`<div style="font-size:11px;color:var(--text3)">${escH(e.desc)}</div>`;
-      html+=`</div>`;
-      if(isAdmin)html+=`<button class="vbtn del" onclick="delCalEvent('${eid}')">🗑</button>`;
-      html+=`</div>`;
-    });
+    html+=`<div style="font-size:13px;font-weight:800;color:var(--text2);margin:8px 0">${calSel}</div>`;
+
+    // 출석 내역
+    if(selAtt.length>0){
+      html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">📋 출석 현황</div>`;
+      if(!isAdmin){
+        // 사원: 본인 결과만
+        selAtt.forEach(a=>{
+          const c=resultColor[a.result]||'#ccc';
+          html+=`<div style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:${c}22;border-radius:10px;margin:0 4px 4px 0">`;
+          html+=`<span style="font-size:12px;font-weight:700;color:${c}">${a.result}</span>`;
+          html+=`<span style="font-size:11px;color:var(--text3)">${a.group}</span>`;
+          html+=`</div>`;
+        });
+      } else {
+        // 관리자: 그룹별 집계
+        const byGroup={};
+        selAtt.forEach(a=>{
+          if(!byGroup[a.group]) byGroup[a.group]={};
+          if(!byGroup[a.group][a.result]) byGroup[a.group][a.result]=[];
+          byGroup[a.group][a.result].push(a.name);
+        });
+        Object.entries(byGroup).forEach(([gname, results])=>{
+          html+=`<div style="margin-bottom:8px">`;
+          html+=`<div style="font-size:12px;font-weight:800;margin-bottom:4px">${gname}</div>`;
+          Object.entries(results).forEach(([result, names])=>{
+            const c=resultColor[result]||'#ccc';
+            html+=`<div style="font-size:11px;margin-bottom:3px"><span style="background:${c}22;color:${c};padding:2px 8px;border-radius:8px;font-weight:700;margin-right:6px">${result} ${names.length}명</span>`;
+            html+=`<span style="color:var(--text3)">${names.slice(0,5).join(', ')}${names.length>5?` 외 ${names.length-5}명`:''}</span></div>`;
+          });
+          html+=`</div>`;
+        });
+      }
+    }
+
+    // 공지 이벤트
+    if(selEvts.length>0){
+      html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:8px 0 6px">📢 일정</div>`;
+      selEvts.forEach(([eid,e])=>{
+        html+=`<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:8px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">`;
+        html+=`<div><div style="font-size:14px;font-weight:700">${escH(e.title||'')}</div>`;
+        if(e.desc)html+=`<div style="font-size:11px;color:var(--text3)">${escH(e.desc)}</div>`;
+        html+=`</div>`;
+        if(isAdmin)html+=`<button class="vbtn del" onclick="delCalEvent('${eid}')">🗑</button>`;
+        html+=`</div>`;
+      });
+    }
+
+    if(selEvts.length===0&&selAtt.length===0){
+      html+=`<div style="font-size:13px;color:var(--text3);padding:8px 0">일정 없음</div>`;
+    }
+
     if(isAdmin){
       html+=`<div style="margin-top:8px;display:flex;gap:8px">`;
       html+=`<input id="calEvtTitle" class="fi" placeholder="일정 제목" style="flex:1;padding:8px 12px">`;
@@ -1549,6 +1668,17 @@ async function renderCalendar(){
   }
   html+='</div>';
   mb.innerHTML=html;
+}
+
+// 해당 월의 주 월요일 키 목록
+function getMonthWeekKeys(y, m){
+  const keys=new Set();
+  const days=new Date(y,m+1,0).getDate();
+  for(let d=1;d<=days;d++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    keys.add(getWeekKey(ds));
+  }
+  return [...keys];
 }
 
 function calNav(dir){
