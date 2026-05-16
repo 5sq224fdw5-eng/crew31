@@ -1725,6 +1725,8 @@ async function castVote(vid,optIdx){
   if(v.closed){showToast('마감된 투표입니다');return;}
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   showToast('✅ 투표 완료!');
+  // 출석 자동 기록
+  recordAttendance(vid, optIdx);
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
@@ -1807,37 +1809,329 @@ function closeVoteModal(){document.getElementById('voteModal').classList.remove(
 // ══════════════════════════════════════════════
 // ── STATUS ──
 // ══════════════════════════════════════════════
-async function loadStatus(){
-  const mb=document.getElementById('mainBody');
-  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  const [votes,memberData]=await Promise.all([dbGet('votes'),dbGet('members')]);
-  if(!votes){mb.innerHTML='<div class="empty"><div class="empty-icon">📋</div>투표 없음</div>';return;}
-  const list=Object.entries(votes).filter(([k,v])=>!v.deleted)
-    .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
-  let html='<div style="padding:14px 0 80px">';
-  list.forEach(([vid,v])=>{
-    const opts=v.options||[];
-    const responses=v.responses||{};
-    const total=Object.keys(responses).length;
-    const gName=v.group==='all'?'전체':(groups[v.group]?.name||v.group||'전체');
-    html+=`<div class="card" style="margin:0 14px 16px;padding:14px">`;
-    html+=`<div style="font-size:14px;font-weight:800;margin-bottom:4px">${escH(v.title||'')}</div>`;
-    html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:10px">${escH(gName)} · ${total}명 참여 · ${v.date||''}</div>`;
-    opts.forEach((opt,i)=>{
-      const cnt=Object.values(responses).filter(r=>r===i).length;
-      const pct=total?Math.round(cnt/total*100):0;
-      const keys=memberData?Object.entries(responses).filter(([k,r])=>r===i).map(([k])=>memberData[k]?.name||k).join(', '):'';
-      html+=`<div style="margin-bottom:10px">`;
-      html+=`<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:4px">`;
-      html+=`<span>${escH(opt)}</span><span style="color:var(--accent)">${cnt}명 ${pct}%</span></div>`;
-      html+=`<div style="background:var(--border);border-radius:4px;height:6px;margin-bottom:4px"><div style="background:var(--accent);height:6px;border-radius:4px;width:${pct}%"></div></div>`;
-      if(keys)html+=`<div style="font-size:11px;color:var(--text3)">${escH(keys)}</div>`;
-      html+=`</div>`;
-    });
-    html+=`</div>`;
+// ══════════════════════════════════════════════
+// ── 투표 결과 → 엑셀값 매핑 ──
+// ══════════════════════════════════════════════
+const VOTE_RESULT_MAP = {
+  '완료': '완료', '퇴근': '완료', '출근': '완료',
+  '공게': '공게', '2인': '공게', '공개': '공게',
+  '프패': '프패', '연차': '프패', '프리패스': '프패',
+  '봉사': '봉사', '열정페이': '봉사',
+  '노피드': '노피드', '재능기부': '노피드',
+  '투피드': '투피드', '두배': '투피드',
+  '누락': '누락'
+};
+
+function mapVoteResult(optionText) {
+  if(!optionText) return '';
+  const t = optionText.toLowerCase();
+  for(const [key, val] of Object.entries(VOTE_RESULT_MAP)) {
+    if(t.includes(key.toLowerCase())) return val;
+  }
+  return '완료'; // 기본값
+}
+
+// 날짜 → 엑셀 시리얼 번호 변환
+function dateToExcelSerial(dateStr) {
+  const d = new Date(dateStr);
+  const start = new Date(1899, 11, 30);
+  return Math.round((d - start) / 86400000);
+}
+
+// 엑셀 시리얼 → 날짜 문자열
+function excelSerialToDate(serial) {
+  const d = new Date(1899, 11, 30);
+  d.setDate(d.getDate() + serial);
+  return `${d.getMonth()+1}월 ${d.getDate()}일`;
+}
+
+// 주차 계산 (월요일 기준)
+function getWeekKey(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return mon.toISOString().slice(0, 10); // 월요일 날짜
+}
+
+function getWeekLabel(mondayStr) {
+  const d = new Date(mondayStr);
+  const m = d.getMonth() + 1;
+  // 해당 달의 몇째 주인지
+  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+  const weekNum = Math.ceil((d.getDate() + firstDay.getDay() - 1) / 7);
+  return `${m}월 ${weekNum}주`;
+}
+
+// ── 현황 탭 메인 ──
+async function loadStatus() {
+  const mb = document.getElementById('mainBody');
+  mb.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  setMainHeader('📋 현황', '주차별 출근 현황',
+    `<button class="btn-sm pri" onclick="showStatusView('week')">주차별</button>`
+  );
+
+  // 그룹 목록
+  const groupList = Object.entries(groups);
+  if(groupList.length === 0) { mb.innerHTML = '<div class="empty">그룹 없음</div>'; return; }
+
+  let html = '<div style="padding-bottom:80px">';
+
+  // 그룹 탭
+  html += '<div style="display:flex;gap:8px;padding:10px 14px 0;overflow-x:auto">';
+  groupList.forEach(([gid, g], i) => {
+    html += `<button onclick="loadStatusGroup('${gid}')" style="padding:7px 16px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;background:${i===0?'var(--accent)':'var(--surface2)'};color:${i===0?'white':'var(--text2)'}" id="statusTab_${gid}">${escH(g.name)}</button>`;
   });
-  html+='</div>';
-  mb.innerHTML=html;
+  html += '</div>';
+  html += '<div id="statusContent" style="margin-top:8px"></div>';
+  html += '</div>';
+  mb.innerHTML = html;
+
+  // 첫 번째 그룹 자동 로드
+  if(groupList.length > 0) loadStatusGroup(groupList[0][0]);
+}
+
+async function loadStatusGroup(gid) {
+  // 탭 스타일 업데이트
+  Object.keys(groups).forEach(id => {
+    const btn = document.getElementById(`statusTab_${id}`);
+    if(btn) { btn.style.background = id===gid?'var(--accent)':'var(--surface2)'; btn.style.color = id===gid?'white':'var(--text2)'; }
+  });
+
+  const el = document.getElementById('statusContent');
+  if(!el) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const [votes, attendance] = await Promise.all([
+    dbGet('votes'),
+    dbGet(`attendance/${gid}`)
+  ]);
+
+  const gName = groups[gid]?.name || gid;
+
+  // 해당 그룹 + 전체 투표만 필터
+  const groupVotes = votes ? Object.entries(votes)
+    .filter(([k,v]) => !v.deleted && (v.group === gid || v.group === 'all') && v.date)
+    .sort((a,b) => a[1].date.localeCompare(b[1].date)) : [];
+
+  if(groupVotes.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div>${gName} 투표 없음</div>`;
+    return;
+  }
+
+  // 주차별 그룹핑
+  const weeks = {};
+  groupVotes.forEach(([vid, v]) => {
+    const wk = getWeekKey(v.date);
+    if(!weeks[wk]) weeks[wk] = [];
+    weeks[wk].push([vid, v]);
+  });
+
+  // attendance 데이터 (수동 수정 포함)
+  const att = attendance || {};
+
+  let html = '';
+
+  // 주차별 렌더
+  Object.entries(weeks).sort((a,b)=>b[0].localeCompare(a[0])).forEach(([mondayStr, wvotes]) => {
+    const wLabel = getWeekLabel(mondayStr);
+    // 날짜 목록
+    const dates = [...new Set(wvotes.map(([,v])=>v.date))].sort();
+
+    html += `<div style="background:white;border-radius:16px;margin:8px 14px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
+    html += `<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">`;
+    html += `<div style="font-size:14px;font-weight:800">${wLabel}</div>`;
+    html += `<div style="display:flex;gap:6px">`;
+    html += `<button onclick="downloadWeekExcel('${gid}','${mondayStr}')" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:var(--green);color:white;font-weight:700">⬇️ 엑셀</button>`;
+    if(CU?.role==='admin') html += `<button onclick="openAttendanceEdit('${gid}','${mondayStr}')" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:var(--surface2);color:var(--text2);font-weight:700">✏️ 수정</button>`;
+    html += `</div></div>`;
+
+    // 멤버별 결과 취합
+    const memberResults = {}; // memberKey → {name, dates: {date: result}}
+    wvotes.forEach(([vid, v]) => {
+      const opts = v.options || [];
+      const responses = v.responses || {};
+      Object.entries(responses).forEach(([mkey, optIdx]) => {
+        if(!memberResults[mkey]) memberResults[mkey] = {name: mkey, dates: {}};
+        const optText = opts[optIdx] || '';
+        const result = mapVoteResult(optText);
+        // 완료 투표 우선, 없으면 시작 투표
+        if(!memberResults[mkey].dates[v.date] || result === '완료') {
+          memberResults[mkey].dates[v.date] = result;
+        }
+      });
+    });
+
+    // 수동 수정 데이터 덮어씌우기
+    if(att[mondayStr]) {
+      Object.entries(att[mondayStr]).forEach(([mkey, dateMap]) => {
+        if(!memberResults[mkey]) memberResults[mkey] = {name: mkey, dates: {}};
+        Object.assign(memberResults[mkey].dates, dateMap);
+      });
+    }
+
+    // 테이블 헤더
+    html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">`;
+    html += `<tr style="background:var(--surface2)"><th style="padding:6px 8px;text-align:left;font-weight:700">멤버</th>`;
+    dates.forEach(d => {
+      const dd = new Date(d);
+      const days = ['일','월','화','수','목','금','토'];
+      html += `<th style="padding:6px 8px;text-align:center;font-weight:700;white-space:nowrap">${dd.getMonth()+1}/${dd.getDate()}<br><span style="font-weight:400;color:var(--text3)">${days[dd.getDay()]}</span></th>`;
+    });
+    html += `<th style="padding:6px 8px;text-align:center;font-weight:700">풀참</th></tr>`;
+
+    // 멤버 행
+    const resultColor = {'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','':`#f1f5f9`};
+    Object.entries(memberResults).sort(([,a],[,b])=>a.name.localeCompare(b.name,'ko')).forEach(([mkey, m]) => {
+      const fullCount = dates.filter(d => {
+        const r = m.dates[d];
+        return r === '완료' || r === '공게' || r === '봉사' || r === '투피드' || r === '노피드';
+      }).length;
+      const isFull = fullCount >= 7;
+      html += `<tr style="border-top:1px solid var(--border)">`;
+      html += `<td style="padding:6px 8px;font-weight:600;white-space:nowrap">${escH(m.name)}</td>`;
+      dates.forEach(d => {
+        const r = m.dates[d] || '';
+        const bg = resultColor[r] || '#f1f5f9';
+        html += `<td style="padding:4px;text-align:center"><span style="display:inline-block;padding:3px 6px;border-radius:6px;background:${bg}22;color:${bg};font-weight:700;font-size:10px;white-space:nowrap">${r||'-'}</span></td>`;
+      });
+      html += `<td style="padding:6px 8px;text-align:center;font-weight:800;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':'${fullCount}/7'}</td>`;
+      html += `</tr>`;
+    });
+    html += `</table></div></div>`;
+  });
+
+  el.innerHTML = html || '<div class="empty">데이터 없음</div>';
+}
+
+// ── 출석 자동 기록 (castVote 후 호출) ──
+async function recordAttendance(vid, optIdx) {
+  try {
+    const v = await dbGet(`votes/${vid}`);
+    if(!v || !v.date || !v.group || v.group === 'all') return;
+    const gid = v.group;
+    const date = v.date;
+    const mondayStr = getWeekKey(date);
+    const myKey = CU?.key || CU?.name || 'guest';
+    const optText = (v.options || [])[optIdx] || '';
+    const result = mapVoteResult(optText);
+    // attendance/{gid}/{mondayStr}/{memberKey}/{date} = result
+    await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, result);
+    // 풀참 체크
+    checkFullAttendance(gid, mondayStr, myKey);
+  } catch(e) { console.warn('recordAttendance error', e); }
+}
+
+async function checkFullAttendance(gid, mondayStr, memberKey) {
+  try {
+    const att = await dbGet(`attendance/${gid}/${mondayStr}/${memberKey}`);
+    if(!att) return;
+    const results = Object.values(att);
+    const validCount = results.filter(r => ['완료','공게','봉사','투피드','노피드','프패'].includes(r)).length;
+    if(validCount >= 7) {
+      // 연차 지급 (오락실 Firebase)
+      const gameMembers = await gameGet('members');
+      if(!gameMembers) return;
+      // 이름으로 매칭
+      const myName = CU?.name || '';
+      const match = Object.entries(gameMembers).find(([k,m]) => {
+        const clean = (m.name||'').replace(/^\*/,'');
+        const realName = clean.replace(/^(좋아요|댓글|시크릿)/,'');
+        return realName === myName;
+      });
+      if(!match) return;
+      const [gameKey] = match;
+      // 이미 지급됐는지 확인
+      const alreadyKey = `fullAttendance/${gid}/${mondayStr}/${memberKey}`;
+      const already = await dbGet(alreadyKey);
+      if(already) return;
+      // 연차 지급
+      const cur = await gameGet(`memberLeave/${gameKey}`) || 0;
+      await gameSet(`memberLeave/${gameKey}`, cur + 1);
+      await dbSet(alreadyKey, true);
+      showToast('🎉 풀참 연차 1일이 지급됐습니다!');
+    }
+  } catch(e) { console.warn('checkFullAttendance error', e); }
+}
+
+// ── 출석 수동 수정 모달 ──
+function openAttendanceEdit(gid, mondayStr) {
+  showToast('수동 수정 기능은 현황탭 → ✏️ 수정 버튼으로 가능합니다');
+  // TODO: 수정 모달 구현
+}
+
+// ── 엑셀 다운로드 ──
+async function downloadWeekExcel(gid, mondayStr) {
+  showToast('⏳ 엑셀 생성 중...');
+  try {
+    const [votes, attendance, gameMembers, memberLeave] = await Promise.all([
+      dbGet('votes'),
+      dbGet(`attendance/${gid}`),
+      gameGet('members'),
+      gameGet('memberLeave')
+    ]);
+
+    const gName = groups[gid]?.name || gid;
+    const wLabel = getWeekLabel(mondayStr);
+    const att = attendance?.[mondayStr] || {};
+
+    // 해당 주 날짜들
+    const wvotes = votes ? Object.entries(votes)
+      .filter(([k,v]) => !v.deleted && (v.group===gid||v.group==='all') && v.date && getWeekKey(v.date)===mondayStr)
+      : [];
+    const dates = [...new Set(wvotes.map(([,v])=>v.date))].sort();
+
+    // 멤버 목록 (오락실 기준)
+    const members = [];
+    if(gameMembers) {
+      let no = 1;
+      Object.entries(gameMembers).forEach(([k,m]) => {
+        if(!m.name) return;
+        const clean = m.name.replace(/^\*/,'');
+        const group = ['좋아요','댓글','시크릿'].find(g=>clean.startsWith(g));
+        if(groups[gid]?.name !== group) return;
+        const realName = group ? clean.replace(group,'') : clean;
+        members.push({no:no++, key:k, name:realName, leave:memberLeave?.[k]||0});
+      });
+    }
+
+    // 멤버별 결과
+    const memberResults = {};
+    wvotes.forEach(([vid,v]) => {
+      const opts = v.options||[];
+      const responses = v.responses||{};
+      Object.entries(responses).forEach(([mkey,optIdx]) => {
+        if(!memberResults[mkey]) memberResults[mkey]={};
+        const result = mapVoteResult(opts[optIdx]||'');
+        if(!memberResults[mkey][v.date] || result==='완료') memberResults[mkey][v.date]=result;
+      });
+    });
+    Object.entries(att).forEach(([mkey,dateMap]) => {
+      if(!memberResults[mkey]) memberResults[mkey]={};
+      Object.assign(memberResults[mkey], dateMap);
+    });
+
+    // CSV 생성
+    const headers = ['NO','ID','INS ID',...dates.map(d=>{const dd=new Date(d);return`${dd.getMonth()+1}/${dd.getDate()}`}),'연차'];
+    const rows = [headers];
+    members.forEach(m => {
+      const row = [m.no, m.name, '', ...dates.map(d=>memberResults[m.key]?.[d]||''), m.leave];
+      rows.push(row);
+    });
+
+    const csv = rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+    const bom = '\uFEFF';
+    const blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${gName}_${wLabel}_현황.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ 엑셀(CSV) 다운로드 완료!');
+  } catch(e) {
+    showToast('다운로드 실패: '+e.message);
+  }
 }
 
 // ══════════════════════════════════════════════
