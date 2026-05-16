@@ -1902,12 +1902,18 @@ async function loadStatusGroup(gid) {
   if(!el) return;
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-  const [votes, attendance] = await Promise.all([
+  // 모든 비동기 데이터 한 번에 로드
+  const [votes, attendance, crewMembers] = await Promise.all([
     dbGet('votes'),
-    dbGet(`attendance/${gid}`)
+    dbGet(`attendance/${gid}`),
+    dbGet('members')
   ]);
 
   const gName = groups[gid]?.name || gid;
+
+  // key → 이름 매핑
+  const keyToName = {};
+  if(crewMembers) Object.entries(crewMembers).forEach(([k,m]) => { if(m.name) keyToName[k] = m.name; });
 
   // 해당 그룹 + 전체 투표만 필터
   const groupVotes = votes ? Object.entries(votes)
@@ -1927,15 +1933,12 @@ async function loadStatusGroup(gid) {
     weeks[wk].push([vid, v]);
   });
 
-  // attendance 데이터 (수동 수정 포함)
   const att = attendance || {};
-
   let html = '';
 
-  // 주차별 렌더
-  Object.entries(weeks).sort((a,b)=>b[0].localeCompare(a[0])).forEach(([mondayStr, wvotes]) => {
+  // 주차별 렌더 (forEach → for...of 로 변경, async 안전)
+  for(const [mondayStr, wvotes] of Object.entries(weeks).sort((a,b)=>b[0].localeCompare(a[0]))) {
     const wLabel = getWeekLabel(mondayStr);
-    // 날짜 목록
     const dates = [...new Set(wvotes.map(([,v])=>v.date))].sort();
 
     html += `<div style="background:white;border-radius:16px;margin:8px 14px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
@@ -1946,26 +1949,27 @@ async function loadStatusGroup(gid) {
     if(CU?.role==='admin') html += `<button onclick="openAttendanceEdit('${gid}','${mondayStr}')" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:var(--surface2);color:var(--text2);font-weight:700">✏️ 수정</button>`;
     html += `</div></div>`;
 
-    // 멤버별 결과 취합
-    const memberResults = {}; // memberKey → {name, dates: {date: result}}
-    wvotes.forEach(([vid, v]) => {
+    // 멤버별 결과 취합 - 해당 그룹 투표만
+    const memberResults = {};
+    const groupOnlyVotes = wvotes.filter(([,v]) => v.group === gid);
+    groupOnlyVotes.forEach(([vid, v]) => {
       const opts = v.options || [];
       const responses = v.responses || {};
       Object.entries(responses).forEach(([mkey, optIdx]) => {
-        if(!memberResults[mkey]) memberResults[mkey] = {name: mkey, dates: {}};
-        const optText = opts[optIdx] || '';
-        const result = mapVoteResult(optText);
-        // 완료 투표 우선, 없으면 시작 투표
+        const mname = keyToName[mkey] || mkey;
+        if(!memberResults[mkey]) memberResults[mkey] = {name: mname, dates: {}};
+        const result = mapVoteResult(opts[optIdx] || '');
         if(!memberResults[mkey].dates[v.date] || result === '완료') {
           memberResults[mkey].dates[v.date] = result;
         }
       });
     });
 
-    // 수동 수정 데이터 덮어씌우기
+    // 수동 수정 + 이전 데이터 덮어씌우기
     if(att[mondayStr]) {
       Object.entries(att[mondayStr]).forEach(([mkey, dateMap]) => {
-        if(!memberResults[mkey]) memberResults[mkey] = {name: mkey, dates: {}};
+        const mname = keyToName[mkey] || mkey;
+        if(!memberResults[mkey]) memberResults[mkey] = {name: mname, dates: {}};
         Object.assign(memberResults[mkey].dates, dateMap);
       });
     }
@@ -1995,11 +1999,11 @@ async function loadStatusGroup(gid) {
         const bg = resultColor[r] || '#f1f5f9';
         html += `<td style="padding:4px;text-align:center"><span style="display:inline-block;padding:3px 6px;border-radius:6px;background:${bg}22;color:${bg};font-weight:700;font-size:10px;white-space:nowrap">${r||'-'}</span></td>`;
       });
-      html += `<td style="padding:6px 8px;text-align:center;font-weight:800;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':'${fullCount}/7'}</td>`;
+      html += `<td style="padding:6px 8px;text-align:center;font-weight:800;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':(fullCount+'/7')}</td>`;
       html += `</tr>`;
     });
     html += `</table></div></div>`;
-  });
+  }
 
   el.innerHTML = html || '<div class="empty">데이터 없음</div>';
 }
