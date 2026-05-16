@@ -2275,6 +2275,14 @@ async function loadSettings(){
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   let html='<div style="padding-bottom:60px">';
 
+  // 오락실 멤버 자동 동기화
+  html+=`<div class="setting-section">`;
+  html+=`<div class="setting-section-title">👥 오락실 멤버 자동 등록</div>`;
+  html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">오락실 멤버에서 그룹명을 제외한 닉네임으로 사무실 멤버를 자동 등록합니다. 중복 닉네임은 한 번만 등록됩니다.</div>`;
+  html+=`<button class="btn-pri" onclick="syncGameMembers()" style="width:100%;padding:12px">🔄 오락실 멤버 동기화</button>`;
+  html+=`<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
+  html+=`</div>`;
+
   // 부서 채팅 잠금
   html+=`<div class="setting-section">`;
   html+=`<div class="setting-section-title">🔒 부서 채팅 잠금</div>`;
@@ -2293,6 +2301,53 @@ async function loadSettings(){
 
   html+='</div>';
   mb.innerHTML=html;
+}
+
+async function syncGameMembers(){
+  const resultEl=document.getElementById('syncResult');
+  if(resultEl) resultEl.textContent='동기화 중...';
+  try{
+    const [gameMembers, crewMembers] = await Promise.all([
+      gameGet('members'),
+      dbGet('members')
+    ]);
+    if(!gameMembers){showToast('오락실 연결 실패');return;}
+
+    const GROUPS=['좋아요','댓글','시크릿'];
+    const existing=crewMembers||{};
+
+    // 기존 사무실 멤버 닉네임 목록
+    const existingNames=new Set(Object.values(existing).map(m=>m.name||''));
+
+    let added=0, skipped=0;
+    const toAdd=[];
+
+    Object.values(gameMembers).forEach(m=>{
+      if(!m.name)return;
+      const clean=m.name.replace(/^\*/,'');
+      const group=GROUPS.find(g=>clean.startsWith(g));
+      const nick=group?clean.slice(group.length):clean;
+      if(!nick)return;
+      if(existingNames.has(nick)){skipped++;return;}
+      // 중복 체크 (toAdd 안에도)
+      if(toAdd.includes(nick)){skipped++;return;}
+      toAdd.push(nick);
+    });
+
+    // 일괄 추가
+    for(const nick of toAdd){
+      await dbPush('members',{name:nick,role:'member'});
+      added++;
+    }
+
+    const msg=`✅ ${added}명 추가됨, ${skipped}명 중복 스킵`;
+    showToast(msg);
+    if(resultEl) resultEl.textContent=msg;
+    if(added>0) loadSettings();
+  }catch(e){
+    showToast('오류: '+e.message);
+    if(resultEl) resultEl.textContent='오류: '+e.message;
+  }
 }
 
 async function addMember(){
