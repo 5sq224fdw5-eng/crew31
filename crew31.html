@@ -986,6 +986,12 @@ const cnt=presence?Object.values(presence).filter(p=>p.active).length:0;
 if(el)el.textContent=`참여자 ${cnt}명`;
 }
 
+function backToChatList(){
+  clearInterval(window._chatPoll);
+  _currentChatRoom=null;
+  loadChatTab();
+}
+
 function selectChatRoom(type,id,name){
 _currentChatRoom={type,id,name};
 loadChatTab();
@@ -1181,6 +1187,10 @@ html+=`<div id="groupList">`;
   html+=`<span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>`;
   html+=`<span style="font-size:14px;font-weight:800;flex:1">${escH(gName)}</span>`;
   html+=`<span style="font-size:12px;color:var(--text3);margin-right:6px">${list.length}명</span>`;
+  if(isAdmin && gid){
+    const isLocked=groups[gid]?.lock;
+    html+=`<span onclick="event.stopPropagation();toggleGroupLockFromMember('${gid}')" style="font-size:18px;cursor:pointer;padding:0 6px" title="${isLocked?'잠금 해제':'채팅 잠금'}">${isLocked?'🔒':'🔓'}</span>`;
+  }
   html+=`<span id="garrow_${gName}" style="font-size:14px;color:var(--text3)">▸</span>`;
   html+=`</div>`;
   html+=`<div id="glist_${gName}" style="display:none;border-top:1px solid var(--border)">`;
@@ -1207,6 +1217,17 @@ function toggleMemberGroup2(gName){
   const open=el.style.display==='none';
   el.style.display=open?'block':'none';
   if(arrow)arrow.textContent=open?'▾':'▸';
+}
+
+async function toggleGroupLockFromMember(gid){
+  const g=groups[gid];if(!g)return;
+  const isLocked=g.lock;
+  const msg=isLocked?`${g.name} 채팅 잠금을 해제하시겠습니까?`:`${g.name} 채팅을 잠그시겠습니까?`;
+  if(!confirm(msg))return;
+  await dbSet(`groups/${gid}/lock`,!isLocked);
+  groups[gid].lock=!isLocked;
+  showToast(isLocked?`🔓 ${g.name} 잠금 해제됨`:`🔒 ${g.name} 잠금됨`);
+  loadMembersPage();
 }
 
 function filterMembers(){
@@ -2232,61 +2253,133 @@ async function downloadWeekExcel(gid, mondayStr) {
     const wLabel = getWeekLabel(mondayStr);
     const att = attendance?.[mondayStr] || {};
 
-    // 해당 주 날짜들
-    const wvotes = votes ? Object.entries(votes)
-      .filter(([k,v]) => !v.deleted && (v.group===gid||v.group==='all') && v.date && getWeekKey(v.date)===mondayStr)
-      : [];
-    const dates = [...new Set(wvotes.map(([,v])=>v.date))].sort();
+    // 해당 주 날짜 목록 (월~일)
+    const monday = new Date(mondayStr);
+    const dates = [];
+    for(let i=0;i<7;i++){
+      const d = new Date(monday);
+      d.setDate(monday.getDate()+i);
+      dates.push(d.toISOString().slice(0,10));
+    }
 
-    // 멤버 목록 (오락실 기준)
-    const members = [];
+    // 오락실 멤버 목록 (해당 그룹만)
+    const ADMIN_NAMES = ['고인물','에이스','경력직','불주먹','김월루','퇴사각'];
+    const allMembers = [];
     if(gameMembers) {
-      let no = 1;
       Object.entries(gameMembers).forEach(([k,m]) => {
         if(!m.name) return;
         const clean = m.name.replace(/^\*/,'');
         const group = ['좋아요','댓글','시크릿'].find(g=>clean.startsWith(g));
         if(groups[gid]?.name !== group) return;
         const realName = group ? clean.replace(group,'') : clean;
-        members.push({no:no++, key:k, name:realName, leave:memberLeave?.[k]||0});
+        allMembers.push({key:k, name:realName, leave:memberLeave?.[k]||0});
       });
     }
+    // 인사팀 먼저, 나머지 가나다
+    allMembers.sort((a,b)=>{
+      const aA=ADMIN_NAMES.includes(a.name), bA=ADMIN_NAMES.includes(b.name);
+      if(aA&&!bA)return -1; if(!aA&&bA)return 1;
+      if(aA&&bA)return ADMIN_NAMES.indexOf(a.name)-ADMIN_NAMES.indexOf(b.name);
+      return a.name.localeCompare(b.name,'ko');
+    });
 
-    // 멤버별 결과
+    // 멤버별 결과 (투표 + attendance 이전 데이터)
     const memberResults = {};
-    wvotes.forEach(([vid,v]) => {
-      const opts = v.options||[];
-      const responses = v.responses||{};
-      Object.entries(responses).forEach(([mkey,optIdx]) => {
-        if(!memberResults[mkey]) memberResults[mkey]={};
-        const result = mapVoteResult(opts[optIdx]||'');
-        if(!memberResults[mkey][v.date] || result==='완료') memberResults[mkey][v.date]=result;
+    // crew31 members key → name 매핑
+    const crewMembers = await dbGet('members')||{};
+    const keyToName = {};
+    Object.entries(crewMembers).forEach(([k,m])=>{ if(m.name) keyToName[k]=m.name; });
+
+    if(votes) {
+      Object.entries(votes).filter(([,v])=>!v.deleted&&v.group===gid&&v.date&&getWeekKey(v.date)===mondayStr)
+        .forEach(([,v])=>{
+          const opts=v.options||[];
+          Object.entries(v.responses||{}).forEach(([mkey,optIdx])=>{
+            const mname=keyToName[mkey]||mkey;
+            if(!memberResults[mname])memberResults[mname]={};
+            const r=mapVoteResult(opts[optIdx]||'');
+            if(!memberResults[mname][v.date]||r==='완료') memberResults[mname][v.date]=r;
+          });
+        });
+    }
+    Object.entries(att).forEach(([mname,dateMap])=>{
+      if(!memberResults[mname])memberResults[mname]={};
+      Object.assign(memberResults[mname], dateMap);
+    });
+
+    // SheetJS로 xlsx 생성
+    const XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
+
+    const RESULT_COLORS = {
+      '완료': {bg:'C6EFCE', fg:'006100'},
+      '프패': {bg:'FFEB9C', fg:'9C6500'},
+      '공게': {bg:'BDD7EE', fg:'1F4E79'},
+      '봉사': {bg:'E2EFDA', fg:'375623'},
+      '노피드': {bg:'D9D9D9', fg:'595959'},
+      '투피드': {bg:'FCE4D6', fg:'C55A11'},
+      '누락': {bg:'FF0000', fg:'FFFFFF'},
+    };
+    const HEADER_COLOR = '1F4E46';
+
+    const wb2 = XLSX.utils.book_new();
+    const aoa = []; // array of arrays
+
+    // 행1: 시작일
+    aoa.push([null, '시작일']);
+    // 행2: 날짜 + 참여수
+    const row2 = [null, monday];
+    dates.forEach(d => {
+      const cnt = allMembers.filter(m => memberResults[m.name]?.[d]).length;
+      row2.push(null, cnt); // 빈칸 + 참여수 (구조상 col D부터)
+    });
+    // 실제로는 col E~K에 참여수
+    const row2b = [null, monday, null, null];
+    dates.forEach(d => row2b.push(allMembers.filter(m=>memberResults[m.name]?.[d]).length));
+    aoa.push(row2b);
+
+    // 행3: 주차
+    aoa.push([null, `${wLabel}차`]);
+    // 행4: 현황 제목
+    aoa.push([null, `${wLabel}차 현황`]);
+    // 행5: 헤더
+    const h5 = [null, 'NO', 'ID', 'INS ID'];
+    dates.forEach(d => { const dd=new Date(d); h5.push(`${dd.getMonth()+1}/${dd.getDate()}`); });
+    h5.push('프리패스');
+    aoa.push(h5);
+    // 행6: 열번호
+    const h6 = [null, '1열', '2열', '3열'];
+    for(let i=0;i<dates.length;i++) h6.push(`${i+4}열`);
+    h6.push(`${dates.length+4}열`);
+    aoa.push(h6);
+
+    // 멤버 행
+    allMembers.forEach((m, idx) => {
+      const row = [null, idx+1, m.name, ''];
+      const valid = ['완료','공게','투피드','노피드','봉사','프패'];
+      let ppCount = 0;
+      dates.forEach(d => {
+        const r = memberResults[m.name]?.[d] || '';
+        row.push(r);
+        if(valid.includes(r)) ppCount++;
       });
-    });
-    Object.entries(att).forEach(([mkey,dateMap]) => {
-      if(!memberResults[mkey]) memberResults[mkey]={};
-      Object.assign(memberResults[mkey], dateMap);
+      row.push(ppCount >= 7 ? 'O' : '');
+      aoa.push(row);
     });
 
-    // CSV 생성
-    const headers = ['NO','ID','INS ID',...dates.map(d=>{const dd=new Date(d);return`${dd.getMonth()+1}/${dd.getDate()}`}),'연차'];
-    const rows = [headers];
-    members.forEach(m => {
-      const row = [m.no, m.name, '', ...dates.map(d=>memberResults[m.key]?.[d]||''), m.leave];
-      rows.push(row);
-    });
+    const ws2 = XLSX.utils.aoa_to_sheet(aoa, {dateNF:'YYYY-MM-DD'});
 
-    const csv = rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
-    const bom = '\uFEFF';
-    const blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${gName}_${wLabel}_현황.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('✅ 엑셀(CSV) 다운로드 완료!');
+    // 열 너비
+    ws2['!cols'] = [
+      {wch:2},{wch:5},{wch:14},{wch:16},
+      ...dates.map(()=>({wch:8})),
+      {wch:8}
+    ];
+
+    XLSX.utils.book_append_sheet(wb2, ws2, wLabel);
+    XLSX.writeFile(wb2, `${gName}_${wLabel}_현황.xlsx`);
+    showToast('✅ 엑셀 다운로드 완료!');
   } catch(e) {
+    console.error(e);
     showToast('다운로드 실패: '+e.message);
   }
 }
@@ -2307,6 +2400,23 @@ async function loadSettings(){
   html+=`<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
   html+=`</div>`;
 
+  // 그룹 관리
+  html+=`<div class="setting-section">`;
+  html+=`<div class="setting-section-title">👥 그룹 관리</div>`;
+  // 그룹 추가
+  html+=`<div style="display:flex;gap:8px;margin-bottom:12px">`;
+  html+=`<input id="newGroupName" class="fi" placeholder="새 그룹 이름" style="flex:1;padding:9px 12px;font-size:13px">`;
+  html+=`<button onclick="addGroup()" style="padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer">추가</button>`;
+  html+=`</div>`;
+  // 그룹 목록
+  Object.entries(groups).forEach(([gid,g])=>{
+    html+=`<div class="setting-row">`;
+    html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
+    html+=`<button onclick="deleteGroup('${gid}')" style="font-size:11px;padding:4px 12px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;cursor:pointer;font-weight:700">🗑 삭제</button>`;
+    html+=`</div>`;
+  });
+  html+=`</div>`;
+
   // 부서 채팅 잠금
   html+=`<div class="setting-section">`;
   html+=`<div class="setting-section-title">🔒 부서 채팅 잠금</div>`;
@@ -2325,6 +2435,33 @@ async function loadSettings(){
 
   html+='</div>';
   mb.innerHTML=html;
+}
+
+async function addGroup(){
+  const name=document.getElementById('newGroupName')?.value.trim();
+  if(!name){showToast('그룹 이름을 입력하세요');return;}
+  // 중복 체크
+  if(Object.values(groups).some(g=>g.name===name)){showToast('이미 있는 그룹 이름입니다');return;}
+  // 색상 자동 지정
+  const colors=['#FF7F6E','#FFB347','#5DB88A','#5B9BD5','#A78BFA','#f59e0b','#ec4899'];
+  const usedColors=Object.values(groups).map(g=>g.color);
+  const color=colors.find(c=>!usedColors.includes(c))||colors[Math.floor(Math.random()*colors.length)];
+  const newId='g'+Date.now();
+  await dbSet(`groups/${newId}`,{name,color,lock:false});
+  groups[newId]={name,color,lock:false};
+  showToast(`✅ ${name} 그룹 추가됨`);
+  renderDeptSubMenu();
+  loadSettings();
+}
+
+async function deleteGroup(gid){
+  const gname=groups[gid]?.name||gid;
+  if(!confirm(`"${gname}" 그룹을 삭제하시겠습니까?\n해당 그룹의 채팅/투표 데이터는 유지됩니다.`))return;
+  await dbDel(`groups/${gid}`);
+  delete groups[gid];
+  showToast(`🗑 ${gname} 그룹 삭제됨`);
+  renderDeptSubMenu();
+  loadSettings();
 }
 
 async function syncGameMembers(){
