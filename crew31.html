@@ -34,8 +34,8 @@ button{cursor:pointer;}
 .fi{width:100%;padding:12px 16px;background:var(--cream);border:1.5px solid var(--border);border-radius:14px;font-size:15px;color:var(--text);outline:none;transition:all 0.2s;box-sizing:border-box;}
 .fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,127,110,0.1);}
 .login-btn{width:100%;padding:15px;border:none;border-radius:14px;font-size:16px;font-weight:800;margin-top:10px;transition:all 0.15s;}
-.login-btn.member{background:linear-gradient(135deg,#FF9F7A,#FF7F6E);color:white;box-shadow:0 4px 16px rgba(255,127,110,0.3);}
-.login-btn.admin{background:linear-gradient(135deg,#FFB347,#FF9F7A);color:white;}
+.login-btn.member{background:linear-gradient(135deg,#FF85C1,#f87286);color:white;box-shadow:0 4px 16px rgba(255,133,193,0.3);}
+.login-btn.admin{background:linear-gradient(135deg,#FF85C1,#f87286);color:white;}
 .login-btn:active{transform:scale(0.97);}
 
 /* ── 앱 레이아웃 ── */
@@ -258,6 +258,7 @@ button{cursor:pointer;}
         <button onclick="goTab('noti')" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;position:relative">
           🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
         </button>
+        <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none">🎡</a>
         <button onclick="logout()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer">🚪</button>
       </div>
     </div>
@@ -276,7 +277,6 @@ button{cursor:pointer;}
         <button class="tab-item admin-tab" data-tab="status" onclick="goTab('status')" style="display:none">📊 현황</button>
         <button class="tab-item admin-tab" data-tab="settings" onclick="goTab('settings')" style="display:none">⚙️ 설정</button>
       </div>
-      <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank" class="tab-item" style="text-decoration:none;background:#FFF0E0;color:#C97A40">🎡 오락실</a>
     </div>
 
     <!-- 부서 서브탭 -->
@@ -1546,6 +1546,8 @@ async function sendDM(){
 // ══════════════════════════════════════════════
 // ── CALENDAR ──
 // ══════════════════════════════════════════════
+let _calGroup = 'all'; // 선택된 캘린더 그룹
+
 async function renderCalendar(){
   if(!calY||!calM&&calM!==0){
     calY=new Date().getFullYear();
@@ -1571,14 +1573,15 @@ async function renderCalendar(){
   if(allAttendance){
     Object.entries(allAttendance).forEach(([gid, weeks])=>{
       const gname = groups[gid]?.name || gid;
+      // 그룹 필터 적용
+      if(_calGroup !== 'all' && gid !== _calGroup) return;
       Object.entries(weeks).forEach(([wk, members])=>{
         Object.entries(members).forEach(([mname, dates])=>{
-          // 사원이면 본인 것만
           if(!isAdmin && mname !== CU?.name) return;
           Object.entries(dates).forEach(([date, result])=>{
             if(!date.startsWith(monthStr)) return;
             if(!dateAttMap[date]) dateAttMap[date]=[];
-            dateAttMap[date].push({name:mname, result, group:gname});
+            dateAttMap[date].push({name:mname, result, group:gname, gid});
           });
         });
       });
@@ -1588,6 +1591,14 @@ async function renderCalendar(){
   const resultColor={'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b'};
 
   let html='<div style="padding-bottom:60px">';
+  // 그룹 필터 탭
+  html+=`<div style="display:flex;gap:6px;padding:10px 14px 0;overflow-x:auto;scrollbar-width:none">`;
+  html+=`<button onclick="setCalGroup('all')" style="flex:0 0 auto;padding:5px 12px;border:none;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:${_calGroup==='all'?'#FF85C1':'#FFE8F3'};color:${_calGroup==='all'?'white':'#FF85C1'}">전체</button>`;
+  Object.entries(groups).forEach(([gid,g])=>{
+    const isActive = _calGroup===gid;
+    html+=`<button onclick="setCalGroup('${gid}')" style="flex:0 0 auto;padding:5px 12px;border:none;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:${isActive?'#f87286':'#fde8eb'};color:${isActive?'white':'#f87286'}">${escH(g.name)}</button>`;
+  });
+  html+=`</div>`;
   html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px 8px">`;
   html+=`<button onclick="calNav(-1)" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);padding:4px 8px">‹</button>`;
   html+=`<div style="font-size:16px;font-weight:800">${y}년 ${m+1}월</div>`;
@@ -1654,12 +1665,26 @@ async function renderCalendar(){
           byGroup[a.group][a.result].push(a.name);
         });
         Object.entries(byGroup).forEach(([gname, results])=>{
-          html+=`<div style="margin-bottom:8px">`;
-          html+=`<div style="font-size:12px;font-weight:800;margin-bottom:4px">${gname}</div>`;
+          const gid = Object.keys(groups).find(id=>groups[id].name===gname);
+          const gcolor = groups[gid]?.color || '#FF85C1';
+          const totalCount = Object.values(results).reduce((s,n)=>s+n.length,0);
+          html+=`<div style="margin-bottom:10px;background:white;border-radius:12px;padding:10px 12px;border:1px solid var(--border)">`;
+          html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">`;
+          html+=`<span style="width:8px;height:8px;border-radius:50%;background:${gcolor};display:inline-block"></span>`;
+          html+=`<span style="font-size:12px;font-weight:800">${gname}</span>`;
+          html+=`<span style="font-size:11px;color:var(--text3);margin-left:auto">총 ${totalCount}명</span>`;
+          html+=`</div>`;
           Object.entries(results).forEach(([result, names])=>{
             const c=resultColor[result]||'#ccc';
-            html+=`<div style="font-size:11px;margin-bottom:3px"><span style="background:${c}22;color:${c};padding:2px 8px;border-radius:8px;font-weight:700;margin-right:6px">${result} ${names.length}명</span>`;
-            html+=`<span style="color:var(--text3)">${names.slice(0,5).join(', ')}${names.length>5?` 외 ${names.length-5}명`:''}</span></div>`;
+            html+=`<div style="margin-bottom:6px">`;
+            html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">`;
+            html+=`<span style="background:${c}22;color:${c};padding:2px 8px;border-radius:8px;font-weight:700;font-size:11px">${result} ${names.length}명</span>`;
+            html+=`</div>`;
+            html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
+            names.forEach(name=>{
+              html+=`<span style="background:var(--surface2);color:var(--text2);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${escH(name)}</span>`;
+            });
+            html+=`</div></div>`;
           });
           html+=`</div>`;
         });
@@ -1704,6 +1729,11 @@ function getMonthWeekKeys(y, m){
     keys.add(getWeekKey(ds));
   }
   return [...keys];
+}
+
+function setCalGroup(gid){
+  _calGroup = gid;
+  renderCalendar();
 }
 
 function calNav(dir){
