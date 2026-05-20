@@ -8,23 +8,24 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
 :root{
-  --bg:#FFF8F5;--surface:#FFFFFF;--surface2:#FFF0EB;--border:#FDDDD4;
-  --text:#2D1B14;--text2:#8C6458;--text3:#C4A098;
-  --accent:#FF7F6E;--accent2:#FF9F7A;--peach:#FFCFC7;--cream:#FFF4F0;
-  --green:#5DB88A;--red:#FF5C5C;--gold:#FFB347;--blue:#5B9BD5;
+  --bg:#FFF9FC;--surface:#FFFFFF;--surface2:#FFF0E0;--border:#FFD6EA;
+  --text:#2D1414;--text2:#A0566B;--text3:#C4A0B0;
+  --accent:#FF85C1;--accent2:#FFB3D9;--peach:#FFE8F3;--cream:#FFF9FC;
+  --green:#f87286;--red:#FF5C5C;--gold:#FFB347;--blue:#5B9BD5;
+  --mint:#fde8eb;--minttext:#f87286;--brown:#C97A40;--beigebg:#FFF0E0;
   --sidebar:#2D1B14;--sidebar2:#3D2820;--sidebar3:#4D3830;
   --shadow:0 2px 16px rgba(255,127,110,0.1);--shadow2:0 6px 32px rgba(255,127,110,0.15);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;}
-button,input,textarea,select{font-family:'Noto Sans KR',sans-serif;}
+body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;}
+button,input,textarea,select{font-family:'Pretendard',sans-serif;}
 button{cursor:pointer;}
 
 /* ── 로그인 ── */
 #loginPage{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;overflow-y:auto;}
 .login-profile-area{width:100%;display:flex;flex-direction:column;align-items:center;padding:52px 24px 28px;background:linear-gradient(180deg,rgba(255,200,180,0.35) 0%,transparent 100%);}
-.login-logo{width:80px;height:80px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,127,110,0.3);}
-.login-title{font-family:'Nunito',sans-serif;font-size:28px;font-weight:900;background:linear-gradient(135deg,#FF7F6E,#FFB347);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;}
+.login-logo{width:80px;height:80px;background:linear-gradient(135deg,#FF85C1,#FFB3D9);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,133,193,0.3);}
+.login-title{font-family:'Nunito',sans-serif;font-size:28px;font-weight:900;background:linear-gradient(135deg,#FF85C1,#f87286);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;}
 .login-sub{font-size:13px;color:var(--text3);}
 .login-card{width:100%;max-width:400px;background:white;border-top:1px solid var(--border);}
 .login-sec{padding:22px 22px 16px;}
@@ -38,15 +39,21 @@ button{cursor:pointer;}
 .login-btn:active{transform:scale(0.97);}
 
 /* ── 앱 레이아웃 ── */
-#app{height:100vh;flex-direction:row;}
+#app{height:100vh;flex-direction:column;}
 
-/* ── 사이드바 ── */
-.sidebar{width:60px;min-width:60px;max-width:60px;background:var(--sidebar);display:flex;flex-direction:column;height:100vh;flex-shrink:0;overflow:hidden;}
+/* ── 메인 콘텐츠 ── */
+.main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg);}
+.main-header{background:#FF85C1;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.main-header-title{font-size:16px;font-weight:800;color:#fff;}
+.main-header-sub{font-size:12px;color:rgba(255,255,255,0.8);margin-top:1px;}
+.main-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 
-/* 프로필 영역 */
-.sb-profile{padding:10px 0 8px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;align-items:center;gap:6px;}
-.sb-logo{display:flex;align-items:center;justify-content:center;}
-.sb-logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+/* ── 탭바 ── */
+.tab-bar{display:flex;overflow-x:auto;scrollbar-width:none;background:white;border-bottom:1px solid var(--border);padding:8px 10px;gap:6px;flex-shrink:0;}
+.tab-bar::-webkit-scrollbar{display:none;}
+.tab-item{flex:0 0 auto;padding:7px 14px;border:none;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;background:#FFF0E0;color:#C97A40;font-family:'Pretendard',sans-serif;white-space:nowrap;transition:all 0.15s;}
+.tab-item.active{background:#FF85C1;color:white;font-weight:700;}
+.tab-item:hover:not(.active){background:#FFE8F3;color:#FF85C1;}
 .sb-logo-text{display:none;}
 .sb-user{display:flex;align-items:center;justify-content:center;}
 .sb-avatar{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:white;position:relative;}
@@ -87,9 +94,9 @@ button{cursor:pointer;}
 
 /* ── 메인 콘텐츠 ── */
 .main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg);}
-.main-header{background:white;border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.main-header-title{font-size:16px;font-weight:800;color:var(--text);}
-.main-header-sub{font-size:12px;color:var(--text3);margin-top:1px;}
+.main-header{background:#FF85C1;border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.main-header-title{font-size:16px;font-weight:800;color:#fff;}
+.main-header-sub{font-size:12px;color:rgba(255,255,255,0.8);margin-top:1px;}
 .main-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 
 /* ── 공통 컴포넌트 ── */
@@ -235,75 +242,49 @@ button{cursor:pointer;}
 
 <div id="app" style="display:none">
 
-  <!-- ▌사이드바 ▌ -->
-
-  <div class="sidebar">
-    <!-- 프로필 -->
-    <div class="sb-profile">
-      <div class="sb-logo"><div class="sb-logo-icon">📋</div></div>
-      <div class="sb-user">
-        <div class="sb-avatar" id="sbAvatar"><div class="online-dot"></div></div>
-      </div>
-    </div>
-
-<!-- 메뉴 -->
-<div class="sb-menu">
-  <button class="sb-item" data-tab="notice" onclick="goTab('notice')">
-    <span class="sb-item-icon">📢</span>공지
-  </button>
-  <button class="sb-item" data-tab="chat" onclick="goTab('chat')">
-    <span class="sb-item-icon">💬</span>채팅
-    <span id="chatBadge" style="display:none" class="sb-badge"></span>
-  </button>
-  <button class="sb-item" data-tab="noti" onclick="goTab('noti')">
-    <span class="sb-item-icon">🔔</span>알림
-    <span id="notiBadge" style="display:none" class="sb-badge"></span>
-  </button>
-  <button class="sb-item" data-tab="home" onclick="goTab('home')">
-    <span class="sb-item-icon">💼</span>투표
-  </button>
-  <div id="deptSubMenu"></div>
-  <button class="sb-item" data-tab="calendar" onclick="goTab('calendar')">
-    <span class="sb-item-icon">🗓</span>달력
-  </button>
-  <button class="sb-item" data-tab="leave" onclick="goTab('leave')">
-    <span class="sb-item-icon">🏖️</span>연차
-  </button>
-  <button class="sb-item" data-tab="members" onclick="goTab('members')">
-    <span class="sb-item-icon">👥</span>멤버
-  </button>
-  <div id="adminMenu" style="display:none">
-    <button class="sb-item" data-tab="status" onclick="goTab('status')">
-      <span class="sb-item-icon">📋</span>현황
-    </button>
-    <button class="sb-item" data-tab="settings" onclick="goTab('settings')">
-      <span class="sb-item-icon">⚙️</span>설정
-    </button>
-  </div>
-</div>
-
-<!-- 오락실 -->
-<a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank" class="sb-game">
-  <span class="sb-game-icon">🎡</span>오락실
-</a>
-
-<!-- 나가기 -->
-<button class="sb-logout-btn" onclick="logout()">
-  <span>🚪</span>나가기
-</button>
-
-  </div>
-
-  <!-- ▌메인 ▌ -->
-
+  <!-- ▌새 레이아웃: 상단 헤더 + 탭바 + 콘텐츠 ▌ -->
   <div class="main">
+
+    <!-- 상단 헤더 -->
     <div class="main-header">
-      <div>
-        <div class="main-header-title" id="mainTitle">📢 공지사항</div>
-        <div class="main-header-sub" id="mainSub"></div>
+      <div id="headerUserInfo" style="display:flex;align-items:center;gap:8px">
+        <div id="headerAvatar" style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0"></div>
+        <div>
+          <div id="headerName" style="font-size:15px;font-weight:700;color:#fff"></div>
+          <div id="headerRole" style="font-size:10px;color:rgba(255,255,255,0.85)"></div>
+        </div>
       </div>
-      <div id="mainHeaderActions"></div>
+      <div style="display:flex;gap:6px">
+        <button onclick="goTab('noti')" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;position:relative">
+          🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
+        </button>
+        <button onclick="logout()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer">🚪</button>
+      </div>
     </div>
+
+    <!-- 탭바 -->
+    <div class="tab-bar" id="mainTabBar">
+      <button class="tab-item active" data-tab="notice" onclick="goTab('notice')">📢 공지</button>
+      <button class="tab-item" data-tab="chat" onclick="goTab('chat')">
+        💬 채팅<span id="chatBadge" style="display:none;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-left:3px"></span>
+      </button>
+      <button class="tab-item" data-tab="home" onclick="goTab('home')">🗳️ 투표</button>
+      <button class="tab-item" data-tab="calendar" onclick="goTab('calendar')">📅 달력</button>
+      <button class="tab-item" data-tab="leave" onclick="goTab('leave')">🏖️ 연차</button>
+      <button class="tab-item" data-tab="members" onclick="goTab('members')">👥 멤버</button>
+      <div id="adminMenu" style="display:contents">
+        <button class="tab-item admin-tab" data-tab="status" onclick="goTab('status')" style="display:none">📊 현황</button>
+        <button class="tab-item admin-tab" data-tab="settings" onclick="goTab('settings')" style="display:none">⚙️ 설정</button>
+      </div>
+      <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank" class="tab-item" style="text-decoration:none;background:#FFF0E0;color:#C97A40">🎡 오락실</a>
+    </div>
+
+    <!-- 부서 서브탭 -->
+    <div id="deptSubMenu" style="display:none;padding:6px 14px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:white">
+      <div id="deptSubMenuInner" style="display:flex;gap:6px;min-width:max-content"></div>
+    </div>
+
+    <!-- 콘텐츠 -->
     <div class="main-body" id="mainBody">
       <div class="loading"><div class="spinner"></div></div>
     </div>
@@ -585,22 +566,25 @@ async function enterApp(){
   document.getElementById('loginPage').style.display='none';
   document.getElementById('app').style.display='flex';
 
-  // 사이드바 아바타
+  // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const sbAv=document.getElementById('sbAvatar');
-  if(sbAv){
-    sbAv.innerHTML=`${initial}<div class="online-dot"></div>`;
-    if(CU.role==='admin')sbAv.classList.add('admin-av');
-    else sbAv.classList.remove('admin-av');
-  }
-  const adminMenu=document.getElementById('adminMenu');
-  if(adminMenu)adminMenu.style.display=CU.role==='admin'?'block':'none';
+  const userRole = CU.role==='admin' ? '(주) 떠리원 인사팀' : '(주) 떠리원 사원';
+  const avatarEl = document.getElementById('headerAvatar');
+  const nameEl = document.getElementById('headerName');
+  const roleEl = document.getElementById('headerRole');
+  if(avatarEl) avatarEl.textContent = initial;
+  if(nameEl) nameEl.textContent = CU.name+'님';
+  if(roleEl) roleEl.textContent = userRole;
+
+  // 관리자 탭 표시
+  document.querySelectorAll('.admin-tab').forEach(el=>{
+    el.style.display = CU.role==='admin' ? 'flex' : 'none';
+  });
 
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
   try{goTab('notice');}catch(e){console.error('goTab error',e);}
   setTimeout(()=>startNotiPolling(),2000);
-  // 기존 푸시 구독 자동 복원
   setTimeout(()=>checkExistingPushSub(),3000);
 }
 
@@ -624,12 +608,15 @@ async function loadGroups(){
 }
 
 function renderDeptSubMenu(){
-  const el=document.getElementById('deptSubMenu');
-  if(!el)return;
+  const el=document.getElementById('deptSubMenuInner');
+  const wrap=document.getElementById('deptSubMenu');
+  if(!el||!wrap)return;
+  const hasGroups=Object.keys(groups).length>0;
+  wrap.style.display=hasGroups?'block':'none';
   el.innerHTML=Object.entries(groups).map(([id,g])=>{
     const isActive=_currentTab==='dept'&&_currentDept===id;
-    return `<button class="sb-sub-item${isActive?' active':''}" onclick="goDept('${id}')">
-      <span class="sb-dept-dot" style="background:${g.color||'#FF7F6E'}"></span>
+    return `<button style="flex:0 0 auto;padding:5px 12px;border:none;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:${isActive?'#f87286':'#fde8eb'};color:${isActive?'white':'#f87286'};font-family:'Pretendard',sans-serif;display:flex;align-items:center;gap:4px" onclick="goDept('${id}')">
+      <span style="width:6px;height:6px;border-radius:50%;background:${isActive?'white':g.color||'#FF7F6E'};display:inline-block;flex-shrink:0"></span>
       ${escH(g.name)}${g.lock?'🔒':''}
     </button>`;
   }).join('');
@@ -644,19 +631,16 @@ function goDept(gid){
   }
   _currentDept=gid;
   _currentTab='dept';
-  document.querySelectorAll('.sb-item').forEach(b=>b.classList.toggle('active',false));
-  document.querySelectorAll('.sb-sub-item').forEach(b=>b.classList.toggle('active',b.dataset?.gid===gid||b.getAttribute('onclick')?.includes(`'${gid}'`)));
+  document.querySelectorAll('.tab-item').forEach(b=>b.classList.remove('active'));
   renderDeptSubMenu();
-  setMainHeader(`💼 ${groups[gid]?.name||''} 업무`, groups[gid]?.name+' 부서 투표·링크');
   loadDeptPage(gid);
 }
 let _pendingDept=null;
 
 function setMainHeader(title,sub='',actionsHtml=''){
-  document.getElementById('mainTitle').textContent=title;
-  document.getElementById('mainSub').textContent=sub;
-  document.getElementById('mainHeaderActions').innerHTML=actionsHtml;
+  // 새 레이아웃에서는 헤더에 탭 타이틀 표시 안 함 (사용자 정보 유지)
 }
+
 
 // ══════════════════════════════════════════════
 // ── TAB NAVIGATION ──
@@ -665,9 +649,8 @@ function goTab(tab){
   _currentTab=tab;
   clearInterval(window._chatPoll);
 
-  // 사이드바 활성화
-  document.querySelectorAll('.sb-item').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  document.querySelectorAll('.sb-sub-item').forEach(b=>b.classList.remove('active'));
+  // 탭바 활성화
+  document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab===tab));
   renderDeptSubMenu();
 
   const mb=document.getElementById('mainBody');
