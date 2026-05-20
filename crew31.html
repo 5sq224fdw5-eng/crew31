@@ -1886,16 +1886,22 @@ function renderVoteCard(vid,v){
     const imagesToShow = isAdmin ? v.images : (v.images ? {[myKey]: myImages} : {});
     if(imagesToShow && Object.keys(imagesToShow).length > 0){
       html+=`<div style="margin-top:8px">`;
-      if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
+      if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
       Object.entries(imagesToShow).forEach(([mkey, imgs])=>{
         if(!imgs||imgs.length===0) return;
-        html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:6px">`;
+        // 닉네임 표시
+        html+=`<div style="margin-bottom:10px">`;
+        html+=`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;align-items:center;gap:6px">`;
+        html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
+        html+=`${escH(mkey)} <span style="color:var(--text3);font-weight:400">(${imgs.length}장)</span>`;
+        html+=`</div>`;
+        html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
         imgs.forEach(img=>{
           html+=`<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
           html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
           html+=`</div>`;
         });
-        html+=`</div>`;
+        html+=`</div></div>`;
       });
       html+=`</div>`;
     }
@@ -1926,8 +1932,11 @@ function renderVoteCard(vid,v){
     }
   }
 
-  // 링크 제출 섹션
+  // 링크 제출 섹션 - 완료 투표는 인사팀만 링크 제출 가능
   const links=v.links?Object.values(v.links):[];
+  const isEndVote = (v.title||'').includes('완료') || (v.title||'').includes('end');
+  const canSubmitLink = !isEndVote || isAdmin; // 완료투표는 관리자만
+
   html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">`;
   html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🔗 링크 제출</div>`;
   if(links.length>0){
@@ -1941,11 +1950,13 @@ function renderVoteCard(vid,v){
   }else{
     html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:6px">아직 제출된 링크가 없습니다</div>`;
   }
-  html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
-  html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-  html+=`<input id="linkNote_${vid}" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-  html+=`</div>`;
-  html+=`<button onclick="submitVoteLink('${vid}')" style="width:100%;margin-top:6px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
+  if(canSubmitLink){
+    html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
+    html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<input id="linkNote_${vid}" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`</div>`;
+    html+=`<button onclick="submitVoteLink('${vid}')" style="width:100%;margin-top:6px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
+  }
   html+=`</div></div>`;
 
   html+=`</div></div>`;
