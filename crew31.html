@@ -1909,7 +1909,7 @@ function renderVoteCard(vid,v){
       const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
       const isMe=myVote===i;
       const canVote=!isClosed&&myVote===undefined;
-      const onclickAttr=canVote?`onclick="castVote('${vid}',${i})"`:'';\
+      const onclickAttr=canVote?`onclick="castVote('${vid}',${i})"`:'';
       html+=`<div class="vopt${isMe?' selected':''}${isClosed?' closed':''}" ${onclickAttr}>`;
       html+=`<div class="vbar" style="width:${pct}%"></div>`;
       html+=`<div class="vopt-chk">${isMe?'✓':''}</div>`;
