@@ -2363,15 +2363,18 @@ async function recordAttendance(vid, optIdx) {
   try {
     const v = await dbGet(`votes/${vid}`);
     if(!v || !v.date || !v.group || v.group === 'all') return;
+
+    // 완료 투표만 기록 (제목에 '완료' 포함된 것만)
+    const isEndVote = (v.title||'').includes('완료') || v.imageUpload;
+    if(!isEndVote) return;
+
     const gid = v.group;
     const date = v.date;
     const mondayStr = getWeekKey(date);
-    const myKey = CU?.key || CU?.name || 'guest';
+    const myKey = CU?.name || CU?.key || 'guest';
     const optText = (v.options || [])[optIdx] || '';
     const result = mapVoteResult(optText);
-    // attendance/{gid}/{mondayStr}/{memberKey}/{date} = result
     await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, result);
-    // 풀참 체크
     checkFullAttendance(gid, mondayStr, myKey);
   } catch(e) { console.warn('recordAttendance error', e); }
 }
