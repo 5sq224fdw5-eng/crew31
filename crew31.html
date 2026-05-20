@@ -308,7 +308,11 @@ button{cursor:pointer;}
       <div class="fl" style="flex:1"><label>날짜</label><input class="fi" id="voteDate" type="date"></div>
       <div class="fl" style="flex:1"><label>마감시간</label><input class="fi" id="voteTime" type="time" value="22:00"></div>
     </div>
-    <div class="fl">
+    <div class="fl" style="display:flex;align-items:center;gap:10px;padding:10px 0">
+      <input type="checkbox" id="voteImageUpload" style="width:18px;height:18px;accent-color:#FF85C1">
+      <label for="voteImageUpload" style="font-size:14px;font-weight:600;cursor:pointer">📸 이미지 업로드 투표 (선택지 없음, 이미지 올리면 완료 처리)</label>
+    </div>
+    <div class="fl" id="optListWrap">
       <label>선택지</label>
       <div id="optList"></div>
       <button class="btn-sm sec" style="margin-top:6px;width:100%" onclick="addOpt()">+ 선택지 추가</button>
@@ -1819,6 +1823,7 @@ function renderVoteCard(vid,v){
   const isClosed=v.closed||(deadline&&now>deadline);
   const gName=v.group==='all'?'전체':(groups[v.group]?.name||v.group||'전체');
   const gColor=groups[v.group]?.color||'var(--accent)';
+  const isImageVote = v.imageUpload === true; // 이미지 업로드 투표 여부
 
   let html=`<div class="card" style="margin:0 14px 16px">`;
   html+=`<div style="padding:14px 14px 10px;border-bottom:1px solid var(--border)">`;
@@ -1839,23 +1844,68 @@ function renderVoteCard(vid,v){
   }
   html+=`</div></div>`;
   html+=`<div style="padding:12px 14px">`;
-  opts.forEach((opt,i)=>{
-    const cnt=Object.values(responses).filter(r=>r===i).length;
-    const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
-    const isMe=myVote===i;
-    const canVote=!isClosed&&myVote===undefined;
-    html+=`<div class="vopt${isMe?' selected':''}${isClosed?' closed':''}" onclick="${canVote?`castVote('${vid}',${i})`:''}">`;
-    html+=`<div class="vbar" style="width:${pct}%"></div>`;
-    html+=`<div class="vopt-chk">${isMe?'✓':''}</div>`;
-    html+=`<div class="vopt-label">${escH(opt)}</div>`;
-    html+=`<div class="vopt-cnt">${cnt}명 ${pct}%</div>`;
-    html+=`</div>`;
-  });
-  if(myVote!==undefined&&!isClosed){
-    html+=`<div style="text-align:center;margin-top:8px"><span class="voted-badge">✅ 투표완료 (${escH(opts[myVote]||'')})</span></div>`;
-  }
-  if(isClosed){
-    html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${totalVotes}명 참여</span></div>`;
+
+  if(isImageVote){
+    // 이미지 업로드 투표
+    const myImages = v.images?.[myKey] || [];
+    const hasUploaded = myImages.length > 0;
+
+    if(!isClosed){
+      if(!hasUploaded){
+        html+=`<div style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:10px">`;
+        html+=`<div style="font-size:24px;margin-bottom:6px">📸</div>`;
+        html+=`<div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px">이미지를 업로드하세요</div>`;
+        html+=`<input type="file" id="imgInput_${vid}" accept="image/*" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+        html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer">📎 이미지 선택</button>`;
+        html+=`</div>`;
+      } else {
+        html+=`<div style="text-align:center;margin-bottom:10px"><span class="voted-badge">✅ ${myImages.length}장 업로드 완료</span></div>`;
+        html+=`<input type="file" id="imgInput_${vid}" accept="image/*" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+        html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="background:var(--surface2);color:var(--text2);border:none;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;width:100%">+ 추가 업로드</button>`;
+      }
+    }
+
+    // 업로드된 이미지 목록 (관리자만 전체, 본인은 본인것만)
+    const imagesToShow = isAdmin ? v.images : (v.images ? {[myKey]: myImages} : {});
+    if(imagesToShow && Object.keys(imagesToShow).length > 0){
+      html+=`<div style="margin-top:8px">`;
+      if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
+      Object.entries(imagesToShow).forEach(([mkey, imgs])=>{
+        if(!imgs||imgs.length===0) return;
+        html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:6px">`;
+        imgs.forEach(img=>{
+          html+=`<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
+          html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
+          html+=`</div>`;
+        });
+        html+=`</div>`;
+      });
+      html+=`</div>`;
+    }
+
+    if(isClosed){
+      html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${Object.keys(v.images||{}).length}명 참여</span></div>`;
+    }
+  } else {
+    // 일반 투표
+    opts.forEach((opt,i)=>{
+      const cnt=Object.values(responses).filter(r=>r===i).length;
+      const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
+      const isMe=myVote===i;
+      const canVote=!isClosed&&myVote===undefined;
+      html+=`<div class="vopt${isMe?' selected':''}${isClosed?' closed':''}" onclick="${canVote?`castVote('${vid}',${i})`:''}">`;
+      html+=`<div class="vbar" style="width:${pct}%"></div>`;
+      html+=`<div class="vopt-chk">${isMe?'✓':''}</div>`;
+      html+=`<div class="vopt-label">${escH(opt)}</div>`;
+      html+=`<div class="vopt-cnt">${cnt}명 ${pct}%</div>`;
+      html+=`</div>`;
+    });
+    if(myVote!==undefined&&!isClosed){
+      html+=`<div style="text-align:center;margin-top:8px"><span class="voted-badge">✅ 투표완료 (${escH(opts[myVote]||'')})</span></div>`;
+    }
+    if(isClosed){
+      html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${totalVotes}명 참여</span></div>`;
+    }
   }
 
   // 링크 제출 섹션
@@ -1900,6 +1950,63 @@ async function submitVoteLink(vid){
   showToast('✅ 링크 제출됨!');
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+// ── Cloudinary 이미지 업로드 ──
+const CLOUDINARY_CLOUD = 'dcmohbbyi';
+const CLOUDINARY_PRESET = 'crew31_upload'; // unsigned preset 이름
+
+async function uploadImages(vid, input){
+  const files = Array.from(input.files);
+  if(!files.length) return;
+  showToast('⏳ 업로드 중...');
+
+  const myKey = CU?.key || CU?.name || 'guest';
+
+  // 만료 시간 계산 (다음날 오후 1시 10분)
+  const now = new Date();
+  const expire = new Date(now);
+  if(now.getHours() >= 22){
+    expire.setDate(expire.getDate() + 1);
+  }
+  expire.setHours(13, 10, 0, 0);
+  const expireAt = expire.getTime();
+
+  const uploaded = [];
+  for(const file of files){
+    try{
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', CLOUDINARY_PRESET);
+      fd.append('folder', `crew31/${vid}`);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {method:'POST', body:fd});
+      const data = await res.json();
+      if(data.secure_url){
+        uploaded.push({url: data.secure_url, publicId: data.public_id, uploadedAt: Date.now(), expireAt});
+      }
+    }catch(e){ console.error('upload error', e); }
+  }
+
+  if(uploaded.length === 0){ showToast('업로드 실패'); return; }
+
+  // Firebase에 저장
+  const existing = await dbGet(`votes/${vid}/images/${myKey}`) || [];
+  const merged = [...existing, ...uploaded];
+  await dbSet(`votes/${vid}/images/${myKey}`, merged);
+
+  // 출석 자동 기록 (완료 처리)
+  const v = await dbGet(`votes/${vid}`);
+  if(v && v.group && v.date){
+    const mondayStr = getWeekKey(v.date);
+    await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${v.date}`, '완료');
+  }
+
+  showToast(`✅ ${uploaded.length}장 업로드 완료!`);
+  input.value = '';
+
+  // 화면 새로고침
+  if(_currentTab==='home') loadHome();
+  else if(_currentTab==='dept') loadDeptPage(_currentDept);
 }
 
 async function castVote(vid,optIdx){
@@ -1949,6 +2056,14 @@ async function openVoteModal(vid,defaultGroup){
     if(defaultGroup)sel.value=defaultGroup;
     _editOptList=['출근','재택','휴가'];
   }
+  // 이미지 업로드 체크박스 초기화
+  const imgCb = document.getElementById('voteImageUpload');
+  if(imgCb){
+    imgCb.checked = editVote?.imageUpload||false;
+    const wrap = document.getElementById('optListWrap');
+    if(wrap) wrap.style.display = imgCb.checked ? 'none' : '';
+    imgCb.onchange = ()=>{ if(wrap) wrap.style.display = imgCb.checked ? 'none' : ''; };
+  }
   renderOptList();
   document.getElementById('voteModal').classList.add('active');
 }
@@ -1967,10 +2082,12 @@ async function saveVote(){
   const time=document.getElementById('voteTime').value;
   const group=document.getElementById('voteGroup').value;
   const vid=document.getElementById('editVoteId').value;
+  const isImageUpload=document.getElementById('voteImageUpload')?.checked||false;
   if(!title){showToast('제목을 입력하세요');return;}
   const options=_editOptList.filter(o=>o.trim());
-  if(options.length<2){showToast('선택지를 2개 이상 입력하세요');return;}
+  if(!isImageUpload && options.length<2){showToast('선택지를 2개 이상 입력하세요');return;}
   const data={title,date,time,group,options,createdAt:Date.now(),createdBy:CU.name};
+  if(isImageUpload) data.imageUpload=true;
   if(vid){
     const existing=await dbGet(`votes/${vid}`);
     await dbSet(`votes/${vid}`,{...existing,...data});
@@ -1978,7 +2095,6 @@ async function saveVote(){
   }else{
     await dbPush('votes',data);
     showToast('✅ 등록됨');
-    // FCM 전체 알림
     const gName=group==='all'?'전체':(groups[group]?.name||group);
     sendFCMNotification({
       title:`📋 새 투표: ${title}`,
@@ -1989,7 +2105,12 @@ async function saveVote(){
   closeVoteModal();
   if(_currentTab==='home')loadHome();else loadDeptPage(_currentDept);
 }
-function closeVoteModal(){document.getElementById('voteModal').classList.remove('active');}
+
+function closeVoteModal(){
+  document.getElementById('voteModal').classList.remove('active');
+  const cb = document.getElementById('voteImageUpload');
+  if(cb){ cb.checked=false; const w=document.getElementById('optListWrap'); if(w)w.style.display=''; }
+}
 
 // ══════════════════════════════════════════════
 // ── STATUS ──
