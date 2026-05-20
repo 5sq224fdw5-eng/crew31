@@ -2097,14 +2097,20 @@ async function openVoteModal(vid, defaultGroup, voteType){
     document.getElementById('voteDate').value=todayStr;
     if(defaultGroup)sel.value=defaultGroup;
 
-    // 타입별 기본값 설정
+    // 그룹별 마감 시간 (Firebase에 저장된 값 우선, 없으면 기본값)
+    const gData = groups[defaultGroup] || {};
+    const gName = gData.name || '';
+    // 기존 그룹 기본값
+    let defaultStartTime = gData.startTime || (gName==='좋아요'?'22:00':'22:00');
+    let defaultEndTime = gData.endTime || (gName==='좋아요'?'12:00':'13:00');
+
     if(voteType==='start'){
       document.getElementById('voteTitle').value='업무(참여) 시작';
-      document.getElementById('voteTime').value='22:10';
+      document.getElementById('voteTime').value=defaultStartTime;
       _editOptList=['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','2인 1조로 근무할게요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
     } else if(voteType==='end'){
       document.getElementById('voteTitle').value='업무 완료';
-      document.getElementById('voteTime').value='13:00';
+      document.getElementById('voteTime').value=defaultEndTime;
       _editOptList=['퇴근할게요 (완료)','2인 1조로 근무했어요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
     } else {
       document.getElementById('voteTitle').value='';
@@ -2598,14 +2604,19 @@ async function loadSettings(){
   html+=`<div class="setting-section">`;
   html+=`<div class="setting-section-title">👥 그룹 관리</div>`;
   // 그룹 추가
-  html+=`<div style="display:flex;gap:8px;margin-bottom:12px">`;
+  html+=`<div style="display:flex;gap:8px;margin-bottom:8px">`;
   html+=`<input id="newGroupName" class="fi" placeholder="새 그룹 이름" style="flex:1;padding:9px 12px;font-size:13px">`;
   html+=`<button onclick="addGroup()" style="padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer">추가</button>`;
+  html+=`</div>`;
+  html+=`<div style="display:flex;gap:8px;margin-bottom:12px">`;
+  html+=`<div style="flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">🌅 시작투표 마감</div><input id="newGroupStartTime" class="fi" type="time" value="22:00" style="width:100%;padding:8px 10px;font-size:13px"></div>`;
+  html+=`<div style="flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">🌙 완료투표 마감</div><input id="newGroupEndTime" class="fi" type="time" value="13:00" style="width:100%;padding:8px 10px;font-size:13px"></div>`;
   html+=`</div>`;
   // 그룹 목록
   Object.entries(groups).forEach(([gid,g])=>{
     html+=`<div class="setting-row">`;
-    html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
+    html+=`<div><span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
+    html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">🌅 ${g.startTime||'22:00'} 마감 · 🌙 ${g.endTime||'13:00'} 마감</div></div>`;
     html+=`<button onclick="deleteGroup('${gid}')" style="font-size:11px;padding:4px 12px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;cursor:pointer;font-weight:700">🗑 삭제</button>`;
     html+=`</div>`;
   });
@@ -2634,15 +2645,15 @@ async function loadSettings(){
 async function addGroup(){
   const name=document.getElementById('newGroupName')?.value.trim();
   if(!name){showToast('그룹 이름을 입력하세요');return;}
-  // 중복 체크
   if(Object.values(groups).some(g=>g.name===name)){showToast('이미 있는 그룹 이름입니다');return;}
-  // 색상 자동 지정
+  const startTime=document.getElementById('newGroupStartTime')?.value||'22:00';
+  const endTime=document.getElementById('newGroupEndTime')?.value||'13:00';
   const colors=['#FF7F6E','#FFB347','#5DB88A','#5B9BD5','#A78BFA','#f59e0b','#ec4899'];
   const usedColors=Object.values(groups).map(g=>g.color);
   const color=colors.find(c=>!usedColors.includes(c))||colors[Math.floor(Math.random()*colors.length)];
   const newId='g'+Date.now();
-  await dbSet(`groups/${newId}`,{name,color,lock:false});
-  groups[newId]={name,color,lock:false};
+  await dbSet(`groups/${newId}`,{name,color,lock:false,startTime,endTime});
+  groups[newId]={name,color,lock:false,startTime,endTime};
   showToast(`✅ ${name} 그룹 추가됨`);
   renderDeptSubMenu();
   loadSettings();
