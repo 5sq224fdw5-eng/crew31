@@ -588,7 +588,8 @@ async function enterApp(){
 
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
-  try{goTab('notice');}catch(e){console.error('goTab error',e);}
+  const lastTab = sessionStorage.getItem('lastTab') || 'notice';
+  try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
   setTimeout(()=>startNotiPolling(),2000);
   setTimeout(()=>checkExistingPushSub(),3000);
 }
@@ -656,6 +657,7 @@ function setMainHeader(title,sub='',actionsHtml=''){
 function goTab(tab){
   _currentTab=tab;
   clearInterval(window._chatPoll);
+  sessionStorage.setItem('lastTab', tab); // 탭 저장
 
   // 탭바 활성화
   document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab===tab));
