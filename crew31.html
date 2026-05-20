@@ -156,7 +156,8 @@ button{cursor:pointer;}
 .cal-cell{min-height:36px;border-radius:8px;display:flex;flex-direction:column;align-items:center;padding:3px;cursor:pointer;transition:background 0.1s;}
 .cal-cell:hover{background:var(--cream);}
 .cal-cell.today .cal-dn{background:var(--accent);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
-.cal-cell.selected{background:var(--cream);}
+.cal-cell.selected{background:var(--peach);border-radius:8px;}
+.cal-cell.selected .cal-dn{color:#FF85C1;font-weight:800;}
 .cal-dn{font-size:12px;font-weight:600;color:var(--text);width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
 .cal-dn.sun{color:var(--red);}
 .cal-dn.sat{color:var(--blue);}
@@ -2088,7 +2089,8 @@ async function openVoteModal(vid, defaultGroup, voteType){
   // 이미지 업로드 체크박스 초기화
   const imgCb = document.getElementById('voteImageUpload');
   if(imgCb){
-    imgCb.checked = editVote?.imageUpload||false;
+    const editVoteData = vid ? await dbGet(`votes/${vid}`) : null;
+    imgCb.checked = editVoteData?.imageUpload||false;
     const wrap = document.getElementById('optListWrap');
     if(wrap) wrap.style.display = imgCb.checked ? 'none' : '';
     imgCb.onchange = ()=>{ if(wrap) wrap.style.display = imgCb.checked ? 'none' : ''; };
