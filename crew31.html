@@ -1825,7 +1825,7 @@ function renderVoteCard(vid,v){
   const isAdmin=CU?.role==='admin';
   const opts=v.options||[];
   const responses=v.responses||{};
-  const myKey=CU?.key||'admin';
+  const myKey=CU?.name||CU?.key||'admin'; // 이름 기반
   const myVote=responses[myKey];
   const totalVotes=Object.keys(responses).length;
   const now=Date.now();
@@ -1990,7 +1990,7 @@ async function uploadImages(vid, input){
   if(!files.length) return;
   showToast('⏳ 업로드 중...');
 
-  const myKey = CU?.key || CU?.name || 'guest';
+  const myKey = CU?.name || CU?.key || 'guest'; // 이름으로 저장
 
   // 만료 시간 계산 (다음날 오후 1시 10분)
   const now = new Date();
@@ -2039,7 +2039,7 @@ async function uploadImages(vid, input){
 }
 
 async function castVote(vid,optIdx){
-  const myKey=CU?.key||'admin';
+  const myKey=CU?.name||CU?.key||'admin';
   const v=await dbGet(`votes/${vid}`);
   if(!v){showToast('투표를 찾을 수 없습니다');return;}
   if(v.responses?.[myKey]!==undefined){showToast('이미 투표하셨습니다');return;}
