@@ -693,22 +693,27 @@ async function loadNoticePage(){
   const mb=document.getElementById('mainBody');
   const isAdmin=CU?.role==='admin';
 
-  setMainHeader('📢 공지사항','공지 및 피드',
-    isAdmin?`<button class="btn-sm pri" onclick="openNoticeModal('feed')">+ 공지 작성</button>`:''
-  );
-
   const notices=await dbGet('notices');
   const noticeComments=await dbGet('noticeComments');
   _cachedData.notices=notices;_cachedData.noticeComments=noticeComments;
 
   const list=notices?Object.entries(notices).filter(([k,n])=>!n.deleted).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)):[];
 
+  let html='<div style="padding:14px 0 80px">';
+
+  // 관리자 버튼 영역
+  if(isAdmin){
+    html+=`<div style="padding:0 14px 12px;display:flex;gap:8px">`;
+    html+=`<button onclick="openNoticeModal('feed')" style="flex:1;background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">📢 공지 작성</button>`;
+    html+=`<button onclick="goTab('home')" style="flex:1;background:#fde8eb;color:#f87286;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🗳️ 투표 만들기</button>`;
+    html+=`</div>`;
+  }
+
   if(list.length===0){
-    mb.innerHTML='<div class="empty"><div class="empty-icon">📭</div>공지가 없습니다</div>';
+    mb.innerHTML=html+'<div class="empty"><div class="empty-icon">📭</div>공지가 없습니다</div></div>';
     return;
   }
 
-  let html='<div style="padding:14px 0 80px">';
   list.forEach(([nid,n])=>{ html+=renderNoticeCard(nid,n,noticeComments); });
   html+='</div>';
   mb.innerHTML=html;
@@ -1766,17 +1771,16 @@ async function loadHome(){
   const mb=document.getElementById('mainBody');
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   const isAdmin=CU?.role==='admin';
-  if(isAdmin){
-    setMainHeader('💼 전체 투표','모든 부서 투표 현황',
-      `<button class="btn-sm pri" onclick="openVoteModal(null,'all')">+ 투표 만들기</button>`);
-  }
   const votes=await dbGet('votes');
   if(!votes||Object.keys(votes).length===0){
-    mb.innerHTML='<div class="empty"><div class="empty-icon">📋</div>등록된 투표가 없습니다</div>';return;
+    mb.innerHTML=`<div class="empty">${isAdmin?`<button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px">+ 투표 만들기</button><br>`:''}<div class="empty-icon">📋</div>등록된 투표가 없습니다</div>`;return;
   }
   const list=Object.entries(votes).filter(([k,v])=>!v.deleted)
     .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
   let html='<div style="padding:14px 0 80px">';
+  if(isAdmin){
+    html+=`<div style="padding:0 14px 10px"><button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%">+ 투표 만들기</button></div>`;
+  }
   for(const [vid,v] of list){html+=renderVoteCard(vid,v);}
   html+='</div>';
   mb.innerHTML=html;
@@ -1789,20 +1793,22 @@ async function loadDeptPage(gid){
   const mb=document.getElementById('mainBody');
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   const isAdmin=CU?.role==='admin';
-  if(isAdmin){
-    setMainHeader(`💼 ${groups[gid]?.name||''} 업무`,groups[gid]?.name+' 부서 투표',
-      `<button class="btn-sm pri" onclick="openVoteModal(null,'${gid}')">+ 투표 만들기</button>`);
-  }
   const votes=await dbGet('votes');
   const list=votes
     ?Object.entries(votes)
       .filter(([k,v])=>!v.deleted&&(v.group===gid||v.group==='all'))
       .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0))
     :[];
-  if(list.length===0){
-    mb.innerHTML='<div class="empty"><div class="empty-icon">📋</div>이 부서의 투표가 없습니다</div>';return;
-  }
   let html='<div style="padding:14px 0 80px">';
+  if(isAdmin){
+    html+=`<div style="padding:0 14px 10px;display:flex;gap:8px">`;
+    html+=`<button onclick="openVoteModal(null,'${gid}','start')" style="flex:1;background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌅 업무 시작</button>`;
+    html+=`<button onclick="openVoteModal(null,'${gid}','end')" style="flex:1;background:#f87286;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌙 업무 완료</button>`;
+    html+=`</div>`;
+  }
+  if(list.length===0){
+    mb.innerHTML=html+'<div class="empty"><div class="empty-icon">📋</div>이 부서의 투표가 없습니다</div></div>';return;
+  }
   for(const [vid,v] of list){html+=renderVoteCard(vid,v);}
   html+='</div>';
   mb.innerHTML=html;
@@ -1830,6 +1836,13 @@ function renderVoteCard(vid,v){
   html+=`<div style="display:flex;align-items:flex-start;gap:8px">`;
   html+=`<div style="flex:1">`;
   html+=`<div style="font-size:15px;font-weight:800">${escH(v.title||'')}</div>`;
+  // 시작/완료 배지
+  const titleLow = (v.title||'').toLowerCase();
+  if(titleLow.includes('시작')||titleLow.includes('start')){
+    html+=`<span style="background:#FFE8F3;color:#FF85C1;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:3px;display:inline-block">🌅 업무시작</span>`;
+  } else if(titleLow.includes('완료')||titleLow.includes('end')||titleLow.includes('퇴근')){
+    html+=`<span style="background:#fde8eb;color:#f87286;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:3px;display:inline-block">🌙 업무완료</span>`;
+  }
   html+=`<div style="font-size:11px;color:var(--text3);margin-top:3px">`;
   html+=`<span style="background:${gColor}22;color:${gColor};padding:2px 8px;border-radius:10px;font-weight:700;margin-right:6px">${escH(gName)}</span>`;
   if(v.date)html+=`📅 ${v.date}`;
@@ -2036,7 +2049,7 @@ async function delVote(vid){
 
 // ── 투표 모달 ──
 let _editOptList=['출근','재택','휴가'];
-async function openVoteModal(vid,defaultGroup){
+async function openVoteModal(vid, defaultGroup, voteType){
   document.getElementById('editVoteId').value=vid||'';
   const sel=document.getElementById('voteGroup');
   sel.innerHTML=`<option value="all">전체</option>`+Object.entries(groups).map(([id,g])=>`<option value="${id}">${escH(g.name)}</option>`).join('');
@@ -2050,11 +2063,23 @@ async function openVoteModal(vid,defaultGroup){
       _editOptList=v.options?[...v.options]:['출근','재택','휴가'];
     }
   }else{
-    document.getElementById('voteTitle').value='';
     document.getElementById('voteDate').value=todayStr;
-    document.getElementById('voteTime').value='22:00';
     if(defaultGroup)sel.value=defaultGroup;
-    _editOptList=['출근','재택','휴가'];
+
+    // 타입별 기본값 설정
+    if(voteType==='start'){
+      document.getElementById('voteTitle').value='업무(참여) 시작';
+      document.getElementById('voteTime').value='22:10';
+      _editOptList=['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','2인 1조로 근무할게요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+    } else if(voteType==='end'){
+      document.getElementById('voteTitle').value='업무 완료';
+      document.getElementById('voteTime').value='13:00';
+      _editOptList=['퇴근할게요 (완료)','2인 1조로 근무했어요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+    } else {
+      document.getElementById('voteTitle').value='';
+      document.getElementById('voteTime').value='22:00';
+      _editOptList=['출근','재택','휴가'];
+    }
   }
   // 이미지 업로드 체크박스 초기화
   const imgCb = document.getElementById('voteImageUpload');
