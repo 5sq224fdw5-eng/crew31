@@ -1066,7 +1066,7 @@ if(!joined){
   html+=`<div id="chatMessages" style="flex:1;overflow-y:auto;padding:12px 14px 8px;display:flex;flex-direction:column;gap:6px"></div>`;
   // 멤버 패널 (오른쪽 슬라이드)
   html+=`<div id="chatMemberPanel" style="width:0;overflow:hidden;background:white;border-left:1px solid var(--border);transition:width 0.25s ease;flex-shrink:0;min-width:0">`;
-  html+=`<div style="width:80px;height:100%;display:flex;flex-direction:column">`;
+  html+=`<div style="width:120px;height:100%;display:flex;flex-direction:column">`;
   html+=`<div style="font-size:12px;font-weight:800;color:var(--text2);padding:12px 12px 8px;border-bottom:1px solid var(--border);flex-shrink:0">👥 채팅 멤버</div>`;
   html+=`<div id="chatMemberList" style="flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;color:var(--text3)">불러오는 중...</div></div>`;
   html+=`</div></div>`;
@@ -1079,7 +1079,7 @@ if(!joined){
   html+=`<button onclick="sendChat()" style="width:40px;height:40px;background:linear-gradient(135deg,#FF85C1,#f87286);border:none;border-radius:50%;color:white;font-size:17px;flex-shrink:0">➤</button>`;
   html+=`</div>`;
 }
-mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 56px)">${html}</div>`;
+mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 52px)">${html}</div>`;
 if(joined||isAdmin){fetchChatMessages();clearInterval(window._chatPoll);window._chatPoll=setInterval(fetchChatMessages,4000);loadChatMemberCount();loadChatMemberPanel();}
 }
 
@@ -1101,8 +1101,8 @@ function backToChatList(){
 function toggleChatMemberPanel(){
   const panel=document.getElementById('chatMemberPanel');
   if(!panel)return;
-  const isOpen=panel.style.width==='200px';
-  panel.style.width=isOpen?'0':'80px';
+  const isOpen=panel.style.width==='120px';
+  panel.style.width=isOpen?'0':'120px';
 }
 
 async function loadChatMemberPanel(){
@@ -2295,6 +2295,13 @@ async function renderVoteCard(vid,v){
       html+=`<div class="vopt-label">${escH(opt)}</div>`;
       html+=`<div class="vopt-cnt">${cnt}명 ${pct}%</div>`;
       html+=`</div>`;
+      // 마감 후 인사팀에게 선택지별 투표자 이름 표시
+      if(isClosed && isAdmin && cnt > 0){
+        const voterNames = Object.entries(responses).filter(([k,v])=>v===i).map(([k])=>k);
+        html+=`<div style="display:flex;flex-wrap:wrap;gap:4px;padding:2px 8px 8px">`;
+        voterNames.forEach(name=>{ html+=`<span style="background:var(--surface2);color:var(--text2);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`; });
+        html+=`</div>`;
+      }
     });
     if(myVote!==undefined&&!isClosed){
       html+=`<div style="text-align:center;margin-top:8px"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span></div>`;
