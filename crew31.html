@@ -22,7 +22,7 @@ button,input,textarea,select{font-family:'Pretendard',sans-serif;}
 button{cursor:pointer;}
 
 /* ── 로그인 ── */
-#loginPage{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;overflow-y:auto;}
+#loginPage{position:fixed;inset:0;z-index:999;background:url("https://res.cloudinary.com/dcmohbbyi/image/upload/q_auto/f_auto/v1779527081/7D978FB6-41D5-4B66-BF7B-EE49E05F488C_nu6dkr.png") center/cover no-repeat;display:flex;flex-direction:column;align-items:center;overflow-y:auto;}
 .login-profile-area{width:100%;display:flex;flex-direction:column;align-items:center;padding:52px 24px 28px;background:linear-gradient(180deg,rgba(255,200,180,0.35) 0%,transparent 100%);}
 .login-logo{width:80px;height:80px;background:linear-gradient(135deg,#FF85C1,#FFB3D9);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,133,193,0.3);}
 .login-title{font-family:'Nunito',sans-serif;font-size:28px;font-weight:900;background:linear-gradient(135deg,#FF85C1,#f87286);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;}
@@ -216,24 +216,33 @@ button{cursor:pointer;}
 <div id="loginPage">
   <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;">
     <div class="login-profile-area">
-      <div class="login-logo">📋</div>
+      <div class="login-logo" style="background:none;box-shadow:none;padding:0;overflow:hidden">
+        <img src="https://res.cloudinary.com/dcmohbbyi/image/upload/q_auto/f_auto/v1779527081/7D978FB6-41D5-4B66-BF7B-EE49E05F488C_nu6dkr.png" style="width:80px;height:80px;object-fit:cover;border-radius:24px">
+      </div>
       <div class="login-title">인트라넷</div>
       <div class="login-sub">(주) 떠리원</div>
       <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
-        style="margin-top:14px;display:flex;align-items:center;gap:6px;background:rgba(108,53,222,0.12);border:1.5px solid rgba(108,53,222,0.2);color:#6C35DE;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
+        style="margin-top:14px;display:flex;align-items:center;gap:6px;background:rgba(255,133,193,0.12);border:1.5px solid rgba(255,133,193,0.3);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
         🎡 오락실 바로가기
       </a>
     </div>
     <div class="login-card" style="width:100%;">
-      <div class="login-sec">
-        <div class="login-label">👤 사원으로 시작</div>
-        <input class="fi" id="loginName" placeholder="이름 입력" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" onkeyup="if(event.key==='Enter')doLogin('member')">
+      <!-- 탭 버튼 -->
+      <div style="display:flex;border-bottom:1px solid var(--border);">
+        <button id="tabMember" onclick="switchLoginTab('member')" style="flex:1;padding:14px;border:none;background:#FF85C1;color:white;font-size:14px;font-weight:800;cursor:pointer;border-radius:0;font-family:'Pretendard',sans-serif;">👤 사원</button>
+        <button id="tabAdmin" onclick="switchLoginTab('admin')" style="flex:1;padding:14px;border:none;background:var(--surface2);color:var(--text3);font-size:14px;font-weight:800;cursor:pointer;border-radius:0;font-family:'Pretendard',sans-serif;">🔑 인사팀</button>
+      </div>
+      <!-- 사원 로그인 -->
+      <div id="loginSectionMember" class="login-sec">
+        <div class="login-label">닉네임을 입력하세요</div>
+        <input class="fi" id="loginName" placeholder="닉네임 입력" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" onkeyup="if(event.key==='Enter')doLogin('member')">
         <button class="login-btn member" onclick="doLogin('member')">입장하기</button>
       </div>
-      <div class="login-sec">
-        <div class="login-label">🔑 인사팀으로 시작</div>
+      <!-- 인사팀 로그인 -->
+      <div id="loginSectionAdmin" class="login-sec" style="display:none;">
+        <div class="login-label">비밀번호를 입력하세요</div>
         <input class="fi" id="loginPw" type="password" placeholder="비밀번호" onkeyup="if(event.key==='Enter')doLogin('admin')">
-        <button class="login-btn admin" onclick="doLogin('admin')">인사팀 입장</button>
+        <button class="login-btn admin" onclick="doLogin('admin')">입장하기</button>
       </div>
     </div>
   </div>
@@ -538,6 +547,16 @@ async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{met
 // ══════════════════════════════════════════════
 // ── LOGIN ──
 // ══════════════════════════════════════════════
+function switchLoginTab(tab){
+  const isMember = tab==='member';
+  document.getElementById('loginSectionMember').style.display = isMember?'':'none';
+  document.getElementById('loginSectionAdmin').style.display = isMember?'none':'';
+  document.getElementById('tabMember').style.background = isMember?'#FF85C1':'var(--surface2)';
+  document.getElementById('tabMember').style.color = isMember?'white':'var(--text3)';
+  document.getElementById('tabAdmin').style.background = isMember?'var(--surface2)':'#f87286';
+  document.getElementById('tabAdmin').style.color = isMember?'var(--text3)':'white';
+}
+
 async function doLogin(role){
   try{
     if(role==='admin'){
@@ -991,7 +1010,7 @@ if(!joined){
   html+=`<button onclick="sendChat()" style="width:40px;height:40px;background:linear-gradient(135deg,#FF85C1,#f87286);border:none;border-radius:50%;color:white;font-size:17px;flex-shrink:0">➤</button>`;
   html+=`</div>`;
 }
-mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 110px)">${html}</div>`;
+mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 90px)">${html}</div>`;
 if(joined||isAdmin){fetchChatMessages();clearInterval(window._chatPoll);window._chatPoll=setInterval(fetchChatMessages,4000);loadChatMemberCount();loadChatMemberPanel();}
 }
 
@@ -1183,6 +1202,15 @@ const path=getChatPath(_currentChatRoom);
 await dbPush(path,msg);
 await fetchChatMessages();
 
+// @all 처리 - 전체 알림
+if(body.includes('@all')){
+  sendFCMNotification({
+    title:`💬 ${CU.name}님의 전체 멘션`,
+    body:body.replace('@all','').trim().slice(0,60)||'전체 멘션',
+    data:{tab:'chat'}
+  });
+}
+
 // FCM: @멘션 감지
 const mentions=[...body.matchAll(/@(\S+)/g)].map(m=>m[1]);
 if(mentions.length>0){
@@ -1265,11 +1293,14 @@ async function showMentionPopup(query, atIdx, input){
     if(crewMembers) names=Object.values(crewMembers).filter(m=>m.name).map(m=>m.name);
   }
 
-  const filtered=names.filter(n=>n.toLowerCase().includes(query)).slice(0,8);
-  if(filtered.length===0){popup.style.display='none';return;}
+  const filtered=names.filter(n=>n.toLowerCase().includes(query));
+  // @all 포함
+  const allOption = query===''||'all'.includes(query) ? ['all'] : [];
+  const finalList=[...allOption,...filtered];
+  if(finalList.length===0){popup.style.display='none';return;}
 
   popup.style.display='block';
-  popup.innerHTML=filtered.map(name=>`
+  popup.innerHTML=finalList.map(name=>`
     <div onclick="insertMention('${escH(name)}',${atIdx})" style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='white'">
       <div style="width:26px;height:26px;border-radius:8px;background:#FF85C1;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${name[0]}</div>
@@ -1298,6 +1329,7 @@ function insertMention(name, atIdx){
 function highlightMentions(text){
   if(!text) return '';
   return escH(text).replace(/@(\S+)/g, (match, name) => {
+    if(name==='all') return `<span style="background:#FF85C1;color:white;padding:1px 6px;border-radius:8px;font-weight:700">@all</span>`;
     const isMe = CU?.name && name === CU.name;
     return `<span style="background:${isMe?'#FF85C1':'#fde8eb'};color:${isMe?'white':'#f87286'};padding:1px 6px;border-radius:8px;font-weight:700">@${escH(name)}</span>`;
   });
