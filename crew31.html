@@ -1704,7 +1704,10 @@ async function loadLeave(){
           html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">`;
           html+=`<div style="display:flex;align-items:center;gap:8px">`;
           html+=`<span style="font-size:18px">${prizeEmoji}</span>`;
-          html+=`<span style="font-size:13px;font-weight:600;${isUsed?'text-decoration:line-through;color:var(--text3)':''}">${escH(prizeName)}</span>`;
+          html+=`<div>`;
+          html+=`<div style="font-size:13px;font-weight:600;${isUsed?'text-decoration:line-through;color:var(--text3)':''}">${escH(prizeName)}</div>`;
+          if(isUsed && p.usedDate) html+=`<div style="font-size:10px;color:var(--text3)">${p.usedDate} 사용</div>`;
+          html+=`</div>`;
           html+=`</div>`;
           if(isAdmin){
             html+=`<button onclick="togglePrizeUsed('${k}',${pidx},${!isUsed})" style="font-size:11px;padding:4px 12px;border-radius:10px;border:none;cursor:pointer;font-weight:700;white-space:nowrap;`;
@@ -2848,9 +2851,9 @@ async function recordAttendance(vid, optIdx) {
                 const prizeArr = Array.isArray(prizesRaw) ? [...prizesRaw] : Object.values(prizesRaw);
                 const tupiIdx = prizeArr.findIndex(p=>p && !p.deducted && (p.name||'').includes('투피드'));
                 if(tupiIdx >= 0){
-                  prizeArr[tupiIdx] = {...prizeArr[tupiIdx], deducted: true};
+                  prizeArr[tupiIdx] = {...prizeArr[tupiIdx], deducted: true, usedDate: date};
                   await gameSet(`memberPrizes/${gmKey}`, prizeArr);
-                  showToast(`🎁 ${gName}${myKey} 투피드 경품 사용됨`);
+                  showToast(`🎁 ${gName}${myKey} 투피드 경품 사용됨 (${date})`);
                 } else {
                   showToast(`⚠️ ${gName}${myKey} 투피드 경품 없음`);
                 }
@@ -2869,7 +2872,7 @@ async function recordAttendance(vid, optIdx) {
           const remaining = totalGiven - totalUsed;
           if(remaining > 0){
             await dbPush(`leaveLog/${ck}`, {type:'deduct',amount:1,date,time:Date.now(),memo:`연차 사용 ${date}`});
-            showToast(`🏖️ 연차 1일 차감 (잔여 ${remaining-1}일)`);
+            showToast(`🏖️ 연차 1일 차감 · ${date} (잔여 ${remaining-1}일)`);
           } else {
             showToast(`⚠️ 잔여 연차 없음`);
           }
