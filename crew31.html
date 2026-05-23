@@ -963,6 +963,7 @@ html+=`<div style="padding:10px 16px;border-bottom:1px solid var(--border);backg
 html+=`<button onclick="backToChatList()" style="background:var(--surface2);border:none;border-radius:10px;padding:7px 12px;font-size:14px;font-weight:700;color:var(--text2)">‹ 목록</button>`;
 html+=`<div style="flex:1"><div style="font-size:14px;font-weight:800">${escH(room.name)}</div><div id="chatMemberCount" style="font-size:11px;color:var(--text3)">참여자 확인 중...</div></div>`;
 if(joined&&!isAdmin)html+=`<button onclick="leaveChat()" style="background:rgba(255,92,92,0.1);border:none;color:var(--red);padding:7px 14px;border-radius:10px;font-size:13px;font-weight:700">퇴장</button>`;
+html+=`<button onclick="toggleChatMemberPanel()" style="background:var(--surface2);border:none;border-radius:10px;padding:7px 12px;font-size:14px;cursor:pointer">👥</button>`;
 html+=`</div>`;
 if(!joined){
   html+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px">`;
@@ -970,17 +971,25 @@ if(!joined){
   html+=`<div style="text-align:center"><div style="font-size:16px;font-weight:800">${escH(room.name)}</div><div style="font-size:13px;color:var(--text3);margin-top:4px">비밀번호를 입력하세요</div></div>`;
   html+=`<div style="width:100%;max-width:280px">`;
   html+=`<input id="chatPwInput" class="fi" type="password" placeholder="비밀번호 입력" style="text-align:center;font-size:18px;letter-spacing:6px;margin-bottom:10px" onkeyup="if(event.key==='Enter')joinChat()">`;
-  html+=`<button onclick="joinChat()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);color:white;border:none;border-radius:14px;font-size:15px;font-weight:800">입장하기</button>`;
+  html+=`<button onclick="joinChat()" style="width:100%;padding:13px;background:linear-gradient(135deg,#FF85C1,#f87286);color:white;border:none;border-radius:14px;font-size:15px;font-weight:800">입장하기</button>`;
   html+=`</div></div>`;
 }else{
+  html+=`<div style="flex:1;display:flex;overflow:hidden;position:relative">`;
   html+=`<div id="chatMessages" style="flex:1;overflow-y:auto;padding:12px 14px 8px;display:flex;flex-direction:column;gap:6px"></div>`;
+  // 멤버 패널 (오른쪽 슬라이드)
+  html+=`<div id="chatMemberPanel" style="width:0;overflow:hidden;background:white;border-left:1px solid var(--border);transition:width 0.25s ease;flex-shrink:0">`;
+  html+=`<div style="width:200px;padding:12px">`;
+  html+=`<div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:10px">👥 채팅 멤버</div>`;
+  html+=`<div id="chatMemberList" style="display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;color:var(--text3)">불러오는 중...</div></div>`;
+  html+=`</div></div>`;
+  html+=`</div>`;
   html+=`<div style="padding:10px 14px 12px;border-top:1px solid var(--border);background:white;display:flex;gap:8px;align-items:flex-end;flex-shrink:0">`;
   html+=`<textarea id="chatInput" rows="1" placeholder="메시지 입력..." onkeydown="chatKeydown(event)" oninput="autoResize(this)" style="flex:1;border:1.5px solid var(--border);border-radius:18px;padding:9px 14px;font-size:14px;font-family:inherit;resize:none;outline:none;max-height:80px;line-height:1.5;background:var(--cream)"></textarea>`;
-  html+=`<button onclick="sendChat()" style="width:40px;height:40px;background:linear-gradient(135deg,#FF9F7A,#FF7F6E);border:none;border-radius:50%;color:white;font-size:17px;flex-shrink:0">➤</button>`;
+  html+=`<button onclick="sendChat()" style="width:40px;height:40px;background:linear-gradient(135deg,#FF85C1,#f87286);border:none;border-radius:50%;color:white;font-size:17px;flex-shrink:0">➤</button>`;
   html+=`</div>`;
 }
 mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 110px)">${html}</div>`;
-if(joined||isAdmin){fetchChatMessages();clearInterval(window._chatPoll);window._chatPoll=setInterval(fetchChatMessages,4000);loadChatMemberCount();}
+if(joined||isAdmin){fetchChatMessages();clearInterval(window._chatPoll);window._chatPoll=setInterval(fetchChatMessages,4000);loadChatMemberCount();loadChatMemberPanel();}
 }
 
 async function loadChatMemberCount(){
@@ -996,6 +1005,61 @@ function backToChatList(){
   clearInterval(window._chatPoll);
   _currentChatRoom=null;
   loadChatTab();
+}
+
+function toggleChatMemberPanel(){
+  const panel=document.getElementById('chatMemberPanel');
+  if(!panel)return;
+  const isOpen=panel.style.width==='200px';
+  panel.style.width=isOpen?'0':'200px';
+}
+
+async function loadChatMemberPanel(){
+  const listEl=document.getElementById('chatMemberList');
+  if(!listEl||!_currentChatRoom)return;
+  const room=_currentChatRoom;
+  let members=[];
+  if(room.type==='dept'){
+    // 부서 채팅: chat_presence에서 현재 접속자
+    const presence=await dbGet(`chat_presence/${getRoomKey(room)}`);
+    if(presence){
+      members=Object.values(presence).filter(p=>p&&p.name).map(p=>({name:p.name,online:true}));
+    }
+    // 오락실 멤버에서 이 그룹 멤버도 표시
+    const gameMembers=await gameGet('members');
+    if(gameMembers){
+      const gName=groups[room.id]?.name||'';
+      Object.values(gameMembers).forEach(m=>{
+        if(!m.name)return;
+        const clean=m.name.replace(/^\*/,'');
+        if(!clean.startsWith(gName))return;
+        const nick=clean.replace(gName,'');
+        if(!members.find(x=>x.name===nick)){
+          members.push({name:nick,online:false});
+        }
+      });
+    }
+  } else {
+    // 전체 채팅: crew31 멤버
+    const crewMembers=await dbGet('members');
+    if(crewMembers){
+      const presence=await dbGet(`chat_presence/${getRoomKey(room)}`)||{};
+      const onlineNames=new Set(Object.values(presence).map(p=>p?.name).filter(Boolean));
+      members=Object.values(crewMembers).filter(m=>m.name).map(m=>({name:m.name,online:onlineNames.has(m.name)}));
+    }
+  }
+  members.sort((a,b)=>{
+    if(a.online&&!b.online)return -1;
+    if(!a.online&&b.online)return 1;
+    return a.name.localeCompare(b.name,'ko');
+  });
+  listEl.innerHTML=members.map(m=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+      <div style="width:28px;height:28px;border-radius:8px;background:${m.online?'#FF85C1':'var(--surface2)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${m.online?'white':'var(--text3)'};">${(m.name||'?')[0]}</div>
+      <span style="font-size:12px;font-weight:600;color:${m.online?'var(--text)':'var(--text3)'}">${escH(m.name)}</span>
+      ${m.online?'<span style="width:6px;height:6px;border-radius:50%;background:#5DB88A;flex-shrink:0"></span>':''}
+    </div>
+  `).join('');
 }
 
 function selectChatRoom(type,id,name){
