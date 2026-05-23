@@ -2404,7 +2404,7 @@ async function castVote(vid,optIdx){
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   showToast('✅ 투표 완료!');
   // 출석 자동 기록
-  recordAttendance(vid, optIdx);
+  await recordAttendance(vid, optIdx);
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
@@ -2748,7 +2748,8 @@ async function recordAttendance(vid, optIdx) {
       if(gameMembers){
         const entry = Object.entries(gameMembers).find(([k,m])=>{
           const clean = (m.name||'').replace(/^\*/,'');
-          return clean === fullName;
+          // 정확히 일치 또는 그룹명+닉네임 포함 여부
+          return clean === fullName || clean.endsWith(myKey) && clean.startsWith(gName);
         });
         if(entry){
           const [gmKey, gmVal] = entry;
