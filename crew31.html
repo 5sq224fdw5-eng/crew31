@@ -1944,16 +1944,22 @@ async function renderVoteCard(vid,v){
     }
     if(isClosed){
       html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${totalVotes}명 참여</span></div>`;
-      // 인사팀만: 미투표자 표시
       if(isAdmin && v.group && v.group!=='all'){
         const allGroupMembers = await dbGet('members');
         if(allGroupMembers){
-          const votedKeys = Object.keys(responses);
-          const nonVoters = Object.entries(allGroupMembers)
-            .filter(([k,m])=>m.name && !votedKeys.includes(m.name))
-            .map(([k,m])=>m.name);
+          const votedNames = Object.keys(responses);
+          const isEndVote2 = (v.title||'').includes('완료') || v.imageUpload;
+
+          // 미투표자 (이 투표에 아예 안 한 사람)
+          const nonVoters = Object.values(allGroupMembers)
+            .filter(m=>m.name && !votedNames.includes(m.name))
+            .map(m=>m.name);
+
+          html+=`<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">`;
+
+          // 미투표자
           if(nonVoters.length>0){
-            html+=`<div style="margin-top:10px;padding:10px 12px;background:#FFF0F0;border-radius:12px;border:1px solid #FFD6D6">`;
+            html+=`<div style="padding:10px 12px;background:#FFF0F0;border-radius:12px;border:1px solid #FFD6D6">`;
             html+=`<div style="font-size:11px;font-weight:700;color:#FC5C65;margin-bottom:6px">⚠️ 미투표 ${nonVoters.length}명</div>`;
             html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
             nonVoters.forEach(name=>{
@@ -1961,8 +1967,38 @@ async function renderVoteCard(vid,v){
             });
             html+=`</div></div>`;
           } else {
-            html+=`<div style="margin-top:8px;text-align:center;font-size:12px;color:var(--green)">✅ 전원 투표 완료</div>`;
+            html+=`<div style="text-align:center;font-size:12px;color:var(--green)">✅ 전원 투표 완료</div>`;
           }
+
+          // 불일치자: 완료 투표일 때만 - 시작 투표 참여자 중 완료 투표 미참여자
+          if(isEndVote2){
+            const allVotes = await dbGet('votes');
+            if(allVotes){
+              // 같은 날짜, 같은 그룹의 시작 투표 찾기
+              const startVote = Object.values(allVotes).find(sv=>
+                !sv.deleted &&
+                sv.group===v.group &&
+                sv.date===v.date &&
+                (sv.title||'').includes('시작') &&
+                sv.responses
+              );
+              if(startVote){
+                const startedNames = Object.keys(startVote.responses||{});
+                const mismatch = startedNames.filter(n=>!votedNames.includes(n));
+                if(mismatch.length>0){
+                  html+=`<div style="padding:10px 12px;background:#FFF8E1;border-radius:12px;border:1px solid #FFE082">`;
+                  html+=`<div style="font-size:11px;font-weight:700;color:#F9A825;margin-bottom:6px">🔔 시작만 하고 완료 미제출 ${mismatch.length}명</div>`;
+                  html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
+                  mismatch.forEach(name=>{
+                    html+=`<span style="background:rgba(249,168,37,0.1);color:#F9A825;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`;
+                  });
+                  html+=`</div></div>`;
+                }
+              }
+            }
+          }
+
+          html+=`</div>`;
         }
       }
     }
