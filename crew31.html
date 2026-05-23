@@ -1416,7 +1416,8 @@ const isAdmin=CU?.role==='admin';
 const gameMembers=await gameGet('members');
 if(!gameMembers){mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>';return;}
 
-const GAME_GROUPS=['좋아요','댓글','시크릿'];
+// 그룹명을 crew31 groups에서 동적으로 가져오기
+const GAME_GROUPS=Object.values(groups).map(g=>g.name).filter(Boolean);
 const byGroup={};GAME_GROUPS.forEach(g=>{byGroup[g]=[];});byGroup['기타']=[];
 Object.entries(gameMembers).forEach(([k,m])=>{
   if(!m.name)return;
@@ -1475,11 +1476,18 @@ function toggleMemberGroup2(gName){
   const el=document.getElementById('glist_'+gName);
   const arrow=document.getElementById('garrow_'+gName);
   if(!el)return;
-  // 잠금 체크
   const gid=Object.keys(groups).find(id=>groups[id].name===gName);
-  if(gid && groups[gid]?.memberLock===true && CU?.role!=='admin'){
-    showToast('🔒 잠긴 그룹입니다');
-    return;
+  if(gid && groups[gid]?.memberLock && CU?.role!=='admin'){
+    const stored = localStorage.getItem('unlockedMember_'+gid);
+    if(!stored){
+      _lockAction={gid,action:'enter',type:'member'};
+      document.getElementById('lockModalTitle').textContent='🔒 멤버 열람 잠금';
+      document.getElementById('lockModalDesc').textContent=`${gName} 멤버 목록은 잠겨있습니다.`;
+      document.getElementById('lockPwLabel').textContent='비밀번호';
+      document.getElementById('lockPwInput').value='';
+      document.getElementById('groupLockModal').classList.add('active');
+      return;
+    }
   }
   const open=el.style.display==='none';
   el.style.display=open?'block':'none';
@@ -1488,18 +1496,45 @@ function toggleMemberGroup2(gName){
 
 async function toggleMemberLock(gid){
   const g=groups[gid];if(!g)return;
-  const isLocked=g.memberLock===true;
-  const msg=isLocked?`${g.name} 멤버 잠금을 해제하시겠습니까?`:`${g.name} 멤버 목록을 잠그시겠습니까?`;
-  if(!confirm(msg))return;
-  await dbSet(`groups/${gid}/memberLock`,!isLocked);
-  groups[gid].memberLock=!isLocked;
-  showToast(isLocked?`🔓 ${g.name} 멤버 잠금 해제됨`:`🔒 ${g.name} 멤버 잠금됨`);
-  loadMembersPage();
+  const isLocked=g.memberLock===true||typeof g.memberLock==='string';
+  if(isLocked){
+    openMemberLockModal(gid,'unlock');
+  } else {
+    openMemberLockModal(gid,'lock');
+  }
 }
 
 async function toggleGroupLockFromMember(gid){
-  // 하위 호환용 - toggleMemberLock으로 위임
   toggleMemberLock(gid);
+}
+
+let _memberLockAction=null;
+function openMemberLockModal(gid, action){
+  const g=groups[gid];if(!g)return;
+  _memberLockAction={gid,action};
+  document.getElementById('editVoteId').value=''; // 재활용
+  // 잠금 모달 재활용
+  const modal = document.getElementById('groupLockModal');
+  if(!modal){showToast('모달 없음');return;}
+  _lockAction={gid,action,type:'member'};
+  document.getElementById('lockModalTitle').textContent = action==='lock'?'👥 멤버 잠금 설정':action==='unlock'?'🔓 멤버 잠금 해제':'🔑 멤버 비번 변경';
+  document.getElementById('lockModalDesc').textContent = action==='unlock'?'현재 비밀번호를 입력하세요.':'새 비밀번호를 입력하세요.';
+  document.getElementById('lockPwLabel').textContent = action==='unlock'?'현재 비밀번호':'새 비밀번호';
+  document.getElementById('lockPwInput').value='';
+  modal.classList.add('active');
+}
+
+let _voteLockAction=null;
+function openVoteLockModal(gid, action){
+  const g=groups[gid];if(!g)return;
+  _lockAction={gid,action,type:'vote'};
+  const modal = document.getElementById('groupLockModal');
+  if(!modal){showToast('모달 없음');return;}
+  document.getElementById('lockModalTitle').textContent = action==='lock'?'🗳️ 투표 잠금 설정':action==='unlock'?'🔓 투표 잠금 해제':'🔑 투표 비번 변경';
+  document.getElementById('lockModalDesc').textContent = action==='unlock'?'현재 비밀번호를 입력하세요.':'새 비밀번호를 입력하세요.';
+  document.getElementById('lockPwLabel').textContent = action==='unlock'?'현재 비밀번호':'새 비밀번호';
+  document.getElementById('lockPwInput').value='';
+  modal.classList.add('active');
 }
 
 function filterMembers(){
@@ -1782,7 +1817,12 @@ async function confirmGroupLock(){
   const action=_lockAction;if(!action)return;
   const {gid}=action;
 
-  if(action.action==='enter'){
+  if(action.action==='enter'&&action.type==='member'){
+    if(groups[gid]?.memberLock!==pw){showToast('비밀번호가 틀렸습니다');return;}
+    localStorage.setItem('unlockedMember_'+gid,'1');
+    closeGroupLockModal();
+    loadMembersPage();
+  }else if(action.action==='enter'){
     if(groups[gid]?.lock!==pw){showToast('비밀번호가 틀렸습니다');return;}
     localStorage.setItem('unlockedGroup_'+gid,'1');
     closeGroupLockModal();
@@ -1801,9 +1841,43 @@ async function confirmGroupLock(){
     closeGroupLockModal();renderDeptSubMenu();loadChatTab();
   }else if(action.action==='change'){
     if(pw.length<4){showToast('4자리 이상 입력하세요');return;}
-    await dbSet(`groups/${gid}/lock`,pw);
-    groups[gid].lock=pw;
-    showToast('🔑 비밀번호 변경됨');
+    if(action.type==='member'){
+      await dbSet(`groups/${gid}/memberLock`,pw);
+      groups[gid].memberLock=pw;
+      showToast('🔑 멤버 비번 변경됨');
+    } else if(action.type==='vote'){
+      await dbSet(`groups/${gid}/voteLock`,pw);
+      groups[gid].voteLock=pw;
+      showToast('🔑 투표 비번 변경됨');
+    } else {
+      await dbSet(`groups/${gid}/lock`,pw);
+      groups[gid].lock=pw;
+      showToast('🔑 비밀번호 변경됨');
+    }
+    closeGroupLockModal();loadSettings();
+  }else if(action.action==='lock'&&action.type==='member'){
+    if(pw.length<4){showToast('4자리 이상 입력하세요');return;}
+    await dbSet(`groups/${gid}/memberLock`,pw);
+    groups[gid].memberLock=pw;
+    showToast('🔒 멤버 잠금 설정됨');
+    closeGroupLockModal();loadSettings();
+  }else if(action.action==='unlock'&&action.type==='member'){
+    if(groups[gid]?.memberLock!==pw){showToast('비밀번호가 틀렸습니다');return;}
+    await dbSet(`groups/${gid}/memberLock`,null);
+    groups[gid].memberLock=null;
+    showToast('🔓 멤버 잠금 해제됨');
+    closeGroupLockModal();loadSettings();
+  }else if(action.action==='lock'&&action.type==='vote'){
+    if(pw.length<4){showToast('4자리 이상 입력하세요');return;}
+    await dbSet(`groups/${gid}/voteLock`,pw);
+    groups[gid].voteLock=pw;
+    showToast('🔒 투표 잠금 설정됨');
+    closeGroupLockModal();loadSettings();
+  }else if(action.action==='unlock'&&action.type==='vote'){
+    if(groups[gid]?.voteLock!==pw){showToast('비밀번호가 틀렸습니다');return;}
+    await dbSet(`groups/${gid}/voteLock`,null);
+    groups[gid].voteLock=null;
+    showToast('🔓 투표 잠금 해제됨');
     closeGroupLockModal();loadSettings();
   }
 }
@@ -2074,8 +2148,34 @@ async function loadHome(){
   if(!votes||Object.keys(votes).length===0){
     mb.innerHTML=`<div class="empty">${isAdmin?`<button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px">+ 투표 만들기</button><br>`:''}<div class="empty-icon">📋</div>등록된 투표가 없습니다</div>`;return;
   }
-  const list=Object.entries(votes).filter(([k,v])=>!v.deleted)
+
+  // 사원이면 자기 그룹 파악
+  let myGroupIds = null;
+  if(!isAdmin){
+    const gameMembers = await gameGet('members');
+    if(gameMembers){
+      myGroupIds = new Set();
+      myGroupIds.add('all'); // 전체 투표는 항상 보임
+      Object.values(gameMembers).forEach(m=>{
+        const clean = (m.name||'').replace(/^\*/,'');
+        if(clean.endsWith(CU.name)){
+          const gName = clean.slice(0, clean.length - CU.name.length);
+          const gid = Object.keys(groups).find(id=>groups[id].name===gName);
+          if(gid) myGroupIds.add(gid);
+        }
+      });
+    }
+  }
+
+  const list=Object.entries(votes)
+    .filter(([k,v])=>{
+      if(v.deleted) return false;
+      if(isAdmin) return true;
+      if(!myGroupIds) return true;
+      return myGroupIds.has(v.group||'all');
+    })
     .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
+
   let html='<div style="padding:14px 0 80px">';
   if(isAdmin){
     html+=`<div style="padding:0 14px 10px"><button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%">+ 투표 만들기</button></div>`;
@@ -2740,45 +2840,37 @@ async function recordAttendance(vid, optIdx) {
     const result = mapVoteResult(optText);
     await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, result);
 
-    // 투피드/노피드 선택 시 오락실 주식 자동 차감
-    if(result === '투피드' || result === '노피드'){
-      const gName = groups[gid]?.name || '';
-      const fullName = gName + myKey; // 예: 댓글불주먹
-      const gameMembers = await gameGet('members');
-      if(gameMembers){
-        const entry = Object.entries(gameMembers).find(([k,m])=>{
-          const clean = (m.name||'').replace(/^\*/,'');
-          // 정확히 일치 또는 그룹명+닉네임 포함 여부
-          return clean === fullName || clean.endsWith(myKey) && clean.startsWith(gName);
-        });
-        if(entry){
-          const [gmKey, gmVal] = entry;
-          const curStock = gmVal.stock || 0;
-          if(result === '노피드' && curStock > 0){
-            await gameSet(`members/${gmKey}/stock`, curStock - 1);
-            await gamePush(`stockLog/${gmKey}`, {type:'deduct',amount:1,date,time:Date.now(),memo:`노피드 ${date}`});
-            showToast(`📉 노피드 - ${gName}${myKey} 주식 1주 차감`);
-          } else if(result === '투피드' && curStock > 0){
-            await gameSet(`members/${gmKey}/stock`, curStock - 1);
-            await gamePush(`stockLog/${gmKey}`, {type:'deduct',amount:1,date,time:Date.now(),memo:`투피드 ${date}`});
-            // 인트라넷 연차도 차감
-            const crewMembers = await dbGet('members');
-            if(crewMembers){
-              const crewEntry = Object.entries(crewMembers).find(([k,m])=>m.name===myKey);
-              if(crewEntry){
-                const [ck] = crewEntry;
-                const curLeave = (await dbGet(`leaveLog/${ck}`)) || {};
-                const totalGiven = Object.values(curLeave).filter(l=>l.type==='give').reduce((s,l)=>s+(l.amount||0),0);
-                const totalUsed = Object.values(curLeave).filter(l=>l.type==='deduct').reduce((s,l)=>s+(l.amount||0),0);
-                const remaining = totalGiven - totalUsed;
-                if(remaining > 0){
-                  await dbPush(`leaveLog/${ck}`, {type:'deduct',amount:1,date,time:Date.now(),memo:`투피드 ${date}`});
-                  showToast(`📉 투피드 - 주식 1주 + 연차 1일 차감`);
-                } else {
-                  showToast(`📉 투피드 - 주식 1주 차감 (연차 부족)`);
-                }
-              }
+    // 투피드 선택 시 → 보유 경품 중 투피드 1개 차감
+    // 프패 선택 시 → 보유 연차 1일 차감
+    const crewMembers = await dbGet('members');
+    if(crewMembers){
+      const crewEntry = Object.entries(crewMembers).find(([k,m])=>m.name===myKey);
+      if(crewEntry){
+        const [ck] = crewEntry;
+        if(result === '투피드'){
+          // 오락실 memberPrizes에서 투피드 경품 1개 차감
+          const prizes = await gameGet(`memberPrizes/${ck}`) || await gameGet(`memberPrizes/${myKey}`);
+          if(prizes){
+            const prizeList = Object.entries(prizes);
+            const tupiEntry = prizeList.find(([k,p])=>!p.deducted && (p.name||'').includes('투피드'));
+            if(tupiEntry){
+              await gameSet(`memberPrizes/${ck}/${tupiEntry[0]}/deducted`, true);
+              showToast(`🎁 투피드 경품 1개 사용됨`);
+            } else {
+              showToast(`⚠️ 보유 중인 투피드 경품 없음`);
             }
+          }
+        } else if(result === '프패'){
+          // 연차 1일 차감
+          const leaveLog = await dbGet(`leaveLog/${ck}`) || {};
+          const totalGiven = Object.values(leaveLog).filter(l=>l.type==='give').reduce((s,l)=>s+(l.amount||0),0);
+          const totalUsed = Object.values(leaveLog).filter(l=>l.type==='deduct').reduce((s,l)=>s+(l.amount||0),0);
+          const remaining = totalGiven - totalUsed;
+          if(remaining > 0){
+            await dbPush(`leaveLog/${ck}`, {type:'deduct',amount:1,date,time:Date.now(),memo:`연차 사용 ${date}`});
+            showToast(`🏖️ 연차 1일 차감 (잔여 ${remaining-1}일)`);
+          } else {
+            showToast(`⚠️ 잔여 연차 없음`);
           }
         }
       }
@@ -3080,7 +3172,6 @@ async function loadSettings(){
   html+=`<div class="setting-section-title">🔒 부서 채팅 잠금</div>`;
   Object.entries(groups).forEach(([gid,g])=>{
     const isLocked = g.lock && g.lock !== true && g.lock !== false;
-    const pw = isLocked ? g.lock : (g.lock===true?'설정됨':'없음');
     html+=`<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">`;
     html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
     html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
@@ -3094,6 +3185,53 @@ async function loadSettings(){
     html+=`</div></div>`;
     if(g.lock){
       html+=`<div style="font-size:12px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px">현재 비번: <b style="color:var(--text)">${escH(String(g.lock))}</b></div>`;
+    }
+    html+=`</div>`;
+  });
+  html+=`</div>`;
+
+  // 멤버 열람 잠금
+  html+=`<div class="setting-section">`;
+  html+=`<div class="setting-section-title">👥 멤버 열람 잠금</div>`;
+  Object.entries(groups).forEach(([gid,g])=>{
+    const ml = g.memberLock;
+    const isMLocked = ml && ml !== true && ml !== false;
+    html+=`<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">`;
+    html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
+    html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
+    html+=`<div style="display:flex;gap:6px">`;
+    if(ml){
+      html+=`<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openMemberLockModal('${gid}','unlock')">🔓 해제</button>`;
+      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openMemberLockModal('${gid}','change')">🔑 변경</button>`;
+    }else{
+      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openMemberLockModal('${gid}','lock')">🔒 잠금 설정</button>`;
+    }
+    html+=`</div></div>`;
+    if(ml){
+      html+=`<div style="font-size:12px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px">현재 비번: <b style="color:var(--text)">${escH(String(ml))}</b></div>`;
+    }
+    html+=`</div>`;
+  });
+  html+=`</div>`;
+
+  // 투표 열람 잠금
+  html+=`<div class="setting-section">`;
+  html+=`<div class="setting-section-title">🗳️ 투표 열람 잠금</div>`;
+  Object.entries(groups).forEach(([gid,g])=>{
+    const vl = g.voteLock;
+    html+=`<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">`;
+    html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
+    html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
+    html+=`<div style="display:flex;gap:6px">`;
+    if(vl){
+      html+=`<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openVoteLockModal('${gid}','unlock')">🔓 해제</button>`;
+      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openVoteLockModal('${gid}','change')">🔑 변경</button>`;
+    }else{
+      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openVoteLockModal('${gid}','lock')">🔒 잠금 설정</button>`;
+    }
+    html+=`</div></div>`;
+    if(vl){
+      html+=`<div style="font-size:12px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px">현재 비번: <b style="color:var(--text)">${escH(String(vl))}</b></div>`;
     }
     html+=`</div>`;
   });
