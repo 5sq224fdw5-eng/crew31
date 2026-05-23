@@ -2392,7 +2392,7 @@ async function renderVoteCard(vid,v){
   // 링크 제출 섹션 - 완료 투표는 인사팀만 링크 제출 가능
   const links=v.links?Object.values(v.links):[];
   const isEndVote = (v.title||'').includes('완료') || (v.title||'').includes('end');
-  const canSubmitLink = !isEndVote || isAdmin; // 완료투표는 관리자만
+  const canSubmitLink = !isClosed && (!isEndVote || isAdmin); // 마감된 투표는 링크 제출 불가
 
   html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">`;
   html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🔗 링크 제출</div>`;
