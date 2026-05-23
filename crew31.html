@@ -640,7 +640,7 @@ function renderDeptSubMenu(){
 }
 
 function goDept(gid){
-  if(groups[gid]?.lock&&CU?.role!=='admin'&&!sessionStorage.getItem('unlockedGroup_'+gid)){
+  if(groups[gid]?.lock&&CU?.role!=='admin'&&!localStorage.getItem('unlockedGroup_'+gid)){
     _pendingFeedVid=null;
     _pendingDept=gid;
     openGroupLockModal(gid,'enter');
@@ -865,10 +865,10 @@ function getRoomKey(room){
   if(!room)return null;
   return room.type==='all'?'all':room.type==='dept'?'dept_'+room.id:'dm_'+[CU?.key,room.id].sort().join('_');
 }
-function isJoined(room){return sessionStorage.getItem('chatJoined_'+getRoomKey(room))==='1';}
+function isJoined(room){return localStorage.getItem('chatJoined_'+getRoomKey(room))==='1';}
 function setJoined(room,v){
   const k='chatJoined_'+getRoomKey(room);
-  if(v)sessionStorage.setItem(k,'1');else sessionStorage.removeItem(k);
+  if(v)localStorage.setItem(k,'1');else localStorage.removeItem(k);
 }
 
 // 메시지 롱프레스 메뉴
@@ -984,7 +984,10 @@ if(!joined){
   html+=`</div></div>`;
   html+=`</div>`;
   html+=`<div style="padding:10px 14px 12px;border-top:1px solid var(--border);background:white;display:flex;gap:8px;align-items:flex-end;flex-shrink:0">`;
-  html+=`<textarea id="chatInput" rows="1" placeholder="메시지 입력..." onkeydown="chatKeydown(event)" oninput="autoResize(this)" style="flex:1;border:1.5px solid var(--border);border-radius:18px;padding:9px 14px;font-size:14px;font-family:inherit;resize:none;outline:none;max-height:80px;line-height:1.5;background:var(--cream)"></textarea>`;
+  html+=`<div style="position:relative;flex:1">`;
+  html+=`<div id="mentionPopup" style="display:none;position:absolute;bottom:44px;left:0;right:0;background:white;border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;z-index:100"></div>`;
+  html+=`<textarea id="chatInput" rows="1" placeholder="메시지 입력... (@멘션)" onkeydown="chatKeydown(event)" oninput="chatInputHandler(this)" style="width:100%;border:1.5px solid var(--border);border-radius:18px;padding:9px 14px;font-size:14px;font-family:inherit;resize:none;outline:none;max-height:80px;line-height:1.5;background:var(--cream);box-sizing:border-box"></textarea>`;
+  html+=`</div>`;
   html+=`<button onclick="sendChat()" style="width:40px;height:40px;background:linear-gradient(135deg,#FF85C1,#f87286);border:none;border-radius:50%;color:white;font-size:17px;flex-shrink:0">➤</button>`;
   html+=`</div>`;
 }
@@ -1161,7 +1164,7 @@ html+=`<div class="msg-bubble ${isMe?'me':'other'}"
   ontouchstart="_pressTimer=setTimeout(()=>showMsgMenu('${mid}',event.touches[0].clientX,event.touches[0].clientY),600)"
   ontouchend="clearTimeout(_pressTimer)"
   ontouchmove="clearTimeout(_pressTimer)"
->${escH(m.body||'')}</div>`;
+>${highlightMentions(m.body||'')}</div>`;
 html+=`<div class="msg-time">${timeStr}</div>`;
 html+=`</div></div>`;
 
@@ -1213,7 +1216,92 @@ if(_currentChatRoom.type==='dm'&&_currentChatRoom.targetKey){
 }
 }
 
-function chatKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}}
+function chatKeydown(e){
+  // 멘션 팝업에서 키 처리
+  const popup=document.getElementById('mentionPopup');
+  if(popup&&popup.style.display!=='none'){
+    if(e.key==='Escape'){popup.style.display='none';return;}
+  }
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}
+}
+
+function chatInputHandler(el){
+  autoResize(el);
+  // @ 멘션 감지
+  const val=el.value;
+  const cursor=el.selectionStart;
+  const textBefore=val.slice(0,cursor);
+  const atIdx=textBefore.lastIndexOf('@');
+  const popup=document.getElementById('mentionPopup');
+  if(!popup)return;
+  if(atIdx===-1||(atIdx>0&&!/\s/.test(textBefore[atIdx-1])&&textBefore[atIdx-1])){
+    // @ 없거나 @ 앞에 공백이 없으면 팝업 닫기
+    const hasAt=atIdx!==-1&&(atIdx===0||/\s/.test(textBefore[atIdx-1]));
+    if(!hasAt){popup.style.display='none';return;}
+  }
+  const query=textBefore.slice(atIdx+1).toLowerCase();
+  showMentionPopup(query, atIdx, el);
+}
+
+async function showMentionPopup(query, atIdx, input){
+  const popup=document.getElementById('mentionPopup');
+  if(!popup)return;
+
+  // 현재 채팅방 멤버 목록
+  let names=[];
+  if(_currentChatRoom?.type==='dept'){
+    const gameMembers=await gameGet('members');
+    if(gameMembers){
+      const gName=groups[_currentChatRoom.id]?.name||'';
+      Object.values(gameMembers).forEach(m=>{
+        if(!m.name)return;
+        const clean=m.name.replace(/^\*/,'');
+        if(!clean.startsWith(gName))return;
+        names.push(clean.replace(gName,''));
+      });
+    }
+  } else {
+    const crewMembers=await dbGet('members');
+    if(crewMembers) names=Object.values(crewMembers).filter(m=>m.name).map(m=>m.name);
+  }
+
+  const filtered=names.filter(n=>n.toLowerCase().includes(query)).slice(0,8);
+  if(filtered.length===0){popup.style.display='none';return;}
+
+  popup.style.display='block';
+  popup.innerHTML=filtered.map(name=>`
+    <div onclick="insertMention('${escH(name)}',${atIdx})" style="padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='white'">
+      <div style="width:26px;height:26px;border-radius:8px;background:#FF85C1;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${name[0]}</div>
+      @${escH(name)}
+    </div>
+  `).join('');
+}
+
+function insertMention(name, atIdx){
+  const input=document.getElementById('chatInput');
+  if(!input)return;
+  const val=input.value;
+  const cursor=input.selectionStart;
+  const before=val.slice(0,atIdx);
+  const after=val.slice(cursor);
+  input.value=before+'@'+name+' '+after;
+  input.focus();
+  const newPos=atIdx+name.length+2;
+  input.setSelectionRange(newPos,newPos);
+  const popup=document.getElementById('mentionPopup');
+  if(popup)popup.style.display='none';
+  autoResize(input);
+}
+
+
+function highlightMentions(text){
+  if(!text) return '';
+  return escH(text).replace(/@(\S+)/g, (match, name) => {
+    const isMe = CU?.name && name === CU.name;
+    return `<span style="background:${isMe?'#FF85C1':'#fde8eb'};color:${isMe?'white':'#f87286'};padding:1px 6px;border-radius:8px;font-weight:700">@${escH(name)}</span>`;
+  });
+}
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,80)+'px';}
 
 // ══════════════════════════════════════════════
@@ -1591,7 +1679,7 @@ async function confirmGroupLock(){
 
   if(action.action==='enter'){
     if(groups[gid]?.lock!==pw){showToast('비밀번호가 틀렸습니다');return;}
-    sessionStorage.setItem('unlockedGroup_'+gid,'1');
+    localStorage.setItem('unlockedGroup_'+gid,'1');
     closeGroupLockModal();
     if(_pendingDept){const d=_pendingDept;_pendingDept=null;goDept(d);}
   }else if(action.action==='lock'){
