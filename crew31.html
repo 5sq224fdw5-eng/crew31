@@ -140,7 +140,7 @@ button{cursor:pointer;}
 .vbtn.del{background:rgba(255,92,92,0.08);color:var(--red);}
 .vbtn.reset{background:rgba(255,179,71,0.1);color:var(--gold);}
 .voted-badge{background:rgba(93,184,138,0.1);color:var(--green);font-size:13px;font-weight:700;padding:8px 14px;border-radius:20px;}
-.closed-badge{background:rgba(196,160,152,0.1);color:var(--text3);font-size:13px;font-weight:700;padding:8px 14px;border-radius:20px;text-align:center;}
+.closed-badge{background:rgba(100,100,100,0.12);color:#888;font-size:12px;font-weight:700;padding:6px 14px;border-radius:20px;text-align:center;border:1px solid rgba(100,100,100,0.15);}
 .link-list{border-top:1px solid var(--border);padding:10px 16px;}
 .link-list-title{font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px;}
 .link-item{padding:5px 0;border-bottom:1px solid var(--surface2);}
@@ -214,16 +214,17 @@ button{cursor:pointer;}
 <!-- ══ LOGIN ══ -->
 
 <div id="loginPage">
-  <div style="position:absolute;inset:0;background:rgba(255,220,235,0.55);backdrop-filter:blur(2px)"></div>
   <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1">
     <div class="login-profile-area">
       <div class="login-logo" style="background:white;box-shadow:0 4px 20px rgba(255,133,193,0.3)">
         <span style="font-size:40px">🍦</span>
       </div>
-      <div class="login-title">인트라넷</div>
-      <div class="login-sub">(주) 떠리원</div>
+      <div style="background:rgba(255,255,255,0.85);border-radius:20px;padding:12px 24px;text-align:center;margin-bottom:4px;backdrop-filter:blur(4px)">
+        <div class="login-title">인트라넷</div>
+        <div class="login-sub">(주) 떠리원</div>
+      </div>
       <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
-        style="margin-top:14px;display:flex;align-items:center;gap:6px;background:rgba(255,133,193,0.12);border:1.5px solid rgba(255,133,193,0.3);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
+        style="margin-top:14px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.3);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;backdrop-filter:blur(4px)">
         🎡 오락실 바로가기
       </a>
     </div>
@@ -269,7 +270,7 @@ button{cursor:pointer;}
         <button onclick="goTab('noti')" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;position:relative">
           🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
         </button>
-        <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;gap:3px">🎡 오락실</a>
+        <button onclick="goToGame()" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;color:white;gap:3px">🎡 오락실</button>
         <button onclick="logout()" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;color:white">🚪 나가기</button>
       </div>
     </div>
@@ -578,6 +579,68 @@ async function doLogin(role){
     console.error('login error',e);
     showToast('오류가 발생했습니다: '+e.message);
   }
+}
+
+async function goToGame(){
+  if(!CU?.name){ window.open('https://5sq224fdw5-eng.github.io/game31/game.html','_blank'); return; }
+
+  // 오락실 멤버에서 현재 닉네임이 포함된 그룹 찾기
+  showToast('⏳ 그룹 확인 중...');
+  const gameMembers = await gameGet('members');
+  if(!gameMembers){ window.open('https://5sq224fdw5-eng.github.io/game31/game.html','_blank'); return; }
+
+  // 내 닉네임이 포함된 그룹 찾기 (예: 좋아요불주먹, 댓글불주먹)
+  const myGroups = [];
+  Object.values(gameMembers).forEach(m=>{
+    if(!m.name) return;
+    const clean = m.name.replace(/^\*/,'');
+    // 그룹명+닉네임 형식에서 내 닉네임 포함 여부 확인
+    if(clean.endsWith(CU.name)){
+      const gName = clean.slice(0, clean.length - CU.name.length);
+      if(gName) myGroups.push({gName, fullName: clean});
+    }
+  });
+
+  if(myGroups.length === 0){
+    // 오락실에 없으면 그냥 이동
+    window.open('https://5sq224fdw5-eng.github.io/game31/game.html','_blank');
+    return;
+  }
+
+  if(myGroups.length === 1){
+    // 그룹 1개면 바로 이동
+    const url = `https://5sq224fdw5-eng.github.io/game31/game.html?autoLogin=${encodeURIComponent(myGroups[0].fullName)}`;
+    window.open(url,'_blank');
+    return;
+  }
+
+  // 그룹 여러 개면 선택 모달
+  const existing = document.getElementById('gameGroupModal');
+  if(existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'gameGroupModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:white;border-radius:20px;padding:24px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+      <div style="font-size:16px;font-weight:800;margin-bottom:6px;text-align:center">🎡 오락실 입장</div>
+      <div style="font-size:13px;color:var(--text3);text-align:center;margin-bottom:16px">어떤 그룹으로 입장할까요?</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${myGroups.map(g=>`
+          <button onclick="enterGameAs('${encodeURIComponent(g.fullName)}')" style="padding:13px;background:#FF85C1;color:white;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">${g.gName} 그룹으로 입장</button>
+        `).join('')}
+      </div>
+      <button onclick="document.getElementById('gameGroupModal').remove()" style="width:100%;margin-top:8px;padding:10px;background:var(--surface2);color:var(--text3);border:none;border-radius:12px;font-size:13px;cursor:pointer">취소</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.onclick = e=>{ if(e.target===modal) modal.remove(); };
+}
+
+function enterGameAs(encodedName){
+  const url = `https://5sq224fdw5-eng.github.io/game31/game.html?autoLogin=${encodedName}`;
+  window.open(url,'_blank');
+  document.getElementById('gameGroupModal')?.remove();
 }
 
 function logout(){
@@ -997,8 +1060,8 @@ if(!joined){
   html+=`<div style="flex:1;display:flex;overflow:hidden;position:relative">`;
   html+=`<div id="chatMessages" style="flex:1;overflow-y:auto;padding:12px 14px 8px;display:flex;flex-direction:column;gap:6px"></div>`;
   // 멤버 패널 (오른쪽 슬라이드)
-  html+=`<div id="chatMemberPanel" style="width:0;overflow:hidden;background:white;border-left:1px solid var(--border);transition:width 0.25s ease;flex-shrink:0">`;
-  html+=`<div style="width:200px;height:100%;display:flex;flex-direction:column">`;
+  html+=`<div id="chatMemberPanel" style="width:0;overflow:hidden;background:white;border-left:1px solid var(--border);transition:width 0.25s ease;flex-shrink:0;min-width:0">`;
+  html+=`<div style="width:80px;height:100%;display:flex;flex-direction:column">`;
   html+=`<div style="font-size:12px;font-weight:800;color:var(--text2);padding:12px 12px 8px;border-bottom:1px solid var(--border);flex-shrink:0">👥 채팅 멤버</div>`;
   html+=`<div id="chatMemberList" style="flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;color:var(--text3)">불러오는 중...</div></div>`;
   html+=`</div></div>`;
@@ -1011,7 +1074,7 @@ if(!joined){
   html+=`<button onclick="sendChat()" style="width:40px;height:40px;background:linear-gradient(135deg,#FF85C1,#f87286);border:none;border-radius:50%;color:white;font-size:17px;flex-shrink:0">➤</button>`;
   html+=`</div>`;
 }
-mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 90px)">${html}</div>`;
+mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 56px)">${html}</div>`;
 if(joined||isAdmin){fetchChatMessages();clearInterval(window._chatPoll);window._chatPoll=setInterval(fetchChatMessages,4000);loadChatMemberCount();loadChatMemberPanel();}
 }
 
@@ -1034,7 +1097,7 @@ function toggleChatMemberPanel(){
   const panel=document.getElementById('chatMemberPanel');
   if(!panel)return;
   const isOpen=panel.style.width==='200px';
-  panel.style.width=isOpen?'0':'200px';
+  panel.style.width=isOpen?'0':'80px';
 }
 
 async function loadChatMemberPanel(){
@@ -1609,7 +1672,7 @@ async function loadLeave(){
             html+=`</button>`;
           }else{
             html+=`<span style="font-size:11px;padding:4px 12px;border-radius:10px;font-weight:700;`;
-            html+=isUsed?`background:var(--surface2);color:var(--text3)">미사용`:`background:rgba(93,184,138,0.15);color:var(--green)">보유중`;
+            html+=isUsed?`background:rgba(93,184,138,0.15);color:var(--green)">사용완료`:`background:var(--surface2);color:var(--text3)">보유중`;
             html+=`</span>`;
           }
           html+=`</div>`;
@@ -1696,6 +1759,10 @@ function openGroupLockModal(gid,action){
     document.getElementById('lockModalTitle').textContent='🔓 잠금 해제';
     document.getElementById('lockModalDesc').textContent='현재 비밀번호를 입력하세요.';
     document.getElementById('lockPwLabel').textContent='현재 비밀번호';
+  }else if(action==='change'){
+    document.getElementById('lockModalTitle').textContent='🔑 비밀번호 변경';
+    document.getElementById('lockModalDesc').textContent='새 비밀번호를 입력하세요.';
+    document.getElementById('lockPwLabel').textContent='새 비밀번호';
   }
   document.getElementById('lockPwInput').value='';
   document.getElementById('groupLockModal').classList.add('active');
@@ -1727,6 +1794,12 @@ async function confirmGroupLock(){
     groups[gid].lock=null;
     showToast('🔓 잠금 해제됨');
     closeGroupLockModal();renderDeptSubMenu();loadChatTab();
+  }else if(action.action==='change'){
+    if(pw.length<4){showToast('4자리 이상 입력하세요');return;}
+    await dbSet(`groups/${gid}/lock`,pw);
+    groups[gid].lock=pw;
+    showToast('🔑 비밀번호 변경됨');
+    closeGroupLockModal();loadSettings();
   }
 }
 
@@ -2043,7 +2116,7 @@ async function renderVoteCard(vid,v){
   const gColor=groups[v.group]?.color||'var(--accent)';
   const isImageVote = v.imageUpload === true; // 이미지 업로드 투표 여부
 
-  let html=`<div class="card" style="margin:0 14px 16px">`;
+  let html=`<div class="card" style="margin:0 14px 16px;${isClosed?'opacity:0.75;background:#f8f8f8;':''}">` ;
   html+=`<div style="padding:14px 14px 10px;border-bottom:1px solid var(--border)">`;
   html+=`<div style="display:flex;align-items:flex-start;gap:8px">`;
   html+=`<div style="flex:1">`;
@@ -2150,20 +2223,7 @@ async function renderVoteCard(vid,v){
 
           html+=`<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">`;
 
-          // 미투표자
-          if(nonVoters.length>0){
-            html+=`<div style="padding:10px 12px;background:#FFF0F0;border-radius:12px;border:1px solid #FFD6D6">`;
-            html+=`<div style="font-size:11px;font-weight:700;color:#FC5C65;margin-bottom:6px">⚠️ 미투표 ${nonVoters.length}명</div>`;
-            html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
-            nonVoters.forEach(name=>{
-              html+=`<span style="background:rgba(252,92,101,0.1);color:#FC5C65;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`;
-            });
-            html+=`</div></div>`;
-          } else {
-            html+=`<div style="text-align:center;font-size:12px;color:var(--green)">✅ 전원 투표 완료</div>`;
-          }
-
-          // 불일치자: 완료 투표일 때만 - 시작 투표 참여자 중 완료 투표 미참여자
+          // 완료 미제출 먼저 (완료 투표일 때만)
           if(isEndVote2){
             const allVotes = await dbGet('votes');
             if(allVotes){
@@ -2180,7 +2240,7 @@ async function renderVoteCard(vid,v){
                 const mismatch = startedNames.filter(n=>!votedNames.includes(n));
                 if(mismatch.length>0){
                   html+=`<div style="padding:10px 12px;background:#FFF8E1;border-radius:12px;border:1px solid #FFE082">`;
-                  html+=`<div style="font-size:11px;font-weight:700;color:#F9A825;margin-bottom:6px">🔔 시작만 하고 완료 미제출 ${mismatch.length}명</div>`;
+                  html+=`<div style="font-size:11px;font-weight:700;color:#F9A825;margin-bottom:6px">🔔 완료 미제출 ${mismatch.length}명</div>`;
                   html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
                   mismatch.forEach(name=>{
                     html+=`<span style="background:rgba(249,168,37,0.1);color:#F9A825;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`;
@@ -2189,6 +2249,19 @@ async function renderVoteCard(vid,v){
                 }
               }
             }
+          }
+
+          // 미투표자
+          if(nonVoters.length>0){
+            html+=`<div style="padding:10px 12px;background:#FFF0F0;border-radius:12px;border:1px solid #FFD6D6">`;
+            html+=`<div style="font-size:11px;font-weight:700;color:#FC5C65;margin-bottom:6px">⚠️ 미투표 ${nonVoters.length}명</div>`;
+            html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
+            nonVoters.forEach(name=>{
+              html+=`<span style="background:rgba(252,92,101,0.1);color:#FC5C65;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`;
+            });
+            html+=`</div></div>`;
+          } else {
+            html+=`<div style="text-align:center;font-size:12px;color:var(--green)">✅ 전원 투표 완료</div>`;
           }
 
           html+=`</div>`;
@@ -2876,15 +2949,23 @@ async function loadSettings(){
   html+=`<div class="setting-section">`;
   html+=`<div class="setting-section-title">🔒 부서 채팅 잠금</div>`;
   Object.entries(groups).forEach(([gid,g])=>{
-    html+=`<div class="setting-row">`;
+    const isLocked = g.lock && g.lock !== true && g.lock !== false;
+    const pw = isLocked ? g.lock : (g.lock===true?'설정됨':'없음');
+    html+=`<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">`;
+    html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
     html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
     html+=`<div style="display:flex;gap:6px">`;
     if(g.lock){
       html+=`<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openGroupLockModal('${gid}','unlock')">🔓 해제</button>`;
+      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupLockModal('${gid}','change')">🔑 변경</button>`;
     }else{
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupLockModal('${gid}','lock')">🔒 잠금</button>`;
+      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupLockModal('${gid}','lock')">🔒 잠금 설정</button>`;
     }
     html+=`</div></div>`;
+    if(g.lock){
+      html+=`<div style="font-size:12px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px">현재 비번: <b style="color:var(--text)">${escH(String(g.lock))}</b></div>`;
+    }
+    html+=`</div>`;
   });
   html+=`</div>`;
 
