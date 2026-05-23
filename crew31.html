@@ -2848,16 +2848,30 @@ async function recordAttendance(vid, optIdx) {
       if(crewEntry){
         const [ck] = crewEntry;
         if(result === '투피드'){
-          // 오락실 memberPrizes에서 투피드 경품 1개 차감
-          const prizes = await gameGet(`memberPrizes/${ck}`) || await gameGet(`memberPrizes/${myKey}`);
-          if(prizes){
-            const prizeList = Object.entries(prizes);
-            const tupiEntry = prizeList.find(([k,p])=>!p.deducted && (p.name||'').includes('투피드'));
-            if(tupiEntry){
-              await gameSet(`memberPrizes/${ck}/${tupiEntry[0]}/deducted`, true);
-              showToast(`🎁 투피드 경품 1개 사용됨`);
-            } else {
-              showToast(`⚠️ 보유 중인 투피드 경품 없음`);
+          const gameMembers = await gameGet('members');
+          if(gameMembers){
+            const gName = groups[gid]?.name || '';
+            const fullName = gName + myKey; // 댓글불주먹
+            const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
+              const clean = (m.name||'').replace(/^\*/,'');
+              return clean === fullName;
+            });
+            if(gameEntry){
+              const [gmKey] = gameEntry;
+              const prizes = await gameGet(`memberPrizes/${gmKey}`);
+              if(prizes){
+                const prizeArr = Array.isArray(prizes) ? prizes : Object.values(prizes);
+                const tupiIdx = prizeArr.findIndex(p=>!p.deducted && (p.name||'').includes('투피드'));
+                if(tupiIdx >= 0){
+                  prizeArr[tupiIdx].deducted = true;
+                  await gameSet(`memberPrizes/${gmKey}`, prizeArr);
+                  showToast(`🎁 ${gName}${myKey} 투피드 경품 1개 사용됨`);
+                } else {
+                  showToast(`⚠️ ${gName}${myKey} 투피드 경품 없음`);
+                }
+              } else {
+                showToast(`⚠️ ${gName}${myKey} 보유 경품 없음`);
+              }
             }
           }
         } else if(result === '프패'){
