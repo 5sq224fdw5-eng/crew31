@@ -25,8 +25,8 @@ button{cursor:pointer;}
 #loginPage{position:fixed;inset:0;z-index:999;background:url("https://res.cloudinary.com/dcmohbbyi/image/upload/q_auto/f_auto/v1779529932/IMG_2100_pgoqa5.png") center/cover no-repeat;display:flex;flex-direction:column;align-items:center;overflow-y:auto;}
 .login-profile-area{width:100%;display:flex;flex-direction:column;align-items:center;padding:52px 24px 28px;background:linear-gradient(180deg,rgba(255,200,180,0.35) 0%,transparent 100%);}
 .login-logo{width:80px;height:80px;background:linear-gradient(135deg,#FF85C1,#FFB3D9);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:14px;box-shadow:0 8px 24px rgba(255,133,193,0.3);}
-.login-title{font-family:'Nunito',sans-serif;font-size:28px;font-weight:900;background:linear-gradient(135deg,#FF85C1,#f87286);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;}
-.login-sub{font-size:13px;color:var(--text3);}
+.login-title{font-family:'Nunito',sans-serif;font-size:28px;font-weight:900;background:linear-gradient(135deg,#FF85C1,#f87286);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;text-shadow:none;filter:drop-shadow(0 2px 4px rgba(255,133,193,0.3));}
+.login-sub{font-size:13px;color:#333;font-weight:600;}
 .login-card{width:100%;max-width:400px;background:white;border-top:1px solid var(--border);}
 .login-sec{padding:22px 22px 16px;}
 .login-sec+.login-sec{border-top:8px solid var(--bg);}
@@ -214,10 +214,11 @@ button{cursor:pointer;}
 <!-- ══ LOGIN ══ -->
 
 <div id="loginPage">
-  <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;">
+  <div style="position:absolute;inset:0;background:rgba(255,220,235,0.55);backdrop-filter:blur(2px)"></div>
+  <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1">
     <div class="login-profile-area">
-      <div class="login-logo" style="background:none;box-shadow:none;padding:0;overflow:hidden">
-        <img src="https://res.cloudinary.com/dcmohbbyi/image/upload/q_auto/f_auto/v1779529932/IMG_2100_pgoqa5.png" style="width:80px;height:80px;object-fit:cover;border-radius:24px">
+      <div class="login-logo" style="background:white;box-shadow:0 4px 20px rgba(255,133,193,0.3)">
+        <span style="font-size:40px">🍦</span>
       </div>
       <div class="login-title">인트라넷</div>
       <div class="login-sub">(주) 떠리원</div>
