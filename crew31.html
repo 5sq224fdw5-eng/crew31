@@ -3,6 +3,9 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>📋 인트라넷</title>
 <style>
@@ -271,6 +274,7 @@ button{cursor:pointer;}
           🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
         </button>
         <button onclick="goToGame()" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;color:white;gap:3px">🎡 오락실</button>
+        <button onclick="location.reload(true)" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;color:white">🔄</button>
         <button onclick="logout()" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;color:white">🚪 나가기</button>
       </div>
     </div>
@@ -2026,6 +2030,15 @@ function getMonthWeekKeys(y, m){
   return [...keys];
 }
 
+function toggleNonVoterDrop(id){
+  const el=document.getElementById(id);
+  const arrow=document.getElementById(id+'_arrow');
+  if(!el)return;
+  const open=el.style.display==='none'||el.style.display==='';
+  el.style.display=open?'block':'none';
+  if(arrow)arrow.textContent=open?'▾':'▸';
+}
+
 function setCalGroup(gid){
   _calGroup = gid;
   renderCalendar();
@@ -2252,15 +2265,20 @@ async function renderVoteCard(vid,v){
             }
           }
 
-          // 미투표자
+          // 미투표자 - 드롭다운으로
           if(nonVoters.length>0){
+            const dropId = `nonVoter_${vid}`;
             html+=`<div style="padding:10px 12px;background:#FFF0F0;border-radius:12px;border:1px solid #FFD6D6">`;
-            html+=`<div style="font-size:11px;font-weight:700;color:#FC5C65;margin-bottom:6px">⚠️ 미투표 ${nonVoters.length}명</div>`;
+            html+=`<div onclick="toggleNonVoterDrop('${dropId}')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">`;
+            html+=`<span style="font-size:11px;font-weight:700;color:#FC5C65">⚠️ 미투표 ${nonVoters.length}명</span>`;
+            html+=`<span id="${dropId}_arrow" style="font-size:12px;color:#FC5C65">▸</span>`;
+            html+=`</div>`;
+            html+=`<div id="${dropId}" style="display:none;margin-top:6px;display:none">`;
             html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
             nonVoters.forEach(name=>{
               html+=`<span style="background:rgba(252,92,101,0.1);color:#FC5C65;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`;
             });
-            html+=`</div></div>`;
+            html+=`</div></div></div>`;
           } else {
             html+=`<div style="text-align:center;font-size:12px;color:var(--green)">✅ 전원 투표 완료</div>`;
           }
