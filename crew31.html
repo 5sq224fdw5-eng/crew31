@@ -217,39 +217,44 @@ button{cursor:pointer;}
 <!-- ══ LOGIN ══ -->
 
 <div id="loginPage">
-  <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1">
-    <div class="login-profile-area">
-      <div class="login-logo" style="background:white;box-shadow:0 4px 20px rgba(255,133,193,0.3);margin-bottom:8px">
+  <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;padding:40px 20px 20px;position:relative;z-index:1">
+
+    <!-- 상단 로고/타이틀 -->
+    <div style="text-align:center;margin-bottom:24px">
+      <div class="login-logo" style="background:white;box-shadow:0 4px 20px rgba(255,133,193,0.3);margin:0 auto 12px">
         <span style="font-size:40px">🍦</span>
       </div>
-      <div style="text-align:center;margin-bottom:4px">
-        <div class="login-title" style="-webkit-text-stroke:1px rgba(255,133,193,0.5);filter:drop-shadow(0 2px 6px rgba(255,255,255,1)) drop-shadow(0 0 12px rgba(255,255,255,0.8))">인트라넷</div>
-        <div class="login-sub" style="color:#FF85C1;font-weight:800;text-shadow:0 1px 4px rgba(255,255,255,1),0 0 8px rgba(255,255,255,0.9)">(주) 떠리원</div>
-      </div>
-      <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
-        style="margin-top:14px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.3);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
-        🎡 오락실 바로가기
-      </a>
+      <div class="login-title" style="filter:drop-shadow(0 2px 6px rgba(255,255,255,0.9))">인트라넷</div>
+      <div class="login-sub" style="color:#FF85C1;font-weight:800;text-shadow:0 1px 4px rgba(255,255,255,0.9)">(주) 떠리원</div>
     </div>
-    <div class="login-card" style="width:100%;">
-      <!-- 탭 버튼 -->
-      <div style="display:flex;border-bottom:1px solid var(--border);">
-        <button id="tabMember" onclick="switchLoginTab('member')" style="flex:1;padding:14px;border:none;background:#FF85C1;color:white;font-size:14px;font-weight:800;cursor:pointer;border-radius:0;font-family:'Pretendard',sans-serif;">👤 사원</button>
-        <button id="tabAdmin" onclick="switchLoginTab('admin')" style="flex:1;padding:14px;border:none;background:var(--surface2);color:var(--text3);font-size:14px;font-weight:800;cursor:pointer;border-radius:0;font-family:'Pretendard',sans-serif;">🔑 인사팀</button>
+
+    <!-- 로그인 카드 -->
+    <div style="width:100%;background:rgba(255,255,255,0.65);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:24px;overflow:hidden;box-shadow:0 8px 32px rgba(255,133,193,0.2)">
+      <!-- 탭 -->
+      <div style="display:flex;border-bottom:1px solid var(--border)">
+        <button id="tabMember" onclick="switchLoginTab('member')" style="flex:1;padding:14px;border:none;background:#FF85C1;color:white;font-size:14px;font-weight:800;cursor:pointer;font-family:'Pretendard',sans-serif">👤 사원</button>
+        <button id="tabAdmin" onclick="switchLoginTab('admin')" style="flex:1;padding:14px;border:none;background:var(--surface2);color:var(--text3);font-size:14px;font-weight:800;cursor:pointer;font-family:'Pretendard',sans-serif">🔑 인사팀</button>
       </div>
-      <!-- 사원 로그인 -->
+      <!-- 사원 -->
       <div id="loginSectionMember" class="login-sec">
         <div class="login-label">닉네임을 입력하세요</div>
         <input class="fi" id="loginName" placeholder="닉네임 입력" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" onkeyup="if(event.key==='Enter')doLogin('member')">
         <button class="login-btn member" onclick="doLogin('member')">입장하기</button>
       </div>
-      <!-- 인사팀 로그인 -->
-      <div id="loginSectionAdmin" class="login-sec" style="display:none;">
+      <!-- 인사팀 -->
+      <div id="loginSectionAdmin" class="login-sec" style="display:none">
         <div class="login-label">비밀번호를 입력하세요</div>
         <input class="fi" id="loginPw" type="password" placeholder="비밀번호" onkeyup="if(event.key==='Enter')doLogin('admin')">
         <button class="login-btn admin" onclick="doLogin('admin')">입장하기</button>
       </div>
     </div>
+
+    <!-- 오락실 바로가기 -->
+    <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
+      style="margin-top:16px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.3);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
+      🎡 오락실 바로가기
+    </a>
+
   </div>
 </div>
 
