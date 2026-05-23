@@ -617,14 +617,22 @@ function renderDeptSubMenu(){
   const el=document.getElementById('deptSubMenuInner');
   const wrap=document.getElementById('deptSubMenu');
   if(!el||!wrap)return;
-  // 채팅/투표 탭에서만 표시, 캘린더 등 다른 탭에선 숨김
   const showSub = ['dept','chat','home'].includes(_currentTab);
   if(!showSub){ wrap.style.display='none'; return; }
   const hasGroups=Object.keys(groups).length>0;
   wrap.style.display=hasGroups?'block':'none';
+
+  // 채팅 탭이면 채팅방으로, 투표 탭이면 부서 투표로
+  const isChatTab = _currentTab==='chat';
+
   el.innerHTML=Object.entries(groups).map(([id,g])=>{
-    const isActive=_currentTab==='dept'&&_currentDept===id;
-    return `<button style="flex:0 0 auto;padding:5px 12px;border:none;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:${isActive?'#f87286':'#fde8eb'};color:${isActive?'white':'#f87286'};font-family:'Pretendard',sans-serif;display:flex;align-items:center;gap:4px" onclick="goDept('${id}')">
+    const isActive = isChatTab
+      ? (_currentChatRoom?.id===id)
+      : (_currentTab==='dept'&&_currentDept===id);
+    const onclick = isChatTab
+      ? `selectChatRoom('dept','${id}','${escH(g.name)}')`
+      : `goDept('${id}')`;
+    return `<button style="flex:0 0 auto;padding:5px 12px;border:none;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:${isActive?'#f87286':'#fde8eb'};color:${isActive?'white':'#f87286'};font-family:'Pretendard',sans-serif;display:flex;align-items:center;gap:4px" onclick="${onclick}">
       <span style="width:6px;height:6px;border-radius:50%;background:${isActive?'white':g.color||'#FF7F6E'};display:inline-block;flex-shrink:0"></span>
       ${escH(g.name)}${g.lock?'🔒':''}
     </button>`;
