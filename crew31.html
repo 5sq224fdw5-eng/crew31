@@ -2196,7 +2196,7 @@ async function renderVoteCard(vid,v){
       const cnt=Object.values(responses).filter(r=>r===i).length;
       const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
       const isMe=myVote===i;
-      const canVote=!isClosed&&myVote===undefined;
+      const canVote=!isClosed;
       const onclickAttr=canVote?`onclick="castVote('${vid}',${i})"`:'';
       html+=`<div class="vopt${isMe?' selected':''}${isClosed?' closed':''}" ${onclickAttr}>`;
       html+=`<div class="vbar" style="width:${pct}%"></div>`;
@@ -2206,7 +2206,7 @@ async function renderVoteCard(vid,v){
       html+=`</div>`;
     });
     if(myVote!==undefined&&!isClosed){
-      html+=`<div style="text-align:center;margin-top:8px"><span class="voted-badge">✅ 투표완료 (${escH(opts[myVote]||'')})</span></div>`;
+      html+=`<div style="text-align:center;margin-top:8px"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span></div>`;
     }
     if(isClosed){
       html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${totalVotes}명 참여</span></div>`;
@@ -2380,7 +2380,7 @@ async function castVote(vid,optIdx){
   const myKey=CU?.name||CU?.key||'admin';
   const v=await dbGet(`votes/${vid}`);
   if(!v){showToast('투표를 찾을 수 없습니다');return;}
-  if(v.responses?.[myKey]!==undefined){showToast('이미 투표하셨습니다');return;}
+  // 재투표 허용
   if(v.closed){showToast('마감된 투표입니다');return;}
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   showToast('✅ 투표 완료!');
