@@ -2149,31 +2149,8 @@ async function loadHome(){
     mb.innerHTML=`<div class="empty">${isAdmin?`<button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px">+ 투표 만들기</button><br>`:''}<div class="empty-icon">📋</div>등록된 투표가 없습니다</div>`;return;
   }
 
-  // 사원이면 자기 그룹 파악
-  let myGroupIds = null;
-  if(!isAdmin){
-    const gameMembers = await gameGet('members');
-    if(gameMembers){
-      myGroupIds = new Set();
-      myGroupIds.add('all'); // 전체 투표는 항상 보임
-      Object.values(gameMembers).forEach(m=>{
-        const clean = (m.name||'').replace(/^\*/,'');
-        if(clean.endsWith(CU.name)){
-          const gName = clean.slice(0, clean.length - CU.name.length);
-          const gid = Object.keys(groups).find(id=>groups[id].name===gName);
-          if(gid) myGroupIds.add(gid);
-        }
-      });
-    }
-  }
-
   const list=Object.entries(votes)
-    .filter(([k,v])=>{
-      if(v.deleted) return false;
-      if(isAdmin) return true;
-      if(!myGroupIds) return true;
-      return myGroupIds.has(v.group||'all');
-    })
+    .filter(([k,v])=>!v.deleted)
     .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
 
   let html='<div style="padding:14px 0 80px">';
@@ -2851,27 +2828,30 @@ async function recordAttendance(vid, optIdx) {
           const gameMembers = await gameGet('members');
           if(gameMembers){
             const gName = groups[gid]?.name || '';
-            const fullName = gName + myKey; // 댓글불주먹
+            const fullName = gName + myKey;
             const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
               const clean = (m.name||'').replace(/^\*/,'');
               return clean === fullName;
             });
             if(gameEntry){
               const [gmKey] = gameEntry;
-              const prizes = await gameGet(`memberPrizes/${gmKey}`);
-              if(prizes){
-                const prizeArr = Array.isArray(prizes) ? prizes : Object.values(prizes);
-                const tupiIdx = prizeArr.findIndex(p=>!p.deducted && (p.name||'').includes('투피드'));
+              const prizesRaw = await gameGet(`memberPrizes/${gmKey}`);
+              if(prizesRaw){
+                // 배열이든 객체든 처리
+                const prizeArr = Array.isArray(prizesRaw) ? [...prizesRaw] : Object.values(prizesRaw);
+                const tupiIdx = prizeArr.findIndex(p=>p && !p.deducted && (p.name||'').includes('투피드'));
                 if(tupiIdx >= 0){
-                  prizeArr[tupiIdx].deducted = true;
+                  prizeArr[tupiIdx] = {...prizeArr[tupiIdx], deducted: true};
                   await gameSet(`memberPrizes/${gmKey}`, prizeArr);
-                  showToast(`🎁 ${gName}${myKey} 투피드 경품 1개 사용됨`);
+                  showToast(`🎁 ${gName}${myKey} 투피드 경품 사용됨`);
                 } else {
                   showToast(`⚠️ ${gName}${myKey} 투피드 경품 없음`);
                 }
               } else {
                 showToast(`⚠️ ${gName}${myKey} 보유 경품 없음`);
               }
+            } else {
+              showToast(`⚠️ 오락실에서 ${gName}${myKey} 를 찾을 수 없음`);
             }
           }
         } else if(result === '프패'){
