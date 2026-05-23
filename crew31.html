@@ -2956,6 +2956,8 @@ async function renderAttEditList(gid, mondayStr, dates, filter){
   // ㄱㄴㄷ 정렬
   members.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   const opts = ['','완료','프패','공게','봉사','노피드','투피드','확인증'];
+  const searchInput = document.querySelector('#attEditModal input');
+  const scrollTop = listEl.scrollTop;
   listEl.innerHTML = members.map(m=>{
     const mData = attData[m.name] || {};
     return `<div style="margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:12px">
@@ -2976,6 +2978,8 @@ async function renderAttEditList(gid, mondayStr, dates, filter){
       </div>
     </div>`;
   }).join('');
+  listEl.scrollTop = scrollTop;
+  if(searchInput) searchInput.focus();
 }
 
 async function selectAttResult(gid, mondayStr, memberName, date, sel){
