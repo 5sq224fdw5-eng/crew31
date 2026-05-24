@@ -216,7 +216,7 @@ button{cursor:pointer;}
 
 <!-- ══ LOGIN ══ -->
 <div id="loginPage">
-  <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;padding:10px 20px 20px;margin-top:40px;position:relative;z-index:1">
+  <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;padding:10px 20px 20px;margin-top:-20px;position:relative;z-index:1">
     <!-- 상단 로고/타이틀 -->
     <div style="margin-bottom:48px">
       <div style="width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1.5px solid rgba(255,133,193,0.4);display:flex;align-items:center;justify-content:center;">
@@ -234,18 +234,15 @@ button{cursor:pointer;}
     </div>
     <!-- 로그인 카드 -->
     <div style="width:100%;border-radius:24px;overflow:hidden;box-shadow:0 8px 32px rgba(255,133,193,0.2)">
-      <!-- 탭 -->
       <div style="display:flex">
         <button id="tabMember" onclick="switchLoginTab('member')" style="flex:1;padding:14px;border:none;background:#FF85C1;color:white;font-size:14px;font-weight:800;cursor:pointer;font-family:'Pretendard',sans-serif">👤 사원</button>
         <button id="tabAdmin" onclick="switchLoginTab('admin')" style="flex:1;padding:14px;border:none;background:#FFF0E0;color:#C97A40;font-size:14px;font-weight:800;cursor:pointer;font-family:'Pretendard',sans-serif">🔑 인사팀</button>
       </div>
-      <!-- 사원 -->
       <div id="loginSectionMember" class="login-sec">
         <div class="login-label">닉네임을 입력하세요</div>
         <input class="fi" id="loginName" placeholder="닉네임 입력" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" onkeyup="if(event.key==='Enter')doLogin('member')">
         <button class="login-btn member" onclick="doLogin('member')">입장하기</button>
       </div>
-      <!-- 인사팀 -->
       <div id="loginSectionAdmin" class="login-sec" style="display:none">
         <div class="login-label">비밀번호를 입력하세요</div>
         <input class="fi" id="loginPw" type="password" placeholder="비밀번호" onkeyup="if(event.key==='Enter')doLogin('admin')">
