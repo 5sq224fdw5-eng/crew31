@@ -221,11 +221,11 @@ button{cursor:pointer;}
 
     <!-- 상단 로고/타이틀 -->
     <div style="margin-bottom:14px">
-      <div style="width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 4px 16px rgba(255,133,193,0.3);position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden">
-        <span style="font-size:64px;position:absolute;opacity:0.12;line-height:1;top:50%;left:50%;transform:translate(-50%,-50%)">🍦</span>
-        <div style="position:relative;text-align:center;z-index:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-          <div style="font-size:18px;font-weight:900;color:#f87286;line-height:1;letter-spacing:-0.5px">인트라넷</div>
-          <div style="font-size:9px;color:#f87286;font-weight:700;line-height:1">(주) 떠리원</div>
+      <div style="width:76px;height:76px;border-radius:50%;background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(255,133,193,0.4);display:flex;align-items:center;justify-content:center">
+        <div style="text-align:center;font-family:'Pretendard',sans-serif">
+          <div style="font-size:16px;font-weight:900;color:#FF85C1;line-height:1;letter-spacing:2px">31</div>
+          <div style="height:2px"></div>
+          <div style="font-size:14px;font-weight:900;color:#FF85C1;line-height:1;letter-spacing:-0.5px">인트라넷</div>
         </div>
       </div>
     </div>
@@ -253,7 +253,7 @@ button{cursor:pointer;}
 
     <!-- 오락실 바로가기 -->
     <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
-      style="margin-top:16px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.3);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
+      style="margin-top:16px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.4);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
       🎡 오락실 바로가기
     </a>
 
@@ -1716,15 +1716,9 @@ async function loadLeave(){
           if(isUsed && p.usedDate) html+=`<div style="font-size:10px;color:var(--text3)">${p.usedDate} 사용</div>`;
           html+=`</div>`;
           html+=`</div>`;
-          if(isAdmin){
-            html+=`<button onclick="togglePrizeUsed('${k}',${pidx},${!isUsed})" style="font-size:11px;padding:4px 12px;border-radius:10px;border:none;cursor:pointer;font-weight:700;white-space:nowrap;`;
-            html+=isUsed?`background:var(--surface2);color:var(--text3)">↩ 미사용`:`background:var(--green);color:white">✓ 사용완료`;
-            html+=`</button>`;
-          }else{
-            html+=`<span style="font-size:11px;padding:4px 12px;border-radius:10px;font-weight:700;`;
-            html+=isUsed?`background:rgba(93,184,138,0.15);color:var(--green)">사용완료`:`background:var(--surface2);color:var(--text3)">보유중`;
-            html+=`</span>`;
-          }
+          html+=`<span style="font-size:11px;padding:4px 12px;border-radius:10px;font-weight:700;`;
+          html+=isUsed?`background:rgba(93,184,138,0.15);color:var(--green)">✓ 사용완료`:`background:var(--surface2);color:var(--text3)">보유중`;
+          html+=`</span>`;
           html+=`</div>`;
         });
       }
