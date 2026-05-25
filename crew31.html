@@ -3365,8 +3365,10 @@ async function loadSettings(){
 
 async function toggleAutoVote(){
   const cur = await dbGet('autoVoteSchedule/enabled');
-  await dbSet('autoVoteSchedule/enabled', !cur);
-  showToast(!cur?'🤖 자동 투표 ON':'🤖 자동 투표 OFF');
+  const next = !cur;
+  await dbSet('autoVoteSchedule/enabled', next);
+  showToast(next?'🤖 자동 투표 ON':'🤖 자동 투표 OFF');
+  await new Promise(r=>setTimeout(r,500));
   loadSettings();
 }
 
