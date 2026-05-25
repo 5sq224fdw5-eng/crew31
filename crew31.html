@@ -652,6 +652,51 @@ function enterGameAs(encodedName){
   document.getElementById('gameGroupModal')?.remove();
 }
 
+// ── 자동 투표 스케줄러 ──
+async function checkAutoVote(){
+  if(CU?.role!=='admin')return;
+  const schedule = await dbGet('autoVoteSchedule');
+  if(!schedule||!schedule.enabled)return;
+
+  const now = new Date();
+  const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const todayStr2 = now.toISOString().slice(0,10);
+  const dateLabel = `${now.getMonth()+1}월 ${now.getDate()}일`;
+
+  for(const [gid, sch] of Object.entries(schedule.groups||{})){
+    if(!sch.enabled) continue;
+
+    // 시작 투표 자동 생성
+    if(sch.startTime && hhmm === sch.startTime){
+      const lastKey = `autoVoteDone_start_${gid}_${todayStr2}`;
+      if(localStorage.getItem(lastKey)) continue;
+      const gData = groups[gid]||{};
+      const opts = ['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','2인 1조로 근무할게요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+      await dbPush('votes',{title:`${dateLabel} 업무(참여) 시작`,group:gid,date:todayStr2,time:sch.startCloseTime||'22:00',options:opts,createdAt:Date.now()});
+      localStorage.setItem(lastKey,'1');
+      showToast(`🗳️ ${gData.name} 시작 투표 자동 생성됨`);
+      loadHome();
+    }
+
+    // 완료 투표 자동 생성
+    if(sch.endTime && hhmm === sch.endTime){
+      const lastKey = `autoVoteDone_end_${gid}_${todayStr2}`;
+      if(localStorage.getItem(lastKey)) continue;
+      const gData = groups[gid]||{};
+      const opts = ['퇴근할게요 (완료)','2인 1조로 근무했어요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+      await dbPush('votes',{title:`${dateLabel} 업무 완료`,group:gid,date:todayStr2,time:sch.endCloseTime||'13:00',options:opts,createdAt:Date.now()});
+      localStorage.setItem(lastKey,'1');
+      showToast(`🗳️ ${gData.name} 완료 투표 자동 생성됨`);
+      loadHome();
+    }
+  }
+}
+
+function startAutoVoteScheduler(){
+  setInterval(checkAutoVote, 60000); // 1분마다 체크
+  checkAutoVote();
+}
+
 function logout(){
   CU=null;localStorage.removeItem('crew31User');
   document.getElementById('loginPage').style.display='flex';
@@ -683,6 +728,7 @@ async function enterApp(){
   const lastTab = sessionStorage.getItem('lastTab') || 'notice';
   try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
   setTimeout(()=>startNotiPolling(),2000);
+  setTimeout(()=>startAutoVoteScheduler(),3000);
   setTimeout(()=>checkExistingPushSub(),3000);
 }
 
@@ -951,11 +997,11 @@ function getChatPath(room){
   if(!room)return null;
   if(room.type==='all')return 'chat';
   if(room.type==='dept')return `chat_dept/${room.id}`;
-  return `chat_dm/${[CU?.key,room.id].sort().join('_')}`;
+  return `chat_dm/${[CU?.name||CU?.key,room.id].sort().join('_')}`;
 }
 function getRoomKey(room){
   if(!room)return null;
-  return room.type==='all'?'all':room.type==='dept'?'dept_'+room.id:'dm_'+[CU?.key,room.id].sort().join('_');
+  return room.type==='all'?'all':room.type==='dept'?'dept_'+room.id:'dm_'+[CU?.name||CU?.key,room.id].sort().join('_');
 }
 function isJoined(room){return localStorage.getItem('chatJoined_'+getRoomKey(room))==='1';}
 function setJoined(room,v){
@@ -1051,7 +1097,7 @@ if(!_currentChatRoom){
 
   // DM 섹션
   const dmData=await dbGet('chat_dm')||{};
-  const myDms=Object.entries(dmData).filter(([k])=>k.includes(CU?.key||CU?.name||''));
+  const myDms=Object.entries(dmData).filter(([k])=>k.includes(CU?.name||CU?.key||''));
   if(myDms.length>0){
     html+=`<div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--text3);margin-top:8px">DM</div>`;
     myDms.forEach(([k,msgs])=>{
@@ -1490,7 +1536,7 @@ html+=`<div id="groupList">`;
     html+=`<div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,${color},${color}aa);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:white;flex-shrink:0">${(realName||'?')[0]}</div>`;
     html+=`<div style="flex:1;min-width:0">`;
     html+=`<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(realName)}</div>`;
-    if(!isMe)html+=`<div onclick="openDMWithMember('${k}','${escH(realName)}')" style="font-size:11px;color:var(--accent);font-weight:700;cursor:pointer;margin-top:1px">💬 DM</div>`;
+    if(!isMe)html+=`<div onclick="openDMWithMember('${escH(realName)}','${escH(realName)}')" style="font-size:11px;color:var(--accent);font-weight:700;cursor:pointer;margin-top:1px">💬 DM</div>`;
     html+=`</div></div>`;
   });
   html+=`</div></div></div>`;
@@ -1588,7 +1634,7 @@ function filterMembers(){
 
 async function openDMWithMember(targetKey,targetName){
   if(!targetKey||!targetName)return;
-  const myKey=CU?.key||'admin';
+  const myKey=CU?.name||CU?.key||'admin';
   const roomId=[myKey,targetKey].sort().join('_');
   _currentChatRoom={type:'dm',id:roomId,name:`💬 ${targetName}`,targetKey,targetName};
   // DM은 비밀번호 없이 자동 입장 처리
@@ -2181,7 +2227,7 @@ async function loadHome(){
   if(isAdmin){
     html+=`<div style="padding:0 14px 10px"><button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%">+ 투표 만들기</button></div>`;
   }
-  for(const [vid,v] of list){html+=await renderVoteCard(vid,v);}
+  for(const [vid,v] of list){try{html+=await renderVoteCard(vid,v);}catch(e){console.error("renderVoteCard error",vid,e);}}
   html+='</div>';
   mb.innerHTML=html;
 }
@@ -2209,7 +2255,7 @@ async function loadDeptPage(gid){
   if(list.length===0){
     mb.innerHTML=html+'<div class="empty"><div class="empty-icon">📋</div>이 부서의 투표가 없습니다</div></div>';return;
   }
-  for(const [vid,v] of list){html+=await renderVoteCard(vid,v);}
+  for(const [vid,v] of list){try{html+=await renderVoteCard(vid,v);}catch(e){console.error("renderVoteCard error",vid,e);}}
   html+='</div>';
   mb.innerHTML=html;
 }
@@ -2321,7 +2367,7 @@ async function renderVoteCard(vid,v){
       html+=`</div>`;
       // 마감 후 인사팀에게 선택지별 투표자 이름 표시
       if(isClosed && isAdmin && cnt > 0){
-        const voterNames = Object.entries(responses).filter(([k,v])=>v===i).map(([k])=>k);
+        const voterNames = Object.entries(responses).filter(([k,rv])=>rv===i).map(([k])=>k);
         html+=`<div style="display:flex;flex-wrap:wrap;gap:4px;padding:2px 8px 8px">`;
         voterNames.forEach(name=>{ html+=`<span style="background:var(--surface2);color:var(--text2);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`; });
         html+=`</div>`;
@@ -2554,12 +2600,14 @@ async function openVoteModal(vid, defaultGroup, voteType){
     let defaultStartTime = gData.startTime || (gName==='좋아요'?'22:00':'22:00');
     let defaultEndTime = gData.endTime || (gName==='좋아요'?'12:00':'13:00');
 
+    const today=new Date();
+    const dateLabel=`${today.getMonth()+1}월 ${today.getDate()}일`;
     if(voteType==='start'){
-      document.getElementById('voteTitle').value='업무(참여) 시작';
+      document.getElementById('voteTitle').value=`${dateLabel} 업무(참여) 시작`;
       document.getElementById('voteTime').value=defaultStartTime;
       _editOptList=['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','2인 1조로 근무할게요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
     } else if(voteType==='end'){
-      document.getElementById('voteTitle').value='업무 완료';
+      document.getElementById('voteTitle').value=`${dateLabel} 업무 완료`;
       document.getElementById('voteTime').value=defaultEndTime;
       _editOptList=['퇴근할게요 (완료)','2인 1조로 근무했어요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
     } else {
@@ -3243,6 +3291,27 @@ async function loadSettings(){
   });
   html+=`</div>`;
 
+  // 자동 투표 스케줄
+  html+=`<div class="setting-section">`;
+  html+=`<div class="setting-section-title">🤖 자동 투표 생성</div>`;
+  const autoSch = await dbGet('autoVoteSchedule')||{};
+  html+=`<div class="setting-row">`;
+  html+=`<span style="font-size:14px;font-weight:600">자동 생성 활성화</span>`;
+  html+=`<button onclick="toggleAutoVote()" style="padding:6px 16px;border-radius:20px;border:none;cursor:pointer;font-weight:700;font-size:13px;background:${autoSch.enabled?'#FF85C1':'var(--surface2)'};color:${autoSch.enabled?'white':'var(--text3)'}">${autoSch.enabled?'ON':'OFF'}</button>`;
+  html+=`</div>`;
+  for(const [gid,g] of Object.entries(groups)){
+    const gs = autoSch.groups?.[gid]||{};
+    html+=`<div style="padding:10px 0;border-top:1px solid var(--border)">`;
+    html+=`<div style="font-size:13px;font-weight:700;margin-bottom:8px">${escH(g.name)}</div>`;
+    html+=`<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px">`;
+    html+=`<label>시작투표 생성 <input type="time" value="${gs.startTime||''}" onchange="updateAutoVoteTime('${gid}','startTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    html+=`<label>시작투표 마감 <input type="time" value="${gs.startCloseTime||'22:00'}" onchange="updateAutoVoteTime('${gid}','startCloseTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    html+=`<label>완료투표 생성 <input type="time" value="${gs.endTime||''}" onchange="updateAutoVoteTime('${gid}','endTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    html+=`<label>완료투표 마감 <input type="time" value="${gs.endCloseTime||'13:00'}" onchange="updateAutoVoteTime('${gid}','endCloseTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    html+=`</div></div>`;
+  }
+  html+=`</div>`;
+
   // 멤버 열람 잠금
   html+=`<div class="setting-section">`;
   html+=`<div class="setting-section-title">👥 멤버 열람 잠금</div>`;
@@ -3292,6 +3361,19 @@ async function loadSettings(){
 
   html+='</div>';
   mb.innerHTML=html;
+}
+
+async function toggleAutoVote(){
+  const cur = await dbGet('autoVoteSchedule/enabled');
+  await dbSet('autoVoteSchedule/enabled', !cur);
+  showToast(!cur?'🤖 자동 투표 ON':'🤖 자동 투표 OFF');
+  loadSettings();
+}
+
+async function updateAutoVoteTime(gid, field, val){
+  await dbSet(`autoVoteSchedule/groups/${gid}/${field}`, val);
+  await dbSet(`autoVoteSchedule/groups/${gid}/enabled`, true);
+  showToast('✅ 저장됨');
 }
 
 async function addGroup(){
