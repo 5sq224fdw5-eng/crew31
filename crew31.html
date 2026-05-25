@@ -524,8 +524,37 @@ function urlBase64ToUint8(base64String){
 
 // 비활성화된 stub (FCM 제거)
 let _fcmToken=null;
-async function initFCM(){}
-async function sendFCMNotification(){}
+const WORKER_URL='https://crew31-push.ys1004dm.workers.dev';
+
+async function initFCM(){
+  try{
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)) return;
+    const reg = await navigator.serviceWorker.ready;
+    const vapidRes = await fetch(`${WORKER_URL}/vapid-public`);
+    const {key} = await vapidRes.json();
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:urlBase64ToUint8Array(key)});
+    }
+    const userKey = CU?.key||CU?.name||'unknown';
+    await fetch(`${WORKER_URL}/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub,userKey,userName:CU?.name||''})});
+    _fcmToken = userKey;
+  }catch(e){console.warn('FCM init error',e);}
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+
+async function sendFCMNotification(opts={}){
+  try{
+    await fetch(`${WORKER_URL}/ping`);
+  }catch(e){console.warn('FCM send error',e);}
+}
+
 async function pollFCMQueue(){}
 const todayStr=new Date().toISOString().slice(0,10);
 
@@ -1346,7 +1375,7 @@ return;
 }
 
 const list=Object.entries(msgs)
-.filter(([k,m])=>!m.deleted&&!m.hidden)
+.filter(([k,m])=>!m.deleted)
 .sort((a,b)=>(a[1].time||0)-(b[1].time||0));
 
 // 뱃지 처리
@@ -1369,7 +1398,7 @@ if(m.system){
 html+=`<div style="text-align:center;padding:4px 0"><span style="font-size:11px;color:var(--text3);background:rgba(200,180,175,0.15);padding:4px 12px;border-radius:20px">${escH(m.body||'')}</span></div>`;
 return;
 }
-const isMe=(CU?.role==='admin'&&m.senderRole==='admin')||(m.senderKey===CU?.key);
+const isMe=(CU?.role==='admin'&&m.senderRole==='admin')||(m.senderKey&&m.senderKey===CU?.key)||(m.senderName&&m.senderName===CU?.name);
 const d=new Date(m.time||0);
 const dateStr=d.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'});
 const timeStr=d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
@@ -2278,29 +2307,9 @@ async function delCalEvent(eid){
 // ── HOME (전체 투표) ──
 // ══════════════════════════════════════════════
 async function loadHome(){
+  if(_currentDept){ loadDeptPage(_currentDept); return; }
   const mb=document.getElementById('mainBody');
-  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  const isAdmin=CU?.role==='admin';
-  const votes=await dbGet('votes');
-  if(!votes||Object.keys(votes).length===0){
-    mb.innerHTML=`<div class="empty">${isAdmin?`<button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px">+ 투표 만들기</button><br>`:''}<div class="empty-icon">📋</div>등록된 투표가 없습니다</div>`;return;
-  }
-
-  if(!_currentDept){
-    mb.innerHTML=`<div class="empty"><div class="empty-icon">🗳️</div>그룹을 선택해주세요</div>`;
-    return;
-  }
-  const list=Object.entries(votes)
-    .filter(([k,v])=>!v.deleted && (v.group===_currentDept||v.group==='all'))
-    .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
-
-  let html='<div style="padding:14px 0 80px">';
-  if(isAdmin){
-    html+=`<div style="padding:0 14px 10px"><button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;width:100%">+ 투표 만들기</button></div>`;
-  }
-  for(const [vid,v] of list){try{html+=await renderVoteCard(vid,v);}catch(e){console.error("renderVoteCard error",vid,e);}}
-  html+='</div>';
-  mb.innerHTML=html;
+  mb.innerHTML=`<div class="empty"><div class="empty-icon">🗳️</div>그룹을 선택해주세요</div>`;
 }
 
 // ══════════════════════════════════════════════
@@ -2445,7 +2454,7 @@ async function renderVoteCard(vid,v){
       }
     });
     if(myVote!==undefined&&!isClosed){
-      html+=`<div style="text-align:center;margin-top:8px"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span></div>`;
+      html+=`<div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span><button onclick="cancelVote('${vid}')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid #ddd;background:white;color:var(--text3);cursor:pointer">취소</button></div>`;
     }
     if(isClosed){
       html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${totalVotes}명 참여</span></div>`;
@@ -2618,6 +2627,13 @@ async function uploadImages(vid, input){
   // 화면 새로고침
   if(_currentTab==='home') loadHome();
   else if(_currentTab==='dept') loadDeptPage(_currentDept);
+}
+
+async function cancelVote(vid){
+  const myKey=CU?.name||CU?.key||'admin';
+  await dbDelete(`votes/${vid}/responses/${myKey}`);
+  showToast('투표 취소됨');
+  if(_currentTab==='home'||_currentTab==='dept') loadDeptPage(_currentDept);
 }
 
 async function castVote(vid,optIdx){
