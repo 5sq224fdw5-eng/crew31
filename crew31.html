@@ -55,7 +55,7 @@ button{cursor:pointer;}
 .tab-bar{display:flex;overflow-x:auto;scrollbar-width:none;background:white;border-bottom:1px solid var(--border);padding:8px 10px;gap:6px;flex-shrink:0;}
 .tab-bar::-webkit-scrollbar{display:none;}
 .tab-item{flex:0 0 auto;padding:7px 14px;border:none;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;background:#FFF0E0;color:#C97A40;font-family:'Pretendard',sans-serif;white-space:nowrap;transition:all 0.15s;}
-.tab-item.active{background:#FF85C1;color:white;font-weight:700;}
+.tab-item.active{background:var(--group-color,#FF85C1);color:white;font-weight:700;}
 .tab-item:hover:not(.active){background:#FFE8F3;color:#FF85C1;}
 .sb-logo-text{display:none;}
 .sb-user{display:flex;align-items:center;justify-content:center;}
@@ -770,6 +770,14 @@ function renderGroupSelectBar(){
     loadNoticePage();
   }
 
+  const groupColor = _currentDept ? (groups[_currentDept]?.color||'#FF85C1') : '#FF85C1';
+
+  // 그룹 내 탭바 활성 색상 변경
+  document.querySelectorAll('.tab-item.active').forEach(b=>{
+    if(b.closest('#mainTabBar')) b.style.background = groupColor;
+  });
+  document.documentElement.style.setProperty('--group-color', groupColor);
+
   let html = '';
   const allActive = !_currentDept;
   html += `<button onclick="selectGroup('all')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:${allActive?'#FF85C1':'#f8f0f5'};color:${allActive?'white':'#999'}">전체</button>`;
@@ -786,14 +794,17 @@ function renderGroupSelectBar(){
 function selectGroup(gid){
   if(gid==='all'){
     _currentDept = null;
+    _currentChatRoom = null;
+    clearInterval(window._chatPoll);
     renderGroupSelectBar();
     _currentTab='notice';
     document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab==='notice'));
     loadNoticePage();
   } else {
     _currentDept = gid;
+    _currentChatRoom = null;
+    clearInterval(window._chatPoll);
     renderGroupSelectBar();
-    // 그룹 선택시 공지 탭으로
     _currentTab='notice';
     document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab==='notice'));
     loadNoticePage();
@@ -831,7 +842,11 @@ function goTab(tab){
   sessionStorage.setItem('lastTab', tab);
 
   // 탭바 활성화
-  document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab===tab));
+  document.querySelectorAll('.tab-item').forEach(b=>{
+    b.classList.toggle('active',b.dataset&&b.dataset.tab===tab);
+    b.style.background = ''; // 인라인 스타일 초기화
+    b.style.color = '';
+  });
   renderGroupSelectBar();
   renderDeptSubMenu();
 
