@@ -843,9 +843,12 @@ function goTab(tab){
 
   // 탭바 활성화
   document.querySelectorAll('.tab-item').forEach(b=>{
-    b.classList.toggle('active',b.dataset&&b.dataset.tab===tab);
-    b.style.background = ''; // 인라인 스타일 초기화
-    b.style.color = '';
+    const isActive = b.dataset&&b.dataset.tab===tab;
+    b.classList.toggle('active', isActive);
+    if(!isActive){
+      b.style.background = '';
+      b.style.color = '';
+    }
   });
   renderGroupSelectBar();
   renderDeptSubMenu();
