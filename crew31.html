@@ -330,7 +330,7 @@ button{cursor:pointer;}
     </div>
     <div class="fl" style="display:flex;align-items:center;gap:10px;padding:10px 0">
       <input type="checkbox" id="voteImageUpload" style="width:18px;height:18px;accent-color:#FF85C1">
-      <label for="voteImageUpload" style="font-size:14px;font-weight:600;cursor:pointer">📸 이미지 업로드 투표 (선택지 없음, 이미지 올리면 완료 처리)</label>
+      <label for="voteImageUpload" style="font-size:14px;font-weight:600;cursor:pointer">📸 이미지 업로드 투표 (선택지와 함께 사용 가능)</label>
     </div>
     <div class="fl" id="optListWrap">
       <label>선택지</label>
@@ -2971,11 +2971,16 @@ async function recordAttendance(vid, optIdx) {
     const v = await dbGet(`votes/${vid}`);
     if(!v || !v.date || !v.group || v.group === 'all') return;
 
-    // 완료 투표만 기록
-    const isEndVote = (v.title||'').includes('완료') || v.imageUpload;
-    if(!isEndVote) return;
-
     const gid = v.group;
+    const gName = groups[gid]?.name || '';
+    const isSecret = gName === '시크릿';
+
+    // 완료 투표 또는 시크릿 시작 투표
+    const isEndVote = (v.title||'').includes('완료') || v.imageUpload;
+    const isStartVote = (v.title||'').includes('시작');
+
+    if(!isEndVote && !(isSecret && isStartVote)) return;
+
     const date = v.date;
     const mondayStr = getWeekKey(date);
     const myKey = CU?.name || CU?.key || 'guest';
