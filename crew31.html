@@ -210,6 +210,22 @@ button{cursor:pointer;}
 </style>
 
 <!-- Firebase SDK -->
+
+<script>
+// 코드 보호
+document.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('keydown',e=>{
+  if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&['I','J','C'].includes(e.key))||(e.ctrlKey&&e.key==='U')){
+    e.preventDefault();return false;
+  }
+});
+(function devtools(){
+  const t=new Date();
+  debugger;
+  if(new Date()-t>100){document.body.innerHTML='';alert('접근 불가');}
+  setTimeout(devtools,1000);
+})();
+</script>
 </head>
 <body>
 <div class="toast" id="toast"></div>
