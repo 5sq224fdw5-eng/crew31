@@ -2543,7 +2543,7 @@ async function renderVoteCard(vid,v){
   }
   // 모든 메모 보기
   if(v.memos){
-    const memoList = Object.entries(v.memos).filter(([k,m])=>m);
+    const memoList = Object.entries(v.memos).filter(([k,m])=>m && typeof m === 'string');
     if(memoList.length>0){
       html+=`<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">`;
       memoList.forEach(([k,m])=>{
