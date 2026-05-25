@@ -283,23 +283,28 @@ button{cursor:pointer;}
       </div>
     </div>
 
+    <!-- 그룹 선택 바 -->
+    <div id="groupSelectBar" style="background:white;padding:8px 14px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);display:flex;gap:6px;min-width:0">
+      <div id="groupSelectInner" style="display:flex;gap:6px;min-width:max-content"></div>
+    </div>
+
     <!-- 탭바 -->
     <div class="tab-bar" id="mainTabBar">
       <button class="tab-item active" data-tab="notice" onclick="goTab('notice')">📢 공지</button>
-      <button class="tab-item" data-tab="chat" onclick="goTab('chat')">
+      <button class="tab-item group-only" data-tab="home" onclick="goTab('home')" style="display:none">🗳️ 투표</button>
+      <button class="tab-item group-only" data-tab="chat" onclick="goTab('chat')" style="display:none">
         💬 채팅<span id="chatBadge" style="display:none;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-left:3px"></span>
       </button>
-      <button class="tab-item" data-tab="home" onclick="goTab('home')">🗳️ 투표</button>
+      <button class="tab-item group-only" data-tab="members" onclick="goTab('members')" style="display:none">👥 멤버</button>
       <button class="tab-item" data-tab="calendar" onclick="goTab('calendar')">📅 달력</button>
       <button class="tab-item" data-tab="leave" onclick="goTab('leave')">🏖️ 연차</button>
-      <button class="tab-item" data-tab="members" onclick="goTab('members')">👥 멤버</button>
       <div id="adminMenu" style="display:contents">
         <button class="tab-item admin-tab" data-tab="status" onclick="goTab('status')" style="display:none">📊 현황</button>
         <button class="tab-item admin-tab" data-tab="settings" onclick="goTab('settings')" style="display:none">⚙️ 설정</button>
       </div>
     </div>
 
-    <!-- 부서 서브탭 -->
+    <!-- 부서 서브탭 (기존 유지) -->
     <div id="deptSubMenu" style="display:none;padding:6px 14px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:white">
       <div id="deptSubMenuInner" style="display:flex;gap:6px;min-width:max-content"></div>
     </div>
@@ -727,6 +732,7 @@ async function enterApp(){
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
   const lastTab = sessionStorage.getItem('lastTab') || 'notice';
   try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
+  setTimeout(()=>renderGroupSelectBar(), 500);
   setTimeout(()=>startNotiPolling(),2000);
   setTimeout(()=>startAutoVoteScheduler(),3000);
   setTimeout(()=>checkExistingPushSub(),3000);
@@ -749,6 +755,54 @@ async function loadGroups(){
   }else groups=g;
   if(!_currentDept||!groups[_currentDept])_currentDept=Object.keys(groups)[0]||'';
   renderDeptSubMenu();
+}
+
+function renderGroupSelectBar(){
+  const bar = document.getElementById('groupSelectInner');
+  if(!bar) return;
+  document.getElementById('groupSelectBar').style.display='flex';
+
+  // 그룹 탭 보이기/숨기기
+  document.querySelectorAll('.group-only').forEach(b=>{
+    b.style.display = _currentDept ? '' : 'none';
+  });
+
+  // 그룹 선택됐는데 현재 탭이 group-only가 아니면 공지로
+  if(!_currentDept && ['home','chat','members'].includes(_currentTab)){
+    _currentTab = 'notice';
+    document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active', b.dataset&&b.dataset.tab==='notice'));
+    loadNoticePage();
+  }
+
+  let html = '';
+  // 전체 버튼
+  const allActive = !_currentDept;
+  html += `<button onclick="selectGroup('all')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:${allActive?'#FF85C1':'#f8f0f5'};color:${allActive?'white':'#999'}">전체</button>`;
+  Object.entries(groups).forEach(([gid,g])=>{
+    const active = _currentDept===gid;
+    const locked = g.lock && CU?.role!=='admin' && !localStorage.getItem('unlockedGroup_'+gid);
+    html += `<button onclick="selectGroup('${gid}')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:${active?(g.color||'#FF85C1'):'#f8f0f5'};color:${active?'white':'#999'}">${locked?'🔒 ':''}${escH(g.name)}</button>`;
+  });
+  bar.innerHTML = html;
+}
+
+
+
+function selectGroup(gid){
+  if(gid==='all'){
+    _currentDept = null;
+    renderGroupSelectBar();
+    _currentTab='notice';
+    document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab==='notice'));
+    loadNoticePage();
+  } else {
+    _currentDept = gid;
+    renderGroupSelectBar();
+    // 그룹 선택시 공지 탭으로
+    _currentTab='notice';
+    document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab==='notice'));
+    loadNoticePage();
+  }
 }
 
 function renderDeptSubMenu(){
@@ -807,6 +861,7 @@ function goTab(tab){
 
   // 탭바 활성화
   document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab===tab));
+  renderGroupSelectBar();
   renderDeptSubMenu();
 
   const mb=document.getElementById('mainBody');
@@ -849,7 +904,11 @@ async function loadNoticePage(){
   const noticeComments=await dbGet('noticeComments');
   _cachedData.notices=notices;_cachedData.noticeComments=noticeComments;
 
-  const list=notices?Object.entries(notices).filter(([k,n])=>!n.deleted).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)):[];
+  const list=notices?Object.entries(notices).filter(([k,n])=>{
+    if(n.deleted) return false;
+    if(!_currentDept) return !n.group || n.group==='all'; // 그룹 미선택: 전체 공지만
+    return !n.group || n.group==='all' || n.group===_currentDept; // 그룹 선택: 전체+해당 그룹
+  }).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)):[];
 
   let html='<div style="padding:14px 0 80px">';
 
@@ -1070,6 +1129,10 @@ async function loadChatTab(){
 const mb=document.getElementById('mainBody');
 const isAdmin=CU?.role==='admin';
 if(!groups||Object.keys(groups).length===0)await loadGroups();
+if(!_currentChatRoom && !_currentDept){
+  mb.innerHTML=`<div class="empty"><div class="empty-icon">💬</div>그룹을 선택해주세요</div>`;
+  return;
+}
 if(!_currentChatRoom){
   let html='<div style="padding-bottom:60px">';
   html+=`<div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--text3)">채팅방</div>`;
@@ -1499,8 +1562,11 @@ Object.entries(gameMembers).forEach(([k,m])=>{
   const realName=group?cleanName.replace(group,''):cleanName;
   const gid=Object.keys(groups).find(id=>groups[id].name===group);
   const color=groups[gid]?.color||'#FF9F7A';
-  (byGroup[group||'기타']).push({key:k,realName,group:group||'기타',color});
+  (byGroup[group||'기타']).push({key:k,realName,group:group||'기타',color,gid});
 });
+
+// 그룹 선택됐으면 해당 그룹만 필터
+const selectedGName = _currentDept ? groups[_currentDept]?.name : null;
 
 let html=`<div style="padding-bottom:80px">`;
 // 고정 검색창
@@ -1513,6 +1579,8 @@ html+=`<div id="searchResults" style="display:none;padding:0 14px"></div>`;
 html+=`<div id="groupList">`;
 [...GAME_GROUPS,'기타'].forEach(gName=>{
   const list=byGroup[gName];if(!list||list.length===0)return;
+  // 그룹 선택됐으면 해당 그룹만
+  if(selectedGName && gName!==selectedGName) return;
   const gid=Object.keys(groups).find(id=>groups[id].name===gName);
   const color=groups[gid]?.color||'#FF9F7A';
   const isMLocked=groups[gid]?.memberLock===true;
@@ -2219,8 +2287,12 @@ async function loadHome(){
     mb.innerHTML=`<div class="empty">${isAdmin?`<button onclick="openVoteModal(null,'all')" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:16px">+ 투표 만들기</button><br>`:''}<div class="empty-icon">📋</div>등록된 투표가 없습니다</div>`;return;
   }
 
+  if(!_currentDept){
+    mb.innerHTML=`<div class="empty"><div class="empty-icon">🗳️</div>그룹을 선택해주세요</div>`;
+    return;
+  }
   const list=Object.entries(votes)
-    .filter(([k,v])=>!v.deleted)
+    .filter(([k,v])=>!v.deleted && (v.group===_currentDept||v.group==='all'))
     .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
 
   let html='<div style="padding:14px 0 80px">';
