@@ -772,10 +772,7 @@ function renderGroupSelectBar(){
 
   const groupColor = _currentDept ? (groups[_currentDept]?.color||'#FF85C1') : '#FF85C1';
 
-  // 그룹 내 탭바 활성 색상 변경
-  document.querySelectorAll('.tab-item.active').forEach(b=>{
-    if(b.closest('#mainTabBar')) b.style.background = groupColor;
-  });
+  // CSS 변수만 변경 - 인라인 스타일 건드리지 않음
   document.documentElement.style.setProperty('--group-color', groupColor);
 
   let html = '';
@@ -792,23 +789,23 @@ function renderGroupSelectBar(){
 
 
 function selectGroup(gid){
+  _currentChatRoom = null;
+  clearInterval(window._chatPoll);
+  // 모든 탭 스타일 완전 초기화
+  document.querySelectorAll('.tab-item').forEach(b=>{
+    b.classList.remove('active');
+    b.style.background = '';
+    b.style.color = '';
+  });
   if(gid==='all'){
     _currentDept = null;
-    _currentChatRoom = null;
-    clearInterval(window._chatPoll);
-    renderGroupSelectBar();
-    _currentTab='notice';
-    document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab==='notice'));
-    loadNoticePage();
   } else {
     _currentDept = gid;
-    _currentChatRoom = null;
-    clearInterval(window._chatPoll);
-    renderGroupSelectBar();
-    _currentTab='notice';
-    document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab==='notice'));
-    loadNoticePage();
   }
+  _currentTab='notice';
+  document.querySelectorAll('[data-tab="notice"]').forEach(b=>b.classList.add('active'));
+  renderGroupSelectBar();
+  loadNoticePage();
 }
 
 function renderDeptSubMenu(){ /* 그룹 선택 바로 대체됨 */ renderGroupSelectBar(); }
