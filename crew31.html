@@ -283,31 +283,26 @@ button{cursor:pointer;}
       </div>
     </div>
 
-    <!-- 그룹 선택 바 -->
-    <div id="groupSelectBar" style="background:white;padding:8px 14px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);display:flex;gap:6px;min-width:0">
-      <div id="groupSelectInner" style="display:flex;gap:6px;min-width:max-content"></div>
-    </div>
-
-    <!-- 탭바 -->
-    <div class="tab-bar" id="mainTabBar">
-      <button class="tab-item active" data-tab="notice" onclick="goTab('notice')">📢 공지</button>
-      <button class="tab-item group-only" data-tab="home" onclick="goTab('home')" style="display:none">🗳️ 투표</button>
-      <button class="tab-item group-only" data-tab="chat" onclick="goTab('chat')" style="display:none">
-        💬 채팅<span id="chatBadge" style="display:none;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-left:3px"></span>
-      </button>
-      <button class="tab-item group-only" data-tab="members" onclick="goTab('members')" style="display:none">👥 멤버</button>
-      <button class="tab-item" data-tab="calendar" onclick="goTab('calendar')">📅 달력</button>
-      <button class="tab-item" data-tab="leave" onclick="goTab('leave')">🏖️ 연차</button>
-      <div id="adminMenu" style="display:contents">
-        <button class="tab-item admin-tab" data-tab="status" onclick="goTab('status')" style="display:none">📊 현황</button>
-        <button class="tab-item admin-tab" data-tab="settings" onclick="goTab('settings')" style="display:none">⚙️ 설정</button>
+    <!-- 통합 네비게이션 바 -->
+    <div style="background:white;border-bottom:1px solid var(--border);padding:6px 14px;overflow-x:auto;scrollbar-width:none;">
+      <div style="display:flex;gap:6px;min-width:max-content">
+        <div id="groupSelectInner" style="display:contents"></div>
+        <button class="tab-item" data-tab="calendar" onclick="goTab('calendar')" style="padding:6px 12px;font-size:11px">달력</button>
+        <button class="tab-item" data-tab="leave" onclick="goTab('leave')" style="padding:6px 12px;font-size:11px">연차</button>
+        <button class="tab-item admin-tab" data-tab="status" onclick="goTab('status')" style="padding:6px 12px;font-size:11px;display:none">현황</button>
+        <button class="tab-item admin-tab" data-tab="settings" onclick="goTab('settings')" style="padding:6px 12px;font-size:11px;display:none">설정</button>
       </div>
     </div>
 
-    <!-- 부서 서브탭 (기존 유지) -->
-    <div id="deptSubMenu" style="display:none;padding:6px 14px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:white">
-      <div id="deptSubMenuInner" style="display:flex;gap:6px;min-width:max-content"></div>
+    <!-- 그룹 내 탭바 (그룹 선택시) -->
+    <div class="tab-bar" id="mainTabBar">
+      <button class="tab-item active" data-tab="notice" onclick="goTab('notice')">📢 공지</button>
+      <button class="tab-item group-only" data-tab="home" onclick="goTab('home')" style="display:none">🗳️ 투표</button>
+      <button class="tab-item group-only" data-tab="chat" onclick="goTab('chat')" style="display:none">💬 채팅<span id="chatBadge" style="display:none;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-left:3px"></span></button>
+      <button class="tab-item group-only" data-tab="members" onclick="goTab('members')" style="display:none">👥 멤버</button>
     </div>
+
+
 
     <!-- 콘텐츠 -->
     <div class="main-body" id="mainBody">
@@ -760,12 +755,13 @@ async function loadGroups(){
 function renderGroupSelectBar(){
   const bar = document.getElementById('groupSelectInner');
   if(!bar) return;
-  document.getElementById('groupSelectBar').style.display='flex';
 
   // 그룹 탭 보이기/숨기기
   document.querySelectorAll('.group-only').forEach(b=>{
     b.style.display = _currentDept ? '' : 'none';
   });
+  const mainTabBar = document.getElementById('mainTabBar');
+  if(mainTabBar) mainTabBar.style.display = _currentDept ? '' : 'none';
 
   // 그룹 선택됐는데 현재 탭이 group-only가 아니면 공지로
   if(!_currentDept && ['home','chat','members'].includes(_currentTab)){
@@ -775,7 +771,6 @@ function renderGroupSelectBar(){
   }
 
   let html = '';
-  // 전체 버튼
   const allActive = !_currentDept;
   html += `<button onclick="selectGroup('all')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:${allActive?'#FF85C1':'#f8f0f5'};color:${allActive?'white':'#999'}">전체</button>`;
   Object.entries(groups).forEach(([gid,g])=>{
@@ -805,31 +800,7 @@ function selectGroup(gid){
   }
 }
 
-function renderDeptSubMenu(){
-  const el=document.getElementById('deptSubMenuInner');
-  const wrap=document.getElementById('deptSubMenu');
-  if(!el||!wrap)return;
-  const showSub = ['dept','chat','home'].includes(_currentTab);
-  if(!showSub){ wrap.style.display='none'; return; }
-  const hasGroups=Object.keys(groups).length>0;
-  wrap.style.display=hasGroups?'block':'none';
-
-  // 채팅 탭이면 채팅방으로, 투표 탭이면 부서 투표로
-  const isChatTab = _currentTab==='chat';
-
-  el.innerHTML=Object.entries(groups).map(([id,g])=>{
-    const isActive = isChatTab
-      ? (_currentChatRoom?.id===id)
-      : (_currentTab==='dept'&&_currentDept===id);
-    const onclick = isChatTab
-      ? `selectChatRoom('dept','${id}','${escH(g.name)}')`
-      : `goDept('${id}')`;
-    return `<button style="flex:0 0 auto;padding:5px 12px;border:none;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:${isActive?'#f87286':'#fde8eb'};color:${isActive?'white':'#f87286'};font-family:'Pretendard',sans-serif;display:flex;align-items:center;gap:4px" onclick="${onclick}">
-      <span style="width:6px;height:6px;border-radius:50%;background:${isActive?'white':g.color||'#FF7F6E'};display:inline-block;flex-shrink:0"></span>
-      ${escH(g.name)}${g.lock?'🔒':''}
-    </button>`;
-  }).join('');
-}
+function renderDeptSubMenu(){ /* 그룹 선택 바로 대체됨 */ renderGroupSelectBar(); }
 
 function goDept(gid){
   if(groups[gid]?.lock&&CU?.role!=='admin'&&!localStorage.getItem('unlockedGroup_'+gid)){
@@ -839,10 +810,10 @@ function goDept(gid){
     return;
   }
   _currentDept=gid;
-  _currentTab='dept';
-  document.querySelectorAll('.tab-item').forEach(b=>b.classList.remove('active'));
-  renderDeptSubMenu();
-  loadDeptPage(gid);
+  _currentTab='notice';
+  document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab==='notice'));
+  renderGroupSelectBar();
+  loadNoticePage();
 }
 let _pendingDept=null;
 
@@ -857,12 +828,17 @@ function setMainHeader(title,sub='',actionsHtml=''){
 function goTab(tab){
   _currentTab=tab;
   clearInterval(window._chatPoll);
-  sessionStorage.setItem('lastTab', tab); // 탭 저장
+  sessionStorage.setItem('lastTab', tab);
 
   // 탭바 활성화
   document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab===tab));
   renderGroupSelectBar();
   renderDeptSubMenu();
+
+  // 그룹 내 탭바 - 그룹 선택됐고 독립메뉴(달력/연차/현황/설정) 아닐때만 표시
+  const standalone = ['calendar','leave','status','settings','noti'];
+  const mainTabBar = document.getElementById('mainTabBar');
+  if(mainTabBar) mainTabBar.style.display = (_currentDept && !standalone.includes(tab)) ? '' : 'none';
 
   const mb=document.getElementById('mainBody');
   if(!mb)return;
@@ -1129,6 +1105,14 @@ async function loadChatTab(){
 const mb=document.getElementById('mainBody');
 const isAdmin=CU?.role==='admin';
 if(!groups||Object.keys(groups).length===0)await loadGroups();
+
+// 그룹 선택됐으면 바로 그 그룹 채팅방으로
+if(!_currentChatRoom && _currentDept){
+  const g = groups[_currentDept];
+  if(g) selectChatRoom('dept', _currentDept, `${g.name} 채팅`);
+  return;
+}
+
 if(!_currentChatRoom && !_currentDept){
   mb.innerHTML=`<div class="empty"><div class="empty-icon">💬</div>그룹을 선택해주세요</div>`;
   return;
