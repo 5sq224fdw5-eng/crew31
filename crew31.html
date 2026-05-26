@@ -2637,8 +2637,13 @@ async function renderVoteCard(vid,v){
     });
   }
 
-  // 링크 시간순 정렬
-  const sortedLinks = [...links].sort((a,b)=>(a.time||0)-(b.time||0));
+  // 링크 시간순 정렬 (time 없으면 pushId 순)
+  const rawLinks = v.links ? Object.entries(v.links) : [];
+  const sortedLinks = rawLinks.sort((a,b)=>{
+    const ta = a[1].time||0, tb = b[1].time||0;
+    if(ta&&tb) return ta-tb;
+    return a[0]<b[0]?-1:1; // pushId 알파벳순 = 시간순
+  }).map(([,l])=>l);
   if(sortedLinks.length>0){
     sortedLinks.forEach(l=>{
       html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)">`;
