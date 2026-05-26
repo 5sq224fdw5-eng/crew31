@@ -2617,6 +2617,26 @@ async function renderVoteCard(vid,v){
   }
 
   html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🔗 링크 제출</div>`;
+
+  // 열정페이(봉사)/재능기부(노피드) 선택자 자동 표시
+  const bonusVoters=[];
+  if(v.responses && v.options){
+    Object.entries(v.responses).forEach(([k,optIdx])=>{
+      const optText=(v.options[optIdx]||'').toLowerCase();
+      if(optText.includes('봉사')||optText.includes('열정페이')||optText.includes('노피드')||optText.includes('재능기부')){
+        bonusVoters.push({nick:k, type:optText.includes('봉사')||optText.includes('열정페이')?'열정페이':'재능기부'});
+      }
+    });
+  }
+  if(bonusVoters.length>0){
+    bonusVoters.forEach(b=>{
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">`;
+      html+=`<span style="font-size:12px;font-weight:700;min-width:60px">${escH(b.nick)}</span>`;
+      html+=`<span style="font-size:12px;color:var(--text3)">${escH(b.type)}</span>`;
+      html+=`</div>`;
+    });
+  }
+
   if(links.length>0){
     links.forEach(l=>{
       html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">`;
@@ -2625,7 +2645,7 @@ async function renderVoteCard(vid,v){
       if(l.note)html+=`<span style="font-size:11px;color:var(--text3)">${escH(l.note)}</span>`;
       html+=`</div>`;
     });
-  }else{
+  }else if(bonusVoters.length===0){
     html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:6px">아직 제출된 링크가 없습니다</div>`;
   }
   if(canSubmitLink){
@@ -3069,13 +3089,10 @@ async function recordAttendance(vid, optIdx) {
 
     const gid = v.group;
     const gName = groups[gid]?.name || '';
-    const isSecret = gName === '시크릿';
 
-    // 완료 투표 또는 시크릿 시작 투표
-    const isEndVote = (v.title||'').includes('완료') || v.imageUpload;
+    // 시작 투표만 기록
     const isStartVote = (v.title||'').includes('시작');
-
-    if(!isEndVote && !(isSecret && isStartVote)) return;
+    if(!isStartVote) return;
 
     const date = v.date;
     const mondayStr = getWeekKey(date);
