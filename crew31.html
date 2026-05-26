@@ -2637,23 +2637,66 @@ async function renderVoteCard(vid,v){
     });
   }
 
-  if(links.length>0){
-    links.forEach(l=>{
-      html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">`;
-      html+=`<span style="font-size:12px;font-weight:700;min-width:60px">${escH(l.nick||'')}</span>`;
+  // 링크 시간순 정렬
+  const sortedLinks = [...links].sort((a,b)=>(a.time||0)-(b.time||0));
+  if(sortedLinks.length>0){
+    sortedLinks.forEach(l=>{
+      html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)">`;
+      html+=`<div style="display:flex;align-items:center;gap:8px">`;
+      html+=`<span style="font-size:12px;font-weight:700;min-width:60px;flex-shrink:0">${escH(l.nick||'')}</span>`;
       html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(l.url||'')}</a>`;
-      if(l.note)html+=`<span style="font-size:11px;color:var(--text3)">${escH(l.note)}</span>`;
+      html+=`</div>`;
+      if(l.note)html+=`<div style="font-size:11px;color:var(--text3);padding-left:68px">ㄴ${escH(l.note)}</div>`;
       html+=`</div>`;
     });
   }else if(bonusVoters.length===0){
     html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:6px">아직 제출된 링크가 없습니다</div>`;
   }
+  // 투피드 선택 여부 확인
+  const myOptText = myVote!==undefined ? (opts[myVote]||'') : '';
+  const isTupide = myOptText.toLowerCase().includes('투피드') || myOptText.includes('두배');
+
   if(canSubmitLink){
-    html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
-    html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-    html+=`<input id="linkNote_${vid}" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    if(isTupide){
+      html+=`<div style="margin-top:8px">`;
+      html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">링크 1</div>`;
+      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+      html+=`<input id="linkUrl_${vid}_1" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}_1" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`</div>`;
+      html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">링크 2</div>`;
+      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+      html+=`<input id="linkUrl_${vid}_2" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}_2" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`</div></div>`;
+      html+=`<button onclick="submitVoteLink('${vid}',true)" style="width:100%;margin-top:2px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
+    } else {
+      html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
+      html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`</div>`;
+      html+=`<button onclick="submitVoteLink('${vid}')" style="width:100%;margin-top:6px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
+    }
+  }
+  // 관리자 일괄복사 + 댓글
+  if(isAdmin && links.length>0){
+    const allUrls=links.map(l=>l.url).filter(Boolean).join('\n');
+    html+=`<button onclick="navigator.clipboard.writeText(${JSON.stringify(allUrls)}).then(()=>showToast('📋 전체 복사됨'))" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
+  }
+  // 관리자 댓글
+  const adminComment = v.adminComment||'';
+  if(isAdmin){
+    html+=`<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">`;
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">🔧 관리자 메모</div>`;
+    html+=`<div style="display:flex;gap:6px">`;
+    html+=`<input id="adminComment_${vid}" value="${escH(adminComment)}" placeholder="관리자 메모 입력..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<button onclick="saveAdminComment('${vid}')" style="padding:8px 12px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">저장</button>`;
+    html+=`</div></div>`;
+  } else if(adminComment){
+    html+=`<div style="margin-top:8px;padding:8px 12px;background:rgba(255,133,193,0.08);border-radius:8px;border-left:3px solid #FF85C1">`;
+    html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:2px">🔧 관리자 메모</div>`;
+    html+=`<div style="font-size:13px;color:var(--text)">${escH(adminComment)}</div>`;
     html+=`</div>`;
-    html+=`<button onclick="submitVoteLink('${vid}')" style="width:100%;margin-top:6px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
   }
   html+=`</div></div>`;
 
@@ -2661,22 +2704,39 @@ async function renderVoteCard(vid,v){
   return html;
 }
 
-async function submitVoteLink(vid){
-  let url=document.getElementById(`linkUrl_${vid}`)?.value.trim();
-  const note=document.getElementById(`linkNote_${vid}`)?.value.trim()||'';
-  if(!url){showToast('URL을 입력하세요');return;}
-  // 인스타 링크 자동 정리
-  // 1. reel → p 변환
-  url=url.replace(/instagram\.com\/reel\//,'instagram.com/p/');
-  // 2. ? 이하 파라미터 제거
-  url=url.replace(/\?.*$/,'');
-  // 3. 끝에 / 없으면 추가
-  if(!url.endsWith('/'))url+='/';
+async function submitVoteLink(vid, isTupide=false){
   const nick=CU?.name||'익명';
-  await dbSet(`votes/${vid}/links/${CU?.key||'admin'}`,{nick,url,note,time:Date.now()});
+  const key=CU?.key||'admin';
+  if(isTupide){
+    const url1=document.getElementById(`linkUrl_${vid}_1`)?.value.trim();
+    const note1=document.getElementById(`linkNote_${vid}_1`)?.value.trim()||'';
+    const url2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
+    const note2=document.getElementById(`linkNote_${vid}_2`)?.value.trim()||'';
+    if(!url1&&!url2){showToast('링크를 입력하세요');return;}
+    if(url1) await dbSet(`votes/${vid}/links/${key}_1`,{nick,url:cleanUrl(url1),note:note1,time:Date.now()});
+    if(url2) await dbSet(`votes/${vid}/links/${key}_2`,{nick,url:cleanUrl(url2),note:note2,time:Date.now()+1});
+  } else {
+    let url=document.getElementById(`linkUrl_${vid}`)?.value.trim();
+    const note=document.getElementById(`linkNote_${vid}`)?.value.trim()||'';
+    if(!url){showToast('URL을 입력하세요');return;}
+    await dbSet(`votes/${vid}/links/${key}`,{nick,url:cleanUrl(url),note,time:Date.now()});
+  }
   showToast('✅ 링크 제출됨!');
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+function cleanUrl(url){
+  url=url.replace(/instagram\.com\/reel\//,'instagram.com/p/');
+  url=url.replace(/\?.*$/,'');
+  if(!url.endsWith('/'))url+='/';
+  return url;
+}
+
+async function saveAdminComment(vid){
+  const val=document.getElementById(`adminComment_${vid}`)?.value.trim()||'';
+  await dbSet(`votes/${vid}/adminComment`,val);
+  showToast('✅ 관리자 메모 저장됨');
 }
 
 // ── Cloudinary 이미지 업로드 ──
