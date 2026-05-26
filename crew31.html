@@ -294,7 +294,7 @@ document.addEventListener('keydown',e=>{
           🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
         </button>
         <button onclick="goToGame()" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;color:white;gap:3px">🎡 오락실</button>
-        <button onclick="location.reload(true)" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;color:white">🔄</button>
+        <button onclick="forceReload()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;color:white">🔄</button>
         <button onclick="logout()" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;color:white">🚪 나가기</button>
       </div>
     </div>
@@ -611,6 +611,22 @@ function switchLoginTab(tab){
   document.getElementById('tabMember').style.color = isMember?'white':'#C97A40';
   document.getElementById('tabAdmin').style.background = isMember?'#FFF0E0':'#f87286';
   document.getElementById('tabAdmin').style.color = isMember?'#C97A40':'white';
+}
+
+function forceReload(){
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistrations().then(regs=>{
+      Promise.all(regs.map(r=>r.unregister())).then(()=>{
+        caches.keys().then(keys=>{
+          Promise.all(keys.map(k=>caches.delete(k))).then(()=>{
+            window.location.replace(window.location.pathname+'?v='+Date.now());
+          });
+        });
+      });
+    });
+  } else {
+    window.location.replace(window.location.pathname+'?v='+Date.now());
+  }
 }
 
 async function doLogin(role){
