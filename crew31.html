@@ -2684,8 +2684,8 @@ async function renderVoteCard(vid,v){
     }
   }
   // 관리자 일괄복사 + 댓글
-  if(isAdmin && links.length>0){
-    const allUrls=links.map(l=>l.url).filter(Boolean).join('\n');
+  if(isAdmin && sortedLinks.length>0){
+    const allUrls=sortedLinks.map(l=>l.url).filter(Boolean).join('\n');
     html+=`<button onclick="navigator.clipboard.writeText(${JSON.stringify(allUrls)}).then(()=>showToast('📋 전체 복사됨'))" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
   }
   // 관리자 댓글
