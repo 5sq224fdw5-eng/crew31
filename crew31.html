@@ -2489,6 +2489,9 @@ async function renderVoteCard(vid,v){
       if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
       Object.entries(imagesToShow).forEach(([mkey, imgs])=>{
         if(!imgs||imgs.length===0) return;
+        // 업로드 순서 정렬
+        const sortedImgs = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+        imgs = sortedImgs;
         const collapseId = `imgCollapse_${vid}_${btoa(encodeURIComponent(mkey)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
         // 완료 투표는 접기/펼치기
         if(isEndVote){
