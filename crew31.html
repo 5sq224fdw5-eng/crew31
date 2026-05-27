@@ -2602,8 +2602,10 @@ async function renderVoteCard(vid,v){
     html+=`<input id="memoInput_${vid}" class="fi" placeholder="메모 입력..." value="${escH(myMemo)}" style="flex:1;font-size:13px;padding:8px 12px">`;
     html+=`<button onclick="saveMemo('${vid}')" style="padding:8px 14px;background:var(--surface2);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">저장</button>`;
     html+=`</div>`;
+  } else if(myMemo){
+    html+=`<div style="font-size:12px;color:var(--text2);background:var(--surface2);padding:8px 12px;border-radius:10px;margin-bottom:8px">${escH(myMemo)}</div>`;
   }
-  // 모든 메모 항상 표시 (마감 전후 모두)
+  // 모든 메모 보기
   if(v.memos){
     const memoList = Object.entries(v.memos).filter(([k,m])=>m && typeof m === 'string');
     if(memoList.length>0){
@@ -2678,26 +2680,10 @@ async function renderVoteCard(vid,v){
       html+=`<button onclick="submitVoteLink('${vid}')" style="width:100%;margin-top:6px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
     }
   }
-  // 링크 전체 복사 (마감 전후 모두, 전체 공개)
-  if(sortedLinks.length>0){
+  // 관리자 일괄복사 + 댓글
+  if(isAdmin && isClosed && sortedLinks.length>0){
     const allUrls=sortedLinks.map(l=>l.url).filter(Boolean).join('\n');
-    html+=`<button onclick="navigator.clipboard.writeText(${JSON.stringify(allUrls)}).then(()=>showToast('📋 전체 복사됨'))" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사 (${sortedLinks.length}개)</button>`;
-  }
-  // 관리자: 마감 전 참여자 확인
-  if(isAdmin && !isClosed && totalVotes>0){
-    const voterNames=Object.keys(responses);
-    const dropId=`voters_${vid}`;
-    html+=`<div style="margin-top:6px;background:rgba(93,184,138,0.07);border-radius:10px;border:1px solid rgba(93,184,138,0.2);overflow:hidden">`;
-    html+=`<div onclick="toggleNonVoterDrop('${dropId}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;cursor:pointer">`;
-    html+=`<span style="font-size:11px;font-weight:700;color:var(--green)">👥 투표 참여자 ${voterNames.length}명</span>`;
-    html+=`<span id="${dropId}_arrow" style="font-size:12px;color:var(--green)">▸</span>`;
-    html+=`</div>`;
-    html+=`<div id="${dropId}" style="display:none;padding:0 12px 10px">`;
-    html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
-    voterNames.forEach(name=>{
-      html+=`<span style="background:rgba(93,184,138,0.12);color:var(--green);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`;
-    });
-    html+=`</div></div></div>`;
+    html+=`<button onclick="navigator.clipboard.writeText(${JSON.stringify(allUrls)}).then(()=>showToast('📋 전체 복사됨'))" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
   }
   // 관리자 댓글
   const adminComment = v.adminComment||'';
@@ -2831,12 +2817,33 @@ async function cancelVote(vid){
 async function castVote(vid,optIdx){
   const myKey=CU?.name||CU?.key||'admin';
   const v=await dbGet(`votes/${vid}`);
-  if(!v){showToast('투표를 찾을 수 없습니다');return;}
-  // 재투표 허용
+  if(!v){showToast('투표를 찾을 수없습니다');return;}
   if(v.closed){showToast('마감된 투표입니다');return;}
+
+  // 이전 선택지 확인 - 연차/투피드였으면 복구
+  const prevOptIdx = v.responses?.[myKey];
+  if(prevOptIdx !== undefined && prevOptIdx !== optIdx){
+    const prevOptText = (v.options?.[prevOptIdx]||'').toLowerCase();
+    const newOptText = (v.options?.[optIdx]||'').toLowerCase();
+    const wasLeave = prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
+    const wasTupide = prevOptText.includes('투피드')||prevOptText.includes('두배');
+    const isLeave = newOptText.includes('프패')||newOptText.includes('연차')||newOptText.includes('프리패스');
+    const isTupide = newOptText.includes('투피드')||newOptText.includes('두배');
+
+    // 연차 복구 (프패 → 다른거로 바꿀 때)
+    if(wasLeave && !isLeave){
+      const leaveKey = `leaveLog/${v.group}/${v.date}/${myKey}`;
+      await dbDelete(leaveKey);
+      showToast('↩️ 연차 차감 취소됨');
+    }
+    // 투피드 경품 복구는 오락실 데이터 직접 건드려야 해서 안내만
+    if(wasTupide && !isTupide){
+      showToast('⚠️ 투피드 경품은 수동 복구 필요');
+    }
+  }
+
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   showToast('✅ 투표 완료!');
-  // 출석 자동 기록
   await recordAttendance(vid, optIdx);
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
@@ -3285,7 +3292,7 @@ function openAttendanceEdit(gid, mondayStr) {
     </div>
     <div id="attEditList" style="flex:1;overflow-y:auto;padding:0 20px 10px">로딩 중...</div>
     <div style="padding:10px 20px 20px;flex-shrink:0">
-      <button onclick="document.getElementById('attEditModal').remove()" style="width:100%;padding:12px;background:var(--surface2);color:var(--text2);border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">닫기</button>
+      <button onclick="document.getElementById('attEditModal').remove();loadStatusPage();" style="width:100%;padding:12px;background:var(--surface2);color:var(--text2);border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">닫기</button>
     </div>
   </div>`;
   document.body.appendChild(modal);
