@@ -2474,19 +2474,40 @@ async function renderVoteCard(vid,v){
       if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
       Object.entries(imagesToShow).forEach(([mkey, imgs])=>{
         if(!imgs||imgs.length===0) return;
-        // 닉네임 표시
-        html+=`<div style="margin-bottom:10px">`;
-        html+=`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;align-items:center;gap:6px">`;
-        html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
-        html+=`${escH(mkey)} <span style="color:var(--text3);font-weight:400">(${imgs.length}장)</span>`;
-        html+=`</div>`;
-        html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
-        imgs.forEach(img=>{
-          html+=`<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
-          html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
+        const collapseId = `imgCollapse_${vid}_${mkey.replace(/[^a-zA-Z0-9]/g,'_')}`;
+        // 완료 투표는 접기/펼치기
+        if(isEndVote){
+          html+=`<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">`;
+          html+=`<div onclick="document.getElementById('${collapseId}').style.display=document.getElementById('${collapseId}').style.display==='none'?'block':'none'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;background:var(--surface2)">`;
+          html+=`<div style="display:flex;align-items:center;gap:6px">`;
+          html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
+          html+=`<span style="font-size:13px;font-weight:700">${escH(mkey)}</span>`;
+          html+=`<span style="font-size:11px;color:var(--text3)">(${imgs.length}장)</span>`;
+          html+=`</div><span style="font-size:12px;color:var(--text3)">▼</span>`;
           html+=`</div>`;
-        });
-        html+=`</div></div>`;
+          html+=`<div id="${collapseId}" style="display:none;padding:8px">`;
+          html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
+          imgs.forEach(img=>{
+            html+=`<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
+            html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
+            html+=`</div>`;
+          });
+          html+=`</div></div></div>`;
+        } else {
+          // 시작 투표는 기존 방식
+          html+=`<div style="margin-bottom:10px">`;
+          html+=`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;align-items:center;gap:6px">`;
+          html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
+          html+=`${escH(mkey)} <span style="color:var(--text3);font-weight:400">(${imgs.length}장)</span>`;
+          html+=`</div>`;
+          html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
+          imgs.forEach(img=>{
+            html+=`<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
+            html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
+            html+=`</div>`;
+          });
+          html+=`</div></div>`;
+        }
       });
       html+=`</div>`;
     }
@@ -2588,10 +2609,11 @@ async function renderVoteCard(vid,v){
 
   // 링크 제출 섹션
   const isEndVote = (v.title||'').includes('완료') || (v.title||'').includes('end');
-  const canSubmitLink = !isClosed && (!isEndVote || isAdmin);
+  const canSubmitLink = !isClosed && !isEndVote;
   const myOptText = myVote!==undefined ? (opts[myVote]||'') : '';
   const isTupide = myOptText.toLowerCase().includes('투피드') || myOptText.includes('두배');
 
+  if(!isEndVote){
   html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">`;
 
   // 메모 섹션
@@ -2681,7 +2703,7 @@ async function renderVoteCard(vid,v){
     }
   }
   // 관리자 일괄복사 + 댓글
-  if(isAdmin && isClosed && sortedLinks.length>0){
+  if(isClosed && sortedLinks.length>0){
     html+=`<button onclick="copyAllLinks('${vid}')" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
   }
   // 관리자 댓글
@@ -2699,6 +2721,8 @@ async function renderVoteCard(vid,v){
     html+=`<div style="font-size:13px;color:var(--text)">${escH(adminComment)}</div>`;
     html+=`</div>`;
   }
+  html+=`</div>`; // border-top div 닫기
+  } // isEndVote 조건 끝
   html+=`</div></div>`;
 
   html+=`</div></div>`;
@@ -2794,7 +2818,27 @@ async function uploadImages(vid, input){
   const v = await dbGet(`votes/${vid}`);
   if(v && v.group && v.date){
     const mondayStr = getWeekKey(v.date);
-    await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${v.date}`, '완료');
+    const isStartV = (v.title||'').includes('시작');
+    if(isStartV){
+      // 시작 투표 사진 → 그냥 완료
+      await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${v.date}`, '완료');
+    } else {
+      // 완료 투표 사진 → 시작 투표 선택지 결과로 확정
+      const allVotes = await dbGet('votes');
+      if(allVotes){
+        const startVote = Object.values(allVotes).find(sv=>
+          !sv.deleted && sv.group===v.group && sv.date===v.date &&
+          (sv.title||'').includes('시작') && sv.responses?.[myKey]!==undefined
+        );
+        if(startVote){
+          const optText = (startVote.options||[])[startVote.responses[myKey]]||'';
+          const result = mapVoteResult(optText);
+          await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${v.date}`, result);
+        } else {
+          await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${v.date}`, '완료');
+        }
+      }
+    }
   }
 
   showToast(`✅ ${uploaded.length}장 업로드 완료!`);
@@ -2839,8 +2883,16 @@ async function castVote(vid,optIdx){
 
     // 연차 복구 (프패 → 다른거로 바꿀 때)
     if(wasLeave && !isLeave){
-      const leaveKey = `leaveLog/${v.group}/${v.date}/${myKey}`;
-      await dbDelete(leaveKey);
+      const crewMembers = await dbGet('members');
+      if(crewMembers){
+        const entry = Object.entries(crewMembers).find(([k,m])=>m.name===myKey||(m.name||'').endsWith(myKey));
+        if(entry){
+          const logs = await dbGet(`leaveLog/${entry[0]}`)||{};
+          // 해당 날짜 차감 기록 찾아서 삭제
+          const deductEntry = Object.entries(logs).find(([k,l])=>l.type==='deduct'&&l.date===v.date&&(l.memo||'').includes(v.date));
+          if(deductEntry) await dbDelete(`leaveLog/${entry[0]}/${deductEntry[0]}`);
+        }
+      }
       showToast('↩️ 연차 차감 취소됨');
     }
     // 투피드 경품 복구는 오락실 데이터 직접 건드려야 해서 안내만
@@ -3180,22 +3232,30 @@ async function recordAttendance(vid, optIdx) {
     const gid = v.group;
     const gName = groups[gid]?.name || '';
 
-    // 시작 투표만 기록
+    // 시작 투표 → 선택지 기준, 완료 투표 선택지 → 결과 업데이트
     const isStartVote = (v.title||'').includes('시작');
-    if(!isStartVote) return;
+    const isEndVote2 = (v.title||'').includes('완료') || v.imageUpload;
+    if(!isStartVote && !isEndVote2) return;
 
     const date = v.date;
     const mondayStr = getWeekKey(date);
     const myKey = CU?.name || CU?.key || 'guest';
     const optText = (v.options || [])[optIdx] || '';
     const result = mapVoteResult(optText);
-    await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, result);
+
+    // 사진 올렸으면 완료, 없으면 선택지 기준
+    const myImages = v.images?.[myKey] || [];
+    const finalResult = myImages.length > 0 ? '완료' : result;
+
+    await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
 
     // 투피드 선택 시 → 보유 경품 중 투피드 1개 차감
     // 프패 선택 시 → 보유 연차 1일 차감
     const crewMembers = await dbGet('members');
     if(crewMembers){
-      const crewEntry = Object.entries(crewMembers).find(([k,m])=>m.name===myKey);
+      const crewEntry = Object.entries(crewMembers).find(([k,m])=>
+        m.name===myKey || (m.name||'').endsWith(myKey)
+      );
       if(crewEntry){
         const [ck] = crewEntry;
         if(result === '투피드'){
@@ -3299,7 +3359,7 @@ function openAttendanceEdit(gid, mondayStr) {
     </div>
     <div id="attEditList" style="flex:1;overflow-y:auto;padding:0 20px 10px">로딩 중...</div>
     <div style="padding:10px 20px 20px;flex-shrink:0">
-      <button onclick="document.getElementById('attEditModal').remove();loadStatusPage();" style="width:100%;padding:12px;background:var(--surface2);color:var(--text2);border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">닫기</button>
+      <button onclick="document.getElementById('attEditModal').remove();loadStatus();" style="width:100%;padding:12px;background:var(--surface2);color:var(--text2);border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">닫기</button>
     </div>
   </div>`;
   document.body.appendChild(modal);
