@@ -2755,8 +2755,12 @@ async function renderVoteCard(vid,v){
         const prevDate = new Date(v.date+'T00:00:00');
         prevDate.setDate(prevDate.getDate()-1);
         const prevDateStr = prevDate.toISOString().slice(0,10);
+        // 완료 투표 제목에서 날짜 부분 추출해서 시작 투표 매칭
+        const titleDate = (v.title||'').match(/\d+월 \d+일/)?.[0]||'';
         const startVote = Object.values(allVotes2).find(sv=>
-          !sv.deleted && sv.group===v.group && sv.date===v.date && (sv.title||'').includes('시작')
+          !sv.deleted && sv.group===v.group &&
+          (sv.title||'').includes('시작') &&
+          (titleDate ? (sv.title||'').includes(titleDate) : (sv.date===v.date||sv.date===prevDateStr))
         );
         if(startVote && startVote.responses){
           const startVoters = Object.keys(startVote.responses);
