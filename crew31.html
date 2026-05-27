@@ -2896,7 +2896,7 @@ async function castVote(vid,optIdx){
         if(entry){
           const logs = await dbGet(`leaveLog/${entry[0]}`)||{};
           // 해당 날짜 차감 기록 찾아서 삭제
-          const deductEntry = Object.entries(logs).find(([k,l])=>l.type==='deduct'&&l.date===v.date&&(l.memo||'').includes(v.date));
+          const deductEntry = Object.entries(logs).find(([k,l])=>l.type==='deduct'&&l.date===v.date);
           if(deductEntry) await dbDelete(`leaveLog/${entry[0]}/${deductEntry[0]}`);
         }
       }
