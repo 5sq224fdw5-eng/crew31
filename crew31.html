@@ -2732,8 +2732,6 @@ async function renderVoteCard(vid,v){
   html+=`</div>`; // border-top div 닫기
   } // isEndVote 조건 끝
   html+=`</div></div>`;
-
-  html+=`</div></div>`;
   return html;
 }
 
@@ -2841,8 +2839,12 @@ async function uploadImages(vid, input){
       // 완료 투표 사진 → 시작 투표 선택지 결과로 확정
       const allVotes = await dbGet('votes');
       if(allVotes){
+        // 완료 투표 date 기준 전날
+        const prevDate = new Date(v.date+'T00:00:00');
+        prevDate.setDate(prevDate.getDate()-1);
+        const prevDateStr = prevDate.toISOString().slice(0,10);
         const startVote = Object.values(allVotes).find(sv=>
-          !sv.deleted && sv.group===v.group && sv.date===v.date &&
+          !sv.deleted && sv.group===v.group && sv.date===prevDateStr &&
           (sv.title||'').includes('시작') && sv.responses?.[myKey]!==undefined
         );
         if(startVote){
