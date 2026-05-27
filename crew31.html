@@ -730,6 +730,8 @@ async function checkAutoVote(){
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const todayStr2 = now.toISOString().slice(0,10);
+  const tomorrow = new Date(now.getTime() + 24*60*60*1000);
+  const tomorrowStr2 = tomorrow.toISOString().slice(0,10);
   const dateLabel = `${now.getMonth()+1}월 ${now.getDate()}일`;
 
   for(const [gid, sch] of Object.entries(schedule.groups||{})){
@@ -753,7 +755,7 @@ async function checkAutoVote(){
       if(localStorage.getItem(lastKey)) continue;
       const gData = groups[gid]||{};
       const opts = ['퇴근할게요 (완료)','2인 1조로 근무했어요 (공게)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
-      await dbPush('votes',{title:`${dateLabel} 업무 완료`,group:gid,date:todayStr2,time:sch.endCloseTime||'13:00',options:opts,createdAt:Date.now()});
+      await dbPush('votes',{title:`${dateLabel} 업무 완료`,group:gid,date:tomorrowStr2,time:sch.endCloseTime||'13:00',options:opts,createdAt:Date.now()});
       localStorage.setItem(lastKey,'1');
       showToast(`🗳️ ${gData.name} 완료 투표 자동 생성됨`);
       loadHome();
@@ -3085,7 +3087,14 @@ async function openVoteModal(vid, defaultGroup, voteType){
       _editOptList=v.options?[...v.options]:['출근','재택','휴가'];
     }
   }else{
-    document.getElementById('voteDate').value=todayStr;
+    // 업무 완료 투표는 익일로 날짜 설정
+    if(voteType==='end'){
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate()+1);
+      document.getElementById('voteDate').value = tomorrow.toISOString().slice(0,10);
+    } else {
+      document.getElementById('voteDate').value=todayStr;
+    }
     if(defaultGroup)sel.value=defaultGroup;
 
     // 그룹별 마감 시간 (Firebase에 저장된 값 우선, 없으면 기본값)
