@@ -2682,8 +2682,7 @@ async function renderVoteCard(vid,v){
   }
   // 관리자 일괄복사 + 댓글
   if(isAdmin && isClosed && sortedLinks.length>0){
-    const allUrls=sortedLinks.map(l=>l.url).filter(Boolean).join('\n');
-    html+=`<button onclick="navigator.clipboard.writeText(${JSON.stringify(allUrls)}).then(()=>showToast('📋 전체 복사됨'))" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
+    html+=`<button onclick="copyAllLinks('${vid}')" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
   }
   // 관리자 댓글
   const adminComment = v.adminComment||'';
@@ -2733,6 +2732,14 @@ function cleanUrl(url){
   url=url.replace(/\?.*$/,'');
   if(!url.endsWith('/'))url+='/';
   return url;
+}
+
+async function copyAllLinks(vid){
+  const v = await dbGet(`votes/${vid}`);
+  if(!v||!v.links){showToast('링크 없음');return;}
+  const urls = Object.values(v.links).sort((a,b)=>(a.time||0)-(b.time||0)).map(l=>l.url).filter(Boolean).join('\n');
+  await navigator.clipboard.writeText(urls);
+  showToast('📋 전체 복사됨');
 }
 
 async function saveAdminComment(vid){
