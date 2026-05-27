@@ -2801,6 +2801,12 @@ async function deleteMyImages(vid){
   if(!confirm('업로드한 사진을 전부 삭제할까요?')) return;
   const myKey = (CU?.name||'').replace(/[\.\#\$\/\[\]\s]/g,'_');
   await dbDelete(`votes/${vid}/images/${myKey}`);
+  // 출석 기록도 삭제
+  const v = await dbGet(`votes/${vid}`);
+  if(v && v.group && v.date){
+    const mondayStr = getWeekKey(v.date);
+    await dbDelete(`attendance/${v.group}/${mondayStr}/${CU?.name||myKey}/${v.date}`);
+  }
   showToast('🗑️ 사진 삭제됨');
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
