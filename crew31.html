@@ -2427,7 +2427,8 @@ async function renderVoteCard(vid,v){
   const isClosed=v.closed||(deadline&&now>deadline);
   const gName=v.group==='all'?'전체':(groups[v.group]?.name||v.group||'전체');
   const gColor=groups[v.group]?.color||'var(--accent)';
-  const isImageVote = v.imageUpload === true; // 이미지 업로드 투표 여부
+  const isEndVote = (v.title||'').includes('완료');
+  const isImageVote = v.imageUpload === true || isEndVote; // 완료 투표도 이미지 섹션
 
   let html=`<div class="card" style="margin:0 14px 16px;${isClosed?'opacity:0.75;background:#f8f8f8;':''}">` ;
   html+=`<div style="padding:14px 14px 10px;border-bottom:1px solid var(--border)">`;
@@ -2477,7 +2478,7 @@ async function renderVoteCard(vid,v){
     }
 
     // 업로드된 이미지 목록 (관리자만 전체, 본인은 본인것만)
-    const imagesToShow = isAdmin ? v.images : (v.images ? {[myKey]: myImages} : {});
+    const imagesToShow = v.images || {};
     if(imagesToShow && Object.keys(imagesToShow).length > 0){
       html+=`<div style="margin-top:8px">`;
       if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
@@ -2617,7 +2618,6 @@ async function renderVoteCard(vid,v){
   }
 
   // 링크 제출 섹션
-  const isEndVote = (v.title||'').includes('완료') || (v.title||'').includes('end');
   const canSubmitLink = !isClosed && !isEndVote;
   const myOptText = myVote!==undefined ? (opts[myVote]||'') : '';
   const isTupide = myOptText.toLowerCase().includes('투피드') || myOptText.includes('두배');
