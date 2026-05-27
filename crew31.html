@@ -2529,8 +2529,8 @@ async function renderVoteCard(vid,v){
       html+=`<div class="vopt-label">${escH(opt)}</div>`;
       html+=`<div class="vopt-cnt">${cnt}명 ${pct}%</div>`;
       html+=`</div>`;
-      // 인사팀에게 선택지별 투표자 이름 표시 (마감 전후 모두)
-      if(isAdmin && cnt > 0){
+      // 모든 사용자에게 선택지별 투표자 이름 표시
+      if(cnt > 0){
         const voterNames = Object.entries(responses).filter(([k,rv])=>rv===i).map(([k])=>k);
         html+=`<div style="display:flex;flex-wrap:wrap;gap:4px;padding:2px 8px 8px">`;
         voterNames.forEach(name=>{ html+=`<span style="background:var(--surface2);color:var(--text2);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${escH(name)}</span>`; });
@@ -2703,7 +2703,7 @@ async function renderVoteCard(vid,v){
     }
   }
   // 관리자 일괄복사 + 댓글
-  if(isClosed && sortedLinks.length>0){
+  if(sortedLinks.length>0){
     html+=`<button onclick="copyAllLinks('${vid}')" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
   }
   // 관리자 댓글
@@ -2738,13 +2738,20 @@ async function submitVoteLink(vid, isTupide=false){
     const url2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
     const note2=document.getElementById(`linkNote_${vid}_2`)?.value.trim()||'';
     if(!url1&&!url2){showToast('링크를 입력하세요');return;}
-    if(url1) await dbSet(`votes/${vid}/links/${key}_1`,{nick,url:cleanUrl(url1),note:note1,time:Date.now()});
-    if(url2) await dbSet(`votes/${vid}/links/${key}_2`,{nick,url:cleanUrl(url2),note:note2,time:Date.now()+1});
+    if(url1){
+      const existing1 = await dbGet(`votes/${vid}/links/${key}_1`);
+      await dbSet(`votes/${vid}/links/${key}_1`,{nick,url:cleanUrl(url1),note:note1,time:existing1?.time||Date.now()});
+    }
+    if(url2){
+      const existing2 = await dbGet(`votes/${vid}/links/${key}_2`);
+      await dbSet(`votes/${vid}/links/${key}_2`,{nick,url:cleanUrl(url2),note:note2,time:existing2?.time||(Date.now()+1)});
+    }
   } else {
     let url=document.getElementById(`linkUrl_${vid}`)?.value.trim();
     const note=document.getElementById(`linkNote_${vid}`)?.value.trim()||'';
     if(!url){showToast('URL을 입력하세요');return;}
-    await dbSet(`votes/${vid}/links/${key}`,{nick,url:cleanUrl(url),note,time:Date.now()});
+    const existing = await dbGet(`votes/${vid}/links/${key}`);
+    await dbSet(`votes/${vid}/links/${key}`,{nick,url:cleanUrl(url),note,time:existing?.time||Date.now()});
   }
   showToast('✅ 링크 제출됨!');
   if(_currentTab==='home')loadHome();
