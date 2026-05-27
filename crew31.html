@@ -2867,7 +2867,12 @@ async function saveMemo(vid){
 
 async function cancelVote(vid){
   const myKey=CU?.name||CU?.key||'admin';
+  const key=CU?.key||'admin';
   await dbDelete(`votes/${vid}/responses/${myKey}`);
+  // 링크도 같이 삭제
+  await dbDelete(`votes/${vid}/links/${key}`);
+  await dbDelete(`votes/${vid}/links/${key}_1`);
+  await dbDelete(`votes/${vid}/links/${key}_2`);
   showToast('투표 취소됨');
   if(_currentTab==='home'||_currentTab==='dept') loadDeptPage(_currentDept);
 }
@@ -2890,17 +2895,29 @@ async function castVote(vid,optIdx){
 
     // 연차 복구 (프패 → 다른거로 바꿀 때)
     if(wasLeave && !isLeave){
-      const crewMembers = await dbGet('members');
-      if(crewMembers){
-        const entry = Object.entries(crewMembers).find(([k,m])=>m.name===myKey||(m.name||'').endsWith(myKey));
-        if(entry){
-          const logs = await dbGet(`leaveLog/${entry[0]}`)||{};
-          // 해당 날짜 차감 기록 찾아서 삭제
-          const deductEntry = Object.entries(logs).find(([k,l])=>l.type==='deduct'&&l.date===v.date);
-          if(deductEntry) await dbDelete(`leaveLog/${entry[0]}/${deductEntry[0]}`);
+      try{
+        const gameMembers = await gameGet('members');
+        if(gameMembers){
+          const gName = groups[v.group]?.name||'';
+          const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
+            const clean=(m.name||'').replace(/^\*/,'');
+            return clean===(gName+myKey)||clean===myKey;
+          });
+          if(gameEntry){
+            const [gmKey] = gameEntry;
+            const cur = await gameGet(`memberLeave/${gmKey}`) || 0;
+            await gameSet(`memberLeave/${gmKey}`, cur+1);
+            showToast('↩️ 연차 복구됨');
+          }
         }
-      }
-      showToast('↩️ 연차 차감 취소됨');
+      }catch(e){showToast('⚠️ 연차 복구 실패');}
+    }
+    // 투피드 → 다른 선택지: 링크 삭제
+    if(wasTupide && !isTupide){
+      const key=CU?.key||'admin';
+      await dbDelete(`votes/${vid}/links/${key}_1`);
+      await dbDelete(`votes/${vid}/links/${key}_2`);
+      await dbDelete(`votes/${vid}/links/${key}`);
     }
     // 투피드 경품 복구
     if(wasTupide && !isTupide){
@@ -3327,16 +3344,27 @@ async function recordAttendance(vid, optIdx) {
             }
           }
         } else if(result === '프패'){
-          // 연차 1일 차감
-          const leaveLog = await dbGet(`leaveLog/${ck}`) || {};
-          const totalGiven = Object.values(leaveLog).filter(l=>l.type==='give').reduce((s,l)=>s+(l.amount||0),0);
-          const totalUsed = Object.values(leaveLog).filter(l=>l.type==='deduct').reduce((s,l)=>s+(l.amount||0),0);
-          const remaining = totalGiven - totalUsed;
-          if(remaining > 0){
-            await dbPush(`leaveLog/${ck}`, {type:'deduct',amount:1,date,time:Date.now(),memo:`연차 사용 ${date}`});
-            showToast(`🏖️ 연차 1일 차감 · ${date} (잔여 ${remaining-1}일)`);
-          } else {
-            showToast(`⚠️ 잔여 연차 없음`);
+          // 오락실 연차 1일 차감
+          const gameMembers = await gameGet('members');
+          if(gameMembers){
+            const gName = groups[gid]?.name||'';
+            const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
+              const clean=(m.name||'').replace(/^\*/,'');
+              return clean===(gName+myKey)||clean===myKey;
+            });
+            if(gameEntry){
+              const [gmKey] = gameEntry;
+              const cur = await gameGet(`memberLeave/${gmKey}`) || 0;
+              if(cur > 0){
+                await gameSet(`memberLeave/${gmKey}`, cur-1);
+                await dbPush(`leaveLog/${ck}`, {type:'deduct',amount:1,date,time:Date.now(),memo:`연차 사용 ${date}`});
+                showToast(`🏖️ 연차 1일 차감 · ${date} (잔여 ${cur-1}일)`);
+              } else {
+                showToast(`⚠️ 잔여 연차 없음`);
+              }
+            } else {
+              showToast(`⚠️ 오락실에서 멤버를 찾을 수 없음`);
+            }
           }
         }
       }
