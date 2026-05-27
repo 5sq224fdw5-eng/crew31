@@ -2457,7 +2457,7 @@ async function renderVoteCard(vid,v){
   html+=`</div></div>`;
   html+=`<div style="padding:12px 14px">`;
 
-  if(isImageVote){
+  if(isImageVote || v.imageUpload){
     // 이미지 업로드 투표
     const myImages = v.images?.[myKey] || [];
     const hasUploaded = myImages.length > 0;
@@ -2477,8 +2477,8 @@ async function renderVoteCard(vid,v){
       }
     }
 
-    // 업로드된 이미지 목록 (관리자만 전체, 본인은 본인것만)
-    const imagesToShow = v.images || {};
+    // 업로드된 이미지 목록 (관리자 전체, 사원 본인것만)
+    const imagesToShow = isAdmin ? (v.images || {}) : (v.images?.[myKey] ? {[myKey]: v.images[myKey]} : {});
     if(imagesToShow && Object.keys(imagesToShow).length > 0){
       html+=`<div style="margin-top:8px">`;
       if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
