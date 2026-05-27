@@ -477,16 +477,24 @@ let _pushReady=false;
 async function checkExistingPushSub(){
   try{
     if(!('serviceWorker' in navigator)||!('PushManager' in window))return;
-    const reg=await navigator.serviceWorker.getRegistration('https://5sq224fdw5-eng.github.io/crew31-sw.js');
+    const reg = await navigator.serviceWorker.ready;
     if(!reg)return;
-    const sub=await reg.pushManager.getSubscription();
-    if(!sub)return;
-    // 구독 있으면 서버에 재등록 (토큰 갱신)
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      // 구독 해제됨 → 자동 재구독
+      const vapidRes = await fetch(`${WORKER_URL}/vapid-public`);
+      if(!vapidRes.ok)return;
+      const {key} = await vapidRes.json();
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:urlBase64ToUint8Array(key)
+      });
+    }
     const userKey=CU?.key||CU?.name||'guest';
-    await fetch(`${PUSH_SERVER}/subscribe`,{
+    await fetch(`${WORKER_URL}/subscribe`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({subscription:sub.toJSON(),userKey,userName:CU?.name||'게스트'})
+      body:JSON.stringify({subscription:sub.toJSON(),userKey,userName:CU?.name||''})
     });
     _pushReady=true;
   }catch(e){console.warn('checkExistingPushSub:',e);}
