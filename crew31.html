@@ -2487,7 +2487,13 @@ async function renderVoteCard(vid,v){
     if(imagesToShow && Object.keys(imagesToShow).length > 0){
       html+=`<div style="margin-top:8px">`;
       if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
-      Object.entries(imagesToShow).forEach(([mkey, imgs])=>{
+      // 멤버별 첫 업로드 시간 기준 정렬
+  const sortedEntries = Object.entries(imagesToShow).sort((a,b)=>{
+    const ta = (a[1][0]?.uploadedAt||0);
+    const tb = (b[1][0]?.uploadedAt||0);
+    return ta-tb;
+  });
+  sortedEntries.forEach(([mkey, imgs], entryIdx)=>{
         if(!imgs||imgs.length===0) return;
         // 업로드 순서 정렬
         const sortedImgs = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
@@ -2499,7 +2505,7 @@ async function renderVoteCard(vid,v){
           html+=`<div onclick="toggleImgCollapse('${collapseId}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;background:var(--surface2)">`;
           html+=`<div style="display:flex;align-items:center;gap:6px">`;
           html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
-          html+=`<span style="font-size:13px;font-weight:700">${escH(mkey)}</span>`;
+          html+=`<span style="font-size:13px;font-weight:700">${entryIdx+1}. ${escH(mkey)}</span>`;
           html+=`<span style="font-size:11px;color:var(--text3)">(${imgs.length}장)</span>`;
           html+=`</div><span style="font-size:12px;color:var(--text3)">▼</span>`;
           html+=`</div>`;
@@ -2516,7 +2522,7 @@ async function renderVoteCard(vid,v){
           html+=`<div style="margin-bottom:10px">`;
           html+=`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;align-items:center;gap:6px">`;
           html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
-          html+=`${escH(mkey)} <span style="color:var(--text3);font-weight:400">(${imgs.length}장)</span>`;
+          html+=`${entryIdx+1}. ${escH(mkey)} <span style="color:var(--text3);font-weight:400">(${imgs.length}장)</span>`;
           html+=`</div>`;
           html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
           imgs.forEach(img=>{
@@ -2740,6 +2746,36 @@ async function renderVoteCard(vid,v){
   }
   html+=`</div>`; // border-top div 닫기
   } // isEndVote 조건 끝
+
+  // 완료 투표 - 전일 시작 투표 참여자 완료 여부 표시
+  if(isEndVote && v.group && v.date){
+    try{
+      const allVotes2 = await dbGet('votes');
+      if(allVotes2){
+        const prevDate = new Date(v.date+'T00:00:00');
+        prevDate.setDate(prevDate.getDate()-1);
+        const prevDateStr = prevDate.toISOString().slice(0,10);
+        const startVote = Object.values(allVotes2).find(sv=>
+          !sv.deleted && sv.group===v.group && sv.date===prevDateStr && (sv.title||'').includes('시작')
+        );
+        if(startVote && startVote.responses){
+          const startVoters = Object.keys(startVote.responses);
+          const endVoters = new Set(Object.keys(v.responses||{}));
+          // 사진 업로드한 사람도 완료로 처리
+          if(v.images) Object.keys(v.images).forEach(k=>endVoters.add(k));
+          html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding:10px 14px">`;
+          html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">완료 현황</div>`;
+          html+=`<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+          startVoters.forEach(n=>{
+            const done = endVoters.has(n);
+            html+=`<span style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;${done?'background:var(--green);color:white;':'background:transparent;color:var(--text3);border:1.5px solid var(--border);'}">${escH(n)}</span>`;
+          });
+          html+=`</div></div>`;
+        }
+      }
+    }catch(e){}
+  }
+
   html+=`</div></div>`;
   return html;
   } catch(e) {
