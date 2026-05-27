@@ -2756,7 +2756,7 @@ async function renderVoteCard(vid,v){
         prevDate.setDate(prevDate.getDate()-1);
         const prevDateStr = prevDate.toISOString().slice(0,10);
         const startVote = Object.values(allVotes2).find(sv=>
-          !sv.deleted && sv.group===v.group && sv.date===prevDateStr && (sv.title||'').includes('시작')
+          !sv.deleted && sv.group===v.group && sv.date===v.date && (sv.title||'').includes('시작')
         );
         if(startVote && startVote.responses){
           const startVoters = Object.keys(startVote.responses);
