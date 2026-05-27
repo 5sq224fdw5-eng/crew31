@@ -2488,7 +2488,7 @@ async function renderVoteCard(vid,v){
         // 완료 투표는 접기/펼치기
         if(isEndVote){
           html+=`<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">`;
-          html+=`<div onclick="document.getElementById('${collapseId}').style.display=document.getElementById('${collapseId}').style.display==='none'?'block':'none'" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;background:var(--surface2)">`;
+          html+=`<div onclick="toggleImgCollapse('${collapseId}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;background:var(--surface2)">`;
           html+=`<div style="display:flex;align-items:center;gap:6px">`;
           html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
           html+=`<span style="font-size:13px;font-weight:700">${escH(mkey)}</span>`;
@@ -2789,6 +2789,12 @@ function cleanUrl(url){
   return url;
 }
 
+function toggleImgCollapse(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
 async function copyAllLinks(vid){
   const v = await dbGet(`votes/${vid}`);
   if(!v||!v.links){showToast('링크 없음');return;}
@@ -2816,7 +2822,8 @@ async function uploadImages(vid, input){
   if(!files.length) return;
   showToast('⏳ 업로드 중...');
 
-  const myKey = CU?.name || CU?.key || 'guest'; // 이름으로 저장
+  const myKey = CU?.name || ''; // 반드시 이름 사용
+  if(!myKey){showToast('로그인 정보 오류');return;}
 
   // 만료 시간 계산 (다음날 오후 1시 10분)
   const now = new Date();
