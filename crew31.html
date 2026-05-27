@@ -2902,9 +2902,40 @@ async function castVote(vid,optIdx){
       }
       showToast('↩️ 연차 차감 취소됨');
     }
-    // 투피드 경품 복구는 오락실 데이터 직접 건드려야 해서 안내만
+    // 투피드 경품 복구
     if(wasTupide && !isTupide){
-      showToast('⚠️ 투피드 경품은 수동 복구 필요');
+      try{
+        const gameMembers = await gameGet('members');
+        if(gameMembers){
+          const gName = groups[v.group]?.name||'';
+          const entry = Object.entries(gameMembers).find(([k,m])=>{
+            const n=m.name||'';
+            return n===myKey||n===(gName+myKey)||n.endsWith(myKey);
+          });
+          if(entry){
+            const [gmKey] = entry;
+            const prizesRaw = await gameGet(`memberPrizes/${gmKey}`);
+            if(prizesRaw){
+              if(Array.isArray(prizesRaw)){
+                const idx = prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('투피드'));
+                if(idx>=0){
+                  prizesRaw[idx]={...prizesRaw[idx],deducted:false,usedDate:null};
+                  await gameSet(`memberPrizes/${gmKey}`,prizesRaw);
+                  showToast('↩️ 투피드 경품 복구됨');
+                }
+              } else {
+                const entries = Object.entries(prizesRaw);
+                const found = entries.find(([k,p])=>p&&p.deducted&&(p.name||'').includes('투피드'));
+                if(found){
+                  await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);
+                  await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);
+                  showToast('↩️ 투피드 경품 복구됨');
+                }
+              }
+            }
+          }
+        }
+      }catch(e){showToast('⚠️ 투피드 복구 실패');}
     }
   }
 
