@@ -2523,6 +2523,8 @@ async function renderVoteCard(vid,v){
 
     // 같은 날짜 시작 투표 찾기
     let startVoters = [];
+    let leaveSet = new Set();
+    let bonusSet = new Set();
     let totalCount = 0;
     try{
       const allVotes = await dbGet('votes');
@@ -2539,41 +2541,30 @@ async function renderVoteCard(vid,v){
         if(startV){
           const svOpts=startV.options||[];
           const svResp=startV.responses||{};
-          // 전체 참여자 (열정페이 포함)
           startVoters = Object.keys(svResp);
-          // 총 인증 수 = 열정페이/봉사/연차 제외
-          totalCount = startVoters.filter(nick=>{
+          startVoters.forEach(nick=>{
             const opt=(svOpts[svResp[nick]]||'').toLowerCase();
-            return !opt.includes('봉사')&&!opt.includes('열정페이')&&!opt.includes('프패')&&!opt.includes('연차')&&!opt.includes('프리패스');
-          }).length;
-          // 연차자 목록
-          startVoters._leaveSet = new Set(startVoters.filter(nick=>{
-            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
-            return opt.includes('프패')||opt.includes('연차')||opt.includes('프리패스');
-          }));
-          // 열정페이/봉사 목록
-          startVoters._bonusSet = new Set(startVoters.filter(nick=>{
-            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
-            return opt.includes('봉사')||opt.includes('열정페이');
-          }));
-          startVoters._svOpts = svOpts;
-          startVoters._svResp = svResp;
+            if(opt.includes('프패')||opt.includes('연차')||opt.includes('프리패스')) leaveSet.add(nick);
+            else if(opt.includes('봉사')||opt.includes('열정페이')) bonusSet.add(nick);
+          });
+          totalCount = startVoters.filter(nick=>!leaveSet.has(nick)&&!bonusSet.has(nick)).length;
         }
       }
     }catch(e){}
 
-    if(startVoters.length===0) startVoters = Object.keys(allImages);
+    if(startVoters.length===0){
+      startVoters = Object.keys(allImages);
+    }
     if(totalCount===0) totalCount = startVoters.length;
 
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 0">`;
     startVoters.forEach(nick=>{
-      const isLeave = startVoters._leaveSet?.has(nick)||false;
+      const isLeave = leaveSet.has(nick);
       const imgs = (allImages[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
       const uploadCount = imgs.length;
       const isMe = nick===myKey;
       const collapseId = `imgCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
-
-      const isBonus = startVoters._bonusSet?.has(nick)||false;
+      const isBonus = bonusSet.has(nick);
       let fillPct, label, btnStyle, canUpload;
       if(isLeave){
         fillPct = 100;
@@ -2620,7 +2611,7 @@ async function renderVoteCard(vid,v){
         const sorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
         html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px">`;
         sorted.forEach(img=>{
-          const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_200/') : img.url;
+          const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_600/') : img.url;
           html+=`<div style="aspect-ratio:9/16;border-radius:6px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
         });
         html+=`</div>`;
