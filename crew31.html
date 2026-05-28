@@ -2483,6 +2483,7 @@ async function toggleVoteDetail(vid){
     el.style.display='block';
     el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
     const v = await dbGet(`votes/${vid}`);
+    showToast(`imageUpload:${v?.imageUpload} title:${(v?.title||'').slice(0,10)}`);
     try{ el.innerHTML = await renderVoteCard(vid, v); }
     catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
   } else {
