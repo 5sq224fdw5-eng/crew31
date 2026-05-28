@@ -2584,9 +2584,9 @@ async function renderVoteCard(vid,v){
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 0">`;
     startVoters.forEach(nick=>{
       const isLeave = leaveSet.has(nick);
-      const imgs = (allImages[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
+      const sanitizedNick = nick.replace(/[\.#$\/\[\]\s]/g, '_');
+      const imgs = (allImages[sanitizedNick]||allImages[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
       const uploadCount = imgs.length;
-      const isMe = nick===myKey;
       const collapseId = `imgCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
       const isBonus = bonusSet.has(nick);
       let fillPct, label, btnStyle, canUpload;
@@ -2616,11 +2616,12 @@ async function renderVoteCard(vid,v){
       }
 
       html+=`<div>`;
-      html+=`<button onclick="toggleImgCollapse('${collapseId}')" style="width:100%;padding:8px 4px;border-radius:20px;${btnStyle}font-size:11px;font-weight:700;cursor:pointer;line-height:1.5;text-align:center">`;
+      html+=`<button onclick="toggleNickBtn('${vid}','${collapseId}','${nick.replace(/'/g,'\\\'')}')" style="width:100%;padding:8px 4px;border-radius:20px;${btnStyle}font-size:11px;font-weight:700;cursor:pointer;line-height:1.5;text-align:center">`;
       html+=`${escH(nick)}<br><span style="font-size:9px">${label}</span>`;
       html+=`</button>`;
       html+=`<div id="${collapseId}" style="display:none;margin-top:6px">`;
-      if(!isClosed && canUpload){
+      const isMe = nick===myKey || nick===(CU?.name||'');
+      if(isMe && !isClosed && canUpload){
         html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
         if(uploadCount>0){
           html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
@@ -3036,6 +3037,46 @@ async function deleteMyImages(vid){
   showToast('🗑️ 사진 삭제됨');
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+async function toggleNickBtn(vid, collapseId, nick){
+  const el = document.getElementById(collapseId);
+  if(!el) return;
+  if(el.style.display !== 'none'){
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'block';
+  // Firebase에서 최신 이미지 읽기
+  const myKey = (CU?.name||'').replace(/[\.#$\/\[\]\s]/g,'_');
+  const sanitized = nick.replace(/[\.#$\/\[\]\s]/g,'_');
+  const imgs = await dbGet(`votes/${vid}/images/${sanitized}`) || await dbGet(`votes/${vid}/images/${myKey}`) || [];
+  const realImgs = imgs.filter(img=>img?.url&&img.url!=='연차');
+  const isMe = nick===(CU?.name||'') || sanitized===myKey;
+  const v = await dbGet(`votes/${vid}`);
+  const isClosed = v?.closed||false;
+
+  let html = '';
+  if(isMe && !isClosed && realImgs.length===0){
+    html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+    html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
+  } else if(isMe && !isClosed && realImgs.length>0){
+    html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+    html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
+    html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">수정</button>`;
+    html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
+    html+=`</div>`;
+  }
+  if(realImgs.length>0){
+    const sorted = [...realImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+    html+=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">`;
+    sorted.forEach(img=>{
+      const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
+      html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+    });
+    html+=`</div>`;
+  }
+  el.innerHTML = html;
 }
 
 function toggleImgCollapse(id){
