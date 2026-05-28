@@ -2626,7 +2626,7 @@ async function renderVoteCard(vid,v){
       }
       if(imgs.length>0){
         const sorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
-        html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
+        html+=`<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">`;
         sorted.forEach(img=>{
           const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
           html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
@@ -2790,13 +2790,23 @@ async function renderVoteCard(vid,v){
         html+=`</div>`;
       } else {
         html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)">`;
-        entry.links.forEach((l,li)=>{
-          html+=`<div style="display:flex;align-items:center;gap:8px;${li>0?'padding-left:28px':''}">`;
-          if(li===0) html+=`<span style="font-size:11px;color:var(--text3);min-width:20px">${num++}.</span>`;
-          if(li===0) html+=`<span style="font-size:12px;font-weight:700;min-width:60px;flex-shrink:0">${escH(l.nick||'')}</span>`;
-          html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(l.url||'')}</a>`;
+        // 첫 번째 링크에서 닉네임/아이디/배지
+        const firstLink = entry.links[0];
+        const linkType = firstLink.type||'normal';
+        const badgeText = linkType==='tupide'?'투피드':linkType==='bonus'?'열정페이':'';
+        html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">`;
+        html+=`<div style="display:flex;align-items:center;gap:4px">`;
+        html+=`<span style="font-size:11px;color:var(--text3)">${num++}.</span>`;
+        html+=`<span style="font-size:13px;font-weight:700">${escH(firstLink.nick||'')}</span>`;
+        if(firstLink.id) html+=`<span style="font-size:12px;color:var(--text3)">@${escH(firstLink.id)}</span>`;
+        html+=`</div>`;
+        if(badgeText) html+=`<span style="background:${linkType==='tupide'?'#FF85C1':'#94a3b8'};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${badgeText}</span>`;
+        html+=`</div>`;
+        entry.links.forEach(l=>{
+          html+=`<div style="margin-bottom:2px">`;
+          html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);word-break:break-all">${escH(l.url||'')}</a>`;
           html+=`</div>`;
-          if(l.note)html+=`<div style="font-size:11px;color:var(--text3);padding-left:${li===0?'96':'28'}px">ㄴ${escH(l.note)}</div>`;
+          if(l.note) html+=`<div style="font-size:11px;color:var(--text3)">ㄴ${escH(l.note)}</div>`;
         });
         html+=`</div>`;
       }
@@ -2805,26 +2815,34 @@ async function renderVoteCard(vid,v){
     html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:6px">아직 제출된 링크가 없습니다</div>`;
   }
   if(canSubmitLink){
-    if(isTupide){
-      html+=`<div style="margin-top:8px">`;
-      html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">링크 1</div>`;
-      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-      html+=`<input id="linkUrl_${vid}_1" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<input id="linkNote_${vid}_1" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`</div>`;
-      html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">링크 2</div>`;
-      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-      html+=`<input id="linkUrl_${vid}_2" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<input id="linkNote_${vid}_2" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`</div></div>`;
-      html+=`<button onclick="submitVoteLink('${vid}',true)" style="width:100%;margin-top:2px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
-    } else {
-      html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
-      html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<input id="linkNote_${vid}" placeholder="메모" style="width:60px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`</div>`;
-      html+=`<button onclick="submitVoteLink('${vid}')" style="width:100%;margin-top:6px;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
-    }
+    // 드롭박스 + @아이디 + 링크 + 메모 구조
+    html+=`<div style="margin-top:10px">`;
+    html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+    html+=`<select id="linkType_${vid}" onchange="onLinkTypeChange('${vid}')" style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<option value="normal">노피드</option>`;
+    html+=`<option value="bonus">열정페이</option>`;
+    html+=`<option value="tupide">투피드</option>`;
+    html+=`</select>`;
+    html+=`<input id="linkId_${vid}" placeholder="@아이디" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`</div>`;
+    html+=`<div id="linkInputArea_${vid}">`;
+    html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+    html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<input id="linkNote_${vid}" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`</div>`;
+    html+=`</div>`;
+    html+=`<div id="linkInputArea2_${vid}" style="display:none">`;
+    html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+    html+=`<input id="linkUrl_${vid}_1" placeholder="링크 1" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<input id="linkNote_${vid}_1" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`</div>`;
+    html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+    html+=`<input id="linkUrl_${vid}_2" placeholder="링크 2" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<input id="linkNote_${vid}_2" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`</div>`;
+    html+=`</div>`;
+    html+=`<button onclick="submitVoteLinkNew('${vid}')" style="width:100%;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
+    html+=`</div>`;
   }
   // 관리자 일괄복사 + 댓글
   if(sortedLinks.length>0){
@@ -2847,7 +2865,6 @@ async function renderVoteCard(vid,v){
   }
   html+=`</div>`; // border-top div 닫기
   } // isEndVote 조건 끝
-
   // 템플릿 멤버 참여 현황
   if(v.tplMembers && v.tplMembers.length>0){
     const voters = Object.keys(v.responses||{});
@@ -2907,6 +2924,55 @@ async function renderVoteCard(vid,v){
     fb+=`</div>`;
     return fb;
   }
+}
+
+function onLinkTypeChange(vid){
+  const type = document.getElementById(`linkType_${vid}`)?.value;
+  const area1 = document.getElementById(`linkInputArea_${vid}`);
+  const area2 = document.getElementById(`linkInputArea2_${vid}`);
+  if(!area1||!area2) return;
+  if(type==='tupide'){
+    area1.style.display='none';
+    area2.style.display='block';
+  } else {
+    area1.style.display='block';
+    area2.style.display='none';
+  }
+}
+
+async function submitVoteLinkNew(vid){
+  const nick=CU?.name||'익명';
+  const key=CU?.key||'admin';
+  const type=document.getElementById(`linkType_${vid}`)?.value||'normal';
+  const linkId=document.getElementById(`linkId_${vid}`)?.value.trim()||'';
+  const displayNick=nick;
+  const displayId=linkId;
+  const isTupide=type==='tupide';
+
+  if(isTupide){
+    const url1=document.getElementById(`linkUrl_${vid}_1`)?.value.trim();
+    const note1=document.getElementById(`linkNote_${vid}_1`)?.value.trim()||'';
+    const url2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
+    const note2=document.getElementById(`linkNote_${vid}_2`)?.value.trim()||'';
+    if(!url1&&!url2){showToast('링크를 입력하세요');return;}
+    if(url1){
+      const ex1=await dbGet(`votes/${vid}/links/${key}_1`);
+      await dbSet(`votes/${vid}/links/${key}_1`,{nick:displayNick,id:displayId,url:cleanUrl(url1),note:note1,type,time:ex1?.time||Date.now()});
+    }
+    if(url2){
+      const ex2=await dbGet(`votes/${vid}/links/${key}_2`);
+      await dbSet(`votes/${vid}/links/${key}_2`,{nick:displayNick,id:displayId,url:cleanUrl(url2),note:note2,type,time:ex2?.time||(Date.now()+1)});
+    }
+  } else {
+    const url=document.getElementById(`linkUrl_${vid}`)?.value.trim();
+    const note=document.getElementById(`linkNote_${vid}`)?.value.trim()||'';
+    if(!url){showToast('URL을 입력하세요');return;}
+    const ex=await dbGet(`votes/${vid}/links/${key}`);
+    await dbSet(`votes/${vid}/links/${key}`,{nick:displayNick,id:displayId,url:cleanUrl(url),note,type,time:ex?.time||Date.now()});
+  }
+  showToast('✅ 링크 제출됨!');
+  if(_currentTab==='home')loadHome();
+  else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
 async function submitVoteLink(vid, isTupide=false){
