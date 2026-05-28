@@ -2536,9 +2536,8 @@ async function renderVoteCard(vid,v){
   html+=`</div></div>`;
   html+=`<div style="padding:12px 14px">`;
 
-  if(isImageVote || v.imageUpload){
-    // 완료 투표 - 시작 투표 참여자 버튼 UI
-    if(isEndVote || v.imageUpload){
+  if(v.imageUpload === true){
+    // imageUpload:true → 무조건 버튼 UI (완료 투표)
       const allVotesForImg = await dbGet('votes');
       let startVoters = [];
       if(allVotesForImg && v.group && v.date){
@@ -2631,46 +2630,6 @@ async function renderVoteCard(vid,v){
       });
       html+=`</div></div>`;
 
-    } else {
-      // 시작 투표 - 기존 업로드 UI
-      const myImages = v.images?.[myKey] || [];
-      const hasUploaded = myImages.length > 0;
-      if(!isClosed){
-        if(!hasUploaded){
-          html+=`<div style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:10px">`;
-          html+=`<div style="font-size:24px;margin-bottom:6px">📸</div>`;
-          html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer">📎 이미지 선택</button>`;
-          html+=`</div>`;
-        } else {
-          html+=`<div style="text-align:center;margin-bottom:10px"><span class="voted-badge">✅ ${myImages.length}장 업로드 완료</span></div>`;
-          html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-          html+=`<div style="display:flex;gap:6px">`;
-          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">+ 추가 업로드</button>`;
-          html+=`<button onclick="deleteMyImages('${vid}')" style="padding:7px 14px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">🗑️ 삭제</button>`;
-          html+=`</div>`;
-        }
-      }
-      const imagesToShow = isAdmin ? (v.images || {}) : (v.images?.[myKey] ? {[myKey]: v.images[myKey]} : {});
-      if(imagesToShow && Object.keys(imagesToShow).length > 0){
-        const sortedEntries2 = Object.entries(imagesToShow).sort((a,b)=>(a[1][0]?.uploadedAt||0)-(b[1][0]?.uploadedAt||0));
-        html+=`<div style="margin-top:8px">`;
-        sortedEntries2.forEach(([mkey2, imgs2], idx2)=>{
-          if(!imgs2||imgs2.length===0) return;
-          const sortedI = [...imgs2].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
-          html+=`<div style="margin-bottom:10px">`;
-          html+=`<div style="font-size:12px;font-weight:700;margin-bottom:6px">${idx2+1}. ${escH(mkey2)} (${imgs2.length}장)</div>`;
-          html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
-          sortedI.forEach(img=>{
-            html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
-            html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
-            html+=`</div>`;
-          });
-          html+=`</div></div>`;
-        });
-        html+=`</div>`;
-      }
-    }
   } else if(isEndVote) {
     // 완료/마감 투표인데 imageUpload 플래그 없는 경우도 버튼 UI
     const allVotesForImg2 = await dbGet('votes');
