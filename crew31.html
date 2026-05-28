@@ -2538,7 +2538,7 @@ async function renderVoteCard(vid,v){
 
   if(isImageVote || v.imageUpload){
     // 완료 투표 - 시작 투표 참여자 버튼 UI
-    if(isEndVote){
+    if(isEndVote || v.imageUpload){
       const allVotesForImg = await dbGet('votes');
       let startVoters = [];
       if(allVotesForImg && v.group && v.date){
@@ -2697,8 +2697,8 @@ async function renderVoteCard(vid,v){
       html+=`</div></div>`;
     });
     html+=`</div></div>`;
-  } else {
-    // 일반 투표
+  } else if(!v.imageUpload) {
+    // 일반 투표 (imageUpload:true면 여기 안 옴)
     opts.forEach((opt,i)=>{
       const cnt=Object.values(responses).filter(r=>r===i).length;
       const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
