@@ -2438,7 +2438,9 @@ async function loadDeptPage(gid){
   }
   list.forEach(([vid2,v2])=>{
     const isClosed2 = v2.closed||(v2.date&&v2.time&&Date.now()>new Date(v2.date+'T'+v2.time).getTime());
-    const resCount = Object.keys(v2.responses||{}).length;
+    const resCount = v2.imageUpload 
+      ? Object.keys(v2.images||{}).filter(k=>{const imgs=v2.images[k];return imgs&&imgs.length>0&&imgs[0]?.url!=='연차';}).length + Object.keys(v2.images||{}).filter(k=>{const imgs=v2.images[k];return imgs&&imgs.length>0&&imgs[0]?.url==='연차';}).length
+      : Object.keys(v2.responses||{}).length;
     const isEnd2 = (v2.title||'').includes('완료')||v2.imageUpload;
     const badge = isEnd2 ? '🌙' : '🌅';
     html+=`<div style="background:white;border-radius:14px;margin:0 14px 8px;overflow:hidden;border:1px solid var(--border)">`;
