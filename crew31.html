@@ -798,8 +798,19 @@ async function enterApp(){
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
   const lastTab = sessionStorage.getItem('lastTab') || 'notice';
-  try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
-  setTimeout(()=>renderGroupSelectBar(), 500);
+  const savedGroup = localStorage.getItem('lastGroup');
+  const savedTab = localStorage.getItem('lastTab')||'notice';
+  if(savedGroup && groups[savedGroup]){
+    _currentDept = savedGroup;
+    setTimeout(()=>{
+      renderGroupSelectBar();
+      selectGroup(savedGroup);
+      setTimeout(()=>goTab(savedTab),100);
+    },300);
+  } else {
+    try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
+    setTimeout(()=>renderGroupSelectBar(), 500);
+  }
   setTimeout(()=>startNotiPolling(),2000);
   setTimeout(()=>startAutoVoteScheduler(),3000);
   setTimeout(()=>checkExistingPushSub(),3000);
@@ -867,6 +878,7 @@ function renderGroupSelectBar(){
 
 
 function selectGroup(gid){
+  localStorage.setItem('lastGroup',gid);
   if(gid==='all'){
     _currentChatRoom = null;
     clearInterval(window._chatPoll);
@@ -928,6 +940,7 @@ function goTab(tab){
   _currentTab=tab;
   clearInterval(window._chatPoll);
   sessionStorage.setItem('lastTab', tab);
+  if(_currentDept) localStorage.setItem('lastTab', tab);
 
   // 탭바 활성화
   document.querySelectorAll('.tab-item').forEach(b=>{
@@ -3403,6 +3416,12 @@ function excelSerialToDate(serial) {
 }
 
 // 주차 계산 (월요일 기준)
+function getTitleDate(v){
+  const m=(v.title||'').match(/(\d+)월\s*(\d+)일/);
+  if(m){const yr=new Date().getFullYear();return `${yr}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;}
+  return v.date||'';
+}
+
 function getWeekKey(dateStr) {
   const d = new Date(dateStr);
   const day = d.getDay();
