@@ -2564,7 +2564,14 @@ async function renderVoteCard(vid,v){
             if(opt.includes('프패')||opt.includes('연차')||opt.includes('프리패스')) leaveSet.add(nick);
             else if(opt.includes('봉사')||opt.includes('열정페이')) bonusSet.add(nick);
           });
-          totalCount = startVoters.filter(nick=>!bonusSet.has(nick)).length;
+          // 총 인증 수 = 열정페이/봉사 제외, 투피드는 2장
+          const tupideSet = new Set(startVoters.filter(nick=>{
+            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
+            return opt.includes('투피드')||opt.includes('두배');
+          }));
+          totalCount = startVoters.filter(nick=>!bonusSet.has(nick)).reduce((sum,nick)=>{
+            return sum + (tupideSet.has(nick) ? 2 : 1);
+          }, 0);
         }
       }
     }catch(e){}
@@ -2613,7 +2620,7 @@ async function renderVoteCard(vid,v){
       html+=`${escH(nick)}<br><span style="font-size:9px">${label}</span>`;
       html+=`</button>`;
       html+=`<div id="${collapseId}" style="display:none;margin-top:6px">`;
-      if(isMe && !isClosed && canUpload){
+      if(!isClosed && canUpload){
         html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
         if(uploadCount>0){
           html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
