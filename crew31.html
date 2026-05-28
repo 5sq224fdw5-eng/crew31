@@ -2443,8 +2443,8 @@ async function loadDeptPage(gid){
   let html='<div style="padding:14px 0 80px">';
   if(isAdmin){
     html+=`<div style="padding:0 14px 10px;display:flex;gap:8px">`;
-    html+=`<button onclick="openVoteModal(null,'${gid}','start')" style="flex:1;background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌅 업무 시작</button>`;
-    html+=`<button onclick="openVoteModal(null,'${gid}','end')" style="flex:1;background:#f87286;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌙 업무 완료</button>`;
+    html+=`<button onclick="alert('시작버튼');openVoteModal(null,'${gid}','start')" style="flex:1;background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌅 업무 시작</button>`;
+    html+=`<button onclick="alert('완료버튼');openVoteModal(null,'${gid}','end')" style="flex:1;background:#f87286;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌙 업무 완료</button>`;
     html+=`</div>`;
   }
   if(list.length===0){
