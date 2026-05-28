@@ -340,6 +340,16 @@ document.addEventListener('keydown',e=>{
     <div class="fl"><label>부서</label>
       <select class="fi" id="voteGroup"></select>
     </div>
+    <div class="fl">
+      <label>참여 템플릿 <span style="font-size:10px;color:var(--text3)">(선택사항)</span></label>
+      <select class="fi" id="voteTplSel" onchange="applyVoteTemplate(this)">
+        <option value="">템플릿 선택...</option>
+      </select>
+    </div>
+    <div class="fl">
+      <label>참여 멤버 <span style="font-size:10px;color:var(--text3)">(쉼표로 구분)</span></label>
+      <input class="fi" id="voteTplMembers" placeholder="에이스, 불주먹, 고인물">
+    </div>
 
     <div style="display:flex;gap:8px">
       <div class="fl" style="flex:1"><label>날짜</label><input class="fi" id="voteDate" type="date"></div>
@@ -2443,8 +2453,8 @@ async function loadDeptPage(gid){
   let html='<div style="padding:14px 0 80px">';
   if(isAdmin){
     html+=`<div style="padding:0 14px 10px;display:flex;gap:8px">`;
-    html+=`<button onclick="alert('시작버튼');openVoteModal(null,'${gid}','start')" style="flex:1;background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌅 업무 시작</button>`;
-    html+=`<button onclick="alert('완료버튼');openVoteModal(null,'${gid}','end')" style="flex:1;background:#f87286;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌙 업무 완료</button>`;
+    html+=`<button onclick="openVoteModal(null,'${gid}','start')" style="flex:1;background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌅 업무 시작</button>`;
+    html+=`<button onclick="openVoteModal(null,'${gid}','end')" style="flex:1;background:#f87286;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🌙 업무 완료</button>`;
     html+=`</div>`;
   }
   if(list.length===0){
