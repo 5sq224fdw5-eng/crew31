@@ -2536,143 +2536,89 @@ async function renderVoteCard(vid,v){
   html+=`</div></div>`;
   html+=`<div style="padding:12px 14px">`;
 
-  if(v.imageUpload === true){
-    // imageUpload:true → 무조건 버튼 UI (완료 투표)
-      const allVotesForImg = await dbGet('votes');
-      let startVoters = [];
-      if(allVotesForImg && v.group && v.date){
-        const titleDate2 = getTitleDate(v);
-        const startV = Object.values(allVotesForImg).find(sv=>{
-          if(sv.deleted || sv.group!==v.group) return false;
-          if(!(sv.title||'').includes('시작')) return false;
-          // 제목 날짜 매칭
-          const tdate1 = (sv.title||'').match(/(\d+)월\s*(\d+)일/);
-          const tdate2 = (v.title||'').match(/(\d+)월\s*(\d+)일/);
-          if(tdate1 && tdate2) return tdate1[1]===tdate2[1] && tdate1[2]===tdate2[2];
-          return getTitleDate(sv)===titleDate2;
-        });
-        if(startV){
-          const svOpts = startV.options||[];
-          const svResp = startV.responses||{};
-          // 열정페이/봉사 제외, 연차 포함
-          startVoters = Object.keys(svResp).filter(nick=>{
-            const optIdx = svResp[nick];
-            const optText = (svOpts[optIdx]||'').toLowerCase();
-            return !optText.includes('봉사') && !optText.includes('열정페이');
-          });
-        }
-      }
-      // 시작 투표 못 찾으면 이미 업로드한 사람들로 대체
-      if(startVoters.length===0) startVoters = Object.keys(allImages);
-      // 총 인증 필요 수 = 연차 제외한 참여자 수
-      const totalCount = startVoters.filter(nick=>{
-        if(!startV) return true;
-        const svOpts = startV?.options||[];
-        const svResp = startV?.responses||{};
-        const optText = (svOpts[svResp[nick]]||'').toLowerCase();
-        return !optText.includes('연차') && !optText.includes('프패') && !optText.includes('프리패스');
-      }).length;
-      const allImages = v.images||{};
-      const leaveVoters = new Set();
-      // 연차 마커 (더미 이미지) 있는 사람
-      Object.entries(allImages).forEach(([k,imgs])=>{
-        if(imgs && imgs.length>0 && imgs[0]?.url==='연차') leaveVoters.add(k);
-      });
+  if(isImageVote){
+    // ── 완료/마감/이미지 투표: 인증 버튼 UI (참투자 줄당 3명) ──
+    const allImages = v.images || {};
+    const allVotesForImg = await dbGet('votes');
 
-      html+=`<div style="padding:10px 0">`;
-      // 버튼 3개씩 그리드
-      html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">`;
-      startVoters.forEach(nick=>{
-        const myImgs = (allImages[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
-        const uploadCount = myImgs.length;
-        const isLeave = leaveVoters.has(nick);
-        const isDone = isDone2;
-        const isMe2 = nick===myKey;
-        const btnCollapseId = `btnCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
-        // 연차자인지 체크
-        const svOptsX = startV ? (startV.options||[]) : [];
-        const svRespX = startV ? (startV.responses||{}) : {};
-        const leaveOptText = (svOptsX[svRespX[nick]]||'').toLowerCase();
-        const isLeaveVoter = leaveOptText.includes('연차')||leaveOptText.includes('프패')||leaveOptText.includes('프리패스');
-        const subLabel = isLeave || isLeaveVoter ? '(연차)' : `(${uploadCount}/${totalCount})`;
-        const isDone2 = uploadCount>=totalCount || isLeave || isLeaveVoter;
-        const doneBg = '#FF85C1';
-        const emptyBg = 'transparent';
-        const doneBorder = '#FF85C1';
-        const emptyBorder = '#FF85C1';
-        html+=`<div>`;
-        html+=`<button onclick="toggleImgCollapse('${btnCollapseId}')" style="width:100%;padding:10px 4px;border-radius:20px;border:1.5px solid #FF85C1;background:${isDone?doneBg:emptyBg};color:${isDone?'white':'#FF85C1'};font-size:11px;font-weight:700;cursor:pointer;line-height:1.4;text-align:center">${escH(nick)}<br><span style="font-size:9px;opacity:0.85">${subLabel}</span></button>`;
-        html+=`<div id="${btnCollapseId}" style="display:none;margin-top:4px">`;
-        // 내 버튼이면 업로드 폼 표시
-        if(isMe2 && !isClosed && !isLeave){
-          html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-          if(uploadCount>0){
-            html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
-            html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">+ 추가</button>`;
-            html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
-            html+=`</div>`;
-          } else {
-            html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
-          }
-        }
-        // 사진 목록
-        if(myImgs.length>0){
-          const sortedMyImgs = [...myImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
-          html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px">`;
-          sortedMyImgs.forEach(img=>{
-            html+=`<div style="aspect-ratio:9/16;border-radius:6px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
-            html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
-            html+=`</div>`;
-          });
-          html+=`</div>`;
-        }
-        html+=`</div></div>`;
-      });
-      html+=`</div></div>`;
-
-  } else if(isEndVote) {
-    // 완료/마감 투표인데 imageUpload 플래그 없는 경우도 버튼 UI
-    const allVotesForImg2 = await dbGet('votes');
-    let startVoters2 = [];
-    if(allVotesForImg2 && v.group){
-      const tdate = (v.title||'').match(/(\d+)월\s*(\d+)일/);
-      const startV2 = Object.values(allVotesForImg2).find(sv=>{
-        if(sv.deleted||sv.group!==v.group||!(sv.title||'').includes('시작')) return false;
-        if(tdate){const t2=(sv.title||'').match(/(\d+)월\s*(\d+)일/);return t2&&t2[1]===tdate[1]&&t2[2]===tdate[2];}
-        return false;
-      });
-      if(startV2) startVoters2=Object.keys(startV2.responses||{});
+    // 같은 날짜의 시작 투표 찾기
+    let startV = null;
+    if(allVotesForImg && v.group){
+      const tdate2 = (v.title||'').match(/(\d+)월\s*(\d+)일/);
+      const titleDate2 = getTitleDate(v);
+      startV = Object.values(allVotesForImg).find(sv=>{
+        if(!sv || sv.deleted || sv.group!==v.group) return false;
+        if(!(sv.title||'').includes('시작')) return false;
+        const t1 = (sv.title||'').match(/(\d+)월\s*(\d+)일/);
+        if(t1 && tdate2) return t1[1]===tdate2[1] && t1[2]===tdate2[2];
+        return getTitleDate(sv)===titleDate2;
+      }) || null;
     }
-    const allImages2=v.images||{};
-    if(startVoters2.length===0) startVoters2=Object.keys(allImages2);
-    const totalCount2=startVoters2.length;
-    const leaveVoters2=new Set();
-    Object.entries(allImages2).forEach(([k,imgs])=>{if(imgs&&imgs.length>0&&imgs[0]?.url==='연차')leaveVoters2.add(k);});
+
+    const svOpts = startV ? (startV.options||[]) : [];
+    const svResp = startV ? (startV.responses||{}) : {};
+
+    const isLeaveText  = (t)=>{const x=(t||'').toLowerCase();return x.includes('연차')||x.includes('프패')||x.includes('프리패스');};
+    const isExcludeText= (t)=>{const x=(t||'').toLowerCase();return x.includes('봉사')||x.includes('열정페이');};
+
+    // 참투(시작 투표 참여)한 사람 = 명단. 봉사/열정페이 제외, 연차 포함
+    let startVoters = [];
+    if(startV){
+      startVoters = Object.keys(svResp).filter(nick=>!isExcludeText(svOpts[svResp[nick]]));
+    }
+    // 시작 투표 못 찾으면 이미 업로드한 사람들로 대체
+    if(startVoters.length===0) startVoters = Object.keys(allImages);
+
+    // 연차 마커(더미 이미지) 있는 사람
+    const leaveVoters = new Set();
+    Object.entries(allImages).forEach(([k,imgs])=>{
+      if(imgs && imgs.length>0 && imgs[0]?.url==='연차') leaveVoters.add(k);
+    });
+
+    // 총 인증 필요 수 = 연차 제외한 참투자 수
+    const totalCount = startVoters.filter(nick=>{
+      if(!startV) return !leaveVoters.has(nick);
+      return !isLeaveText(svOpts[svResp[nick]]) && !leaveVoters.has(nick);
+    }).length;
+
     html+=`<div style="padding:10px 0">`;
+    // 버튼 3개씩 그리드
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">`;
-    startVoters2.forEach(nick=>{
-      const myImgs2=(allImages2[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
-      const uploadCount2=myImgs2.length;
-      const isLeave2=leaveVoters2.has(nick);
-      const isDone2=uploadCount2>=totalCount2||isLeave2;
-      const isMe3=nick===myKey;
-      const btnCollapseId2=`btnCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
-      const subLabel2=isLeave2?'(연차)':`(${uploadCount2}/${totalCount2})`;
+    startVoters.forEach(nick=>{
+      const myImgs = (allImages[nick]||[]).filter(img=>img?.url && img.url!=='연차');
+      const uploadCount = myImgs.length;
+      const isLeave = leaveVoters.has(nick) || (startV && isLeaveText(svOpts[svResp[nick]]));
+      const isDone  = isLeave || (totalCount>0 && uploadCount>=totalCount) || (totalCount===0 && uploadCount>0);
+      const isMe2   = nick===myKey;
+      const subLabel = isLeave ? '(연차)' : `(${uploadCount}/${totalCount})`;
+      const btnCollapseId = `btnCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
+      const doneBg='#FF85C1', emptyBg='transparent';
+
       html+=`<div>`;
-      html+=`<button onclick="toggleImgCollapse('${btnCollapseId2}')" style="width:100%;padding:10px 4px;border-radius:20px;border:1.5px solid #FF85C1;background:${isDone2?'#FF85C1':'transparent'};color:${isDone2?'white':'#FF85C1'};font-size:11px;font-weight:700;cursor:pointer;line-height:1.4;text-align:center">${escH(nick)}<br><span style="font-size:9px;opacity:0.85">${subLabel2}</span></button>`;
-      html+=`<div id="${btnCollapseId2}" style="display:none;margin-top:4px">`;
-      if(isMe3&&!isClosed&&!isLeave2){
+      html+=`<button onclick="toggleImgCollapse('${btnCollapseId}')" style="width:100%;padding:10px 4px;border-radius:20px;border:1.5px solid #FF85C1;background:${isDone?doneBg:emptyBg};color:${isDone?'white':'#FF85C1'};font-size:11px;font-weight:700;cursor:pointer;line-height:1.4;text-align:center">${escH(nick)}<br><span style="font-size:9px;opacity:0.85">${subLabel}</span></button>`;
+      html+=`<div id="${btnCollapseId}" style="display:none;margin-top:4px">`;
+
+      // 내 버튼이면 업로드 폼 표시
+      if(isMe2 && !isClosed && !isLeave){
         html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-        if(uploadCount2>0){
-          html+=`<div style="display:flex;gap:4px;margin-bottom:6px"><button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">+ 추가</button><button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button></div>`;
-        }else{
+        if(uploadCount>0){
+          html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
+          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">+ 추가</button>`;
+          html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
+          html+=`</div>`;
+        } else {
           html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
         }
       }
-      if(myImgs2.length>0){
-        const sortedI2=[...myImgs2].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+      // 사진 목록 (올린 순)
+      if(myImgs.length>0){
+        const sortedMyImgs = [...myImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
         html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px">`;
-        sortedI2.forEach(img=>{html+=`<div style="aspect-ratio:9/16;border-radius:6px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')"><img src="${img.url}" style="width:100%;height:100%;object-fit:cover"></div>`;});
+        sortedMyImgs.forEach(img=>{
+          html+=`<div style="aspect-ratio:9/16;border-radius:6px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
+          html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
+          html+=`</div>`;
+        });
         html+=`</div>`;
       }
       html+=`</div></div>`;
@@ -3168,6 +3114,19 @@ async function saveMemo(vid){
 async function cancelVote(vid){
   const myKey=CU?.name||CU?.key||'admin';
   const key=CU?.key||'admin';
+
+  // 취소 전 이전 선택지 확인 → 투피드/연차 차감분 복구
+  const v = await dbGet(`votes/${vid}`);
+  const prevOptIdx = v?.responses?.[myKey];
+  if(prevOptIdx !== undefined){
+    const prevOptText = (v.options?.[prevOptIdx]||'').toLowerCase();
+    const wasLeave  = prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
+    const wasTupide = prevOptText.includes('투피드')||prevOptText.includes('두배');
+    if(wasLeave || wasTupide){
+      await restoreGamePerk(v.group, myKey, {leave:wasLeave, tupide:wasTupide});
+    }
+  }
+
   await dbDelete(`votes/${vid}/responses/${myKey}`);
   // 링크도 같이 삭제
   await dbDelete(`votes/${vid}/links/${key}`);
@@ -3177,11 +3136,55 @@ async function cancelVote(vid){
   if(_currentTab==='home'||_currentTab==='dept') loadDeptPage(_currentDept);
 }
 
+// ── 오락실 경품/연차 복구 (취소·선택변경 공용) ──
+async function restoreGamePerk(gid, myKey, {leave=false, tupide=false}={}){
+  try{
+    const gameMembers = await gameGet('members');
+    if(!gameMembers) return;
+    const gName = groups[gid]?.name||'';
+    const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
+      const clean=(m.name||'').replace(/^\*/,'');
+      return clean===(gName+myKey)||clean===myKey||clean.endsWith(myKey);
+    });
+    if(!gameEntry) return;
+    const [gmKey] = gameEntry;
+
+    if(leave){
+      const cur = await gameGet(`memberLeave/${gmKey}`) || 0;
+      await gameSet(`memberLeave/${gmKey}`, cur+1);
+      showToast('↩️ 연차 복구됨');
+    }
+    if(tupide){
+      const prizesRaw = await gameGet(`memberPrizes/${gmKey}`);
+      if(prizesRaw){
+        if(Array.isArray(prizesRaw)){
+          const idx = prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('투피드'));
+          if(idx>=0){
+            prizesRaw[idx]={...prizesRaw[idx],deducted:false,usedDate:null};
+            await gameSet(`memberPrizes/${gmKey}`,prizesRaw);
+            showToast('↩️ 투피드 경품 복구됨');
+          }
+        } else {
+          const found = Object.entries(prizesRaw).find(([k,p])=>p&&p.deducted&&(p.name||'').includes('투피드'));
+          if(found){
+            await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);
+            await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);
+            showToast('↩️ 투피드 경품 복구됨');
+          }
+        }
+      }
+    }
+  }catch(e){ showToast('⚠️ 경품 복구 실패'); }
+}
+
 async function castVote(vid,optIdx){
   const myKey=CU?.name||CU?.key||'admin';
   const v=await dbGet(`votes/${vid}`);
   if(!v){showToast('투표를 찾을 수없습니다');return;}
   if(v.closed){showToast('마감된 투표입니다');return;}
+
+  // 같은 선택지 재클릭 시 중복 차감 방지
+  if(v.responses?.[myKey] === optIdx){ showToast('이미 선택한 항목이에요'); return; }
 
   // 선택지 체크 - 연차/투피드 없으면 막기
   const newOptText = (v.options?.[optIdx]||'').toLowerCase();
