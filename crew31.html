@@ -2539,20 +2539,22 @@ async function renderVoteCard(vid,v){
         if(startV){
           const svOpts=startV.options||[];
           const svResp=startV.responses||{};
-          // 열정페이/봉사 제외한 전체 참여자
-          startVoters = Object.keys(svResp).filter(nick=>{
-            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
-            return !opt.includes('봉사')&&!opt.includes('열정페이');
-          });
-          // 총 인증 수 = 연차 제외
+          // 전체 참여자 (열정페이 포함)
+          startVoters = Object.keys(svResp);
+          // 총 인증 수 = 열정페이/봉사/연차 제외
           totalCount = startVoters.filter(nick=>{
             const opt=(svOpts[svResp[nick]]||'').toLowerCase();
-            return !opt.includes('프패')&&!opt.includes('연차')&&!opt.includes('프리패스');
+            return !opt.includes('봉사')&&!opt.includes('열정페이')&&!opt.includes('프패')&&!opt.includes('연차')&&!opt.includes('프리패스');
           }).length;
           // 연차자 목록
           startVoters._leaveSet = new Set(startVoters.filter(nick=>{
             const opt=(svOpts[svResp[nick]]||'').toLowerCase();
             return opt.includes('프패')||opt.includes('연차')||opt.includes('프리패스');
+          }));
+          // 열정페이/봉사 목록
+          startVoters._bonusSet = new Set(startVoters.filter(nick=>{
+            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
+            return opt.includes('봉사')||opt.includes('열정페이');
           }));
           startVoters._svOpts = svOpts;
           startVoters._svResp = svResp;
@@ -2571,20 +2573,31 @@ async function renderVoteCard(vid,v){
       const isMe = nick===myKey;
       const collapseId = `imgCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
 
-      let fillPct, label, btnStyle;
+      const isBonus = startVoters._bonusSet?.has(nick)||false;
+      let fillPct, label, btnStyle, canUpload;
       if(isLeave){
         fillPct = 100;
         label = '(연차)';
-        btnStyle = `background:#FF85C1;color:white;border:1.5px solid #FF85C1;`;
+        btnStyle = `background:#FFB347;color:white;border:1.5px solid #FFB347;`;
+        canUpload = false;
+      } else if(isBonus){
+        fillPct = totalCount>0 ? Math.min(100, Math.round(uploadCount/totalCount*100)) : 0;
+        label = `열정페이 (${uploadCount}/${totalCount})`;
+        btnStyle = fillPct===100
+          ? `background:#94a3b8;color:white;border:1.5px solid #94a3b8;`
+          : fillPct===0
+            ? `background:transparent;color:#94a3b8;border:1.5px solid #94a3b8;`
+            : `background:linear-gradient(to right,#94a3b8 ${fillPct}%,transparent ${fillPct}%);color:${fillPct>50?'white':'#94a3b8'};border:1.5px solid #94a3b8;`;
+        canUpload = true;
       } else {
         fillPct = totalCount>0 ? Math.min(100, Math.round(uploadCount/totalCount*100)) : 0;
         label = `(${uploadCount}/${totalCount})`;
-        // 그라디언트로 비율 채움
         btnStyle = fillPct===100
           ? `background:#FF85C1;color:white;border:1.5px solid #FF85C1;`
           : fillPct===0
             ? `background:transparent;color:#FF85C1;border:1.5px solid #FF85C1;`
             : `background:linear-gradient(to right,#FF85C1 ${fillPct}%,transparent ${fillPct}%);color:${fillPct>50?'white':'#FF85C1'};border:1.5px solid #FF85C1;`;
+        canUpload = true;
       }
 
       html+=`<div>`;
@@ -2592,7 +2605,7 @@ async function renderVoteCard(vid,v){
       html+=`${escH(nick)}<br><span style="font-size:9px">${label}</span>`;
       html+=`</button>`;
       html+=`<div id="${collapseId}" style="display:none;margin-top:6px">`;
-      if(isMe && !isClosed && !isLeave){
+      if(isMe && !isClosed && canUpload){
         html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
         if(uploadCount>0){
           html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
@@ -2863,41 +2876,6 @@ async function renderVoteCard(vid,v){
           html+=`<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;${bg}">${escH(n)}${tag}</span>`;
         });
         html+=`</div></div>`;
-      }
-    }catch(e){}
-  }
-
-  // 완료 투표 - 전일 시작 투표 참여자 완료 여부 표시
-  if(isEndVote && v.group && v.date){
-    try{
-      const allVotes2 = await dbGet('votes');
-      if(allVotes2){
-        const prevDate = new Date(v.date+'T00:00:00');
-        prevDate.setDate(prevDate.getDate()-1);
-        const prevDateStr = prevDate.toISOString().slice(0,10);
-        // 완료 투표 제목에서 날짜 부분 추출해서 시작 투표 매칭
-        const titleDate = (v.title||'').match(/\d+월 \d+일/)?.[0]||'';
-        const startVote = Object.values(allVotes2).find(sv=>
-          !sv.deleted && sv.group===v.group &&
-          (sv.title||'').includes('시작') &&
-          (titleDate ? (sv.title||'').includes(titleDate) : (sv.date===v.date||sv.date===prevDateStr))
-        );
-        if(startVote && startVote.responses){
-          const startVoters = Object.keys(startVote.responses);
-          const endVoters = new Set(Object.keys(v.responses||{}));
-          // 사진 업로드 또는 연차 마커도 완료로 처리
-          if(v.images) Object.entries(v.images).forEach(([k,imgs])=>{
-            if(imgs && imgs.length>0) endVoters.add(k);
-          });
-          html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding:10px 14px">`;
-          html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">완료 현황</div>`;
-          html+=`<div style="display:flex;flex-wrap:wrap;gap:6px">`;
-          startVoters.forEach(n=>{
-            const done = endVoters.has(n);
-            html+=`<span style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;${done?'background:var(--green);color:white;':'background:transparent;color:var(--text3);border:1.5px solid var(--border);'}">${escH(n)}</span>`;
-          });
-          html+=`</div></div>`;
-        }
       }
     }catch(e){}
   }
