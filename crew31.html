@@ -2483,9 +2483,8 @@ async function toggleVoteDetail(vid){
     el.style.display='block';
     el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
     const v = await dbGet(`votes/${vid}`);
-    showToast(`imageUpload:${v?.imageUpload} title:${(v?.title||'').slice(0,10)}`);
     try{ el.innerHTML = await renderVoteCard(vid, v); }
-    catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
+    catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}<br>${e.stack?.slice(0,200)}</div>`; }
   } else {
     el.style.display='none';
   }
@@ -2507,7 +2506,7 @@ async function renderVoteCard(vid,v){
   const isClosed=v.closed||(deadline&&now>deadline);
   const gName=v.group==='all'?'전체':(groups[v.group]?.name||v.group||'전체');
   const gColor=groups[v.group]?.color||'var(--accent)';
-  const isEndVote = (v.title||'').includes('완료') || (v.title||'').includes('마감');
+  const isEndVote = (v.title||'').includes('완료') || (v.title||'').includes('마감') || v.imageUpload===true;
   const isImageVote = v.imageUpload === true || isEndVote;
 
   let html=`<div class="card" style="margin:0 14px 16px;${isClosed?'opacity:0.75;background:#f8f8f8;':''}">` ;
@@ -2720,8 +2719,8 @@ async function renderVoteCard(vid,v){
       html+=`</div></div>`;
     });
     html+=`</div></div>`;
-  } else if(!v.imageUpload) {
-    // 일반 투표 (imageUpload:true면 여기 안 옴)
+  } else if(!v.imageUpload && !isEndVote) {
+    // 일반 투표만
     opts.forEach((opt,i)=>{
       const cnt=Object.values(responses).filter(r=>r===i).length;
       const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
