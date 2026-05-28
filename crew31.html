@@ -2842,8 +2842,10 @@ async function renderVoteCard(vid,v){
         if(startVote && startVote.responses){
           const startVoters = Object.keys(startVote.responses);
           const endVoters = new Set(Object.keys(v.responses||{}));
-          // 사진 업로드한 사람도 완료로 처리
-          if(v.images) Object.keys(v.images).forEach(k=>endVoters.add(k));
+          // 사진 업로드 또는 연차 마커도 완료로 처리
+          if(v.images) Object.entries(v.images).forEach(([k,imgs])=>{
+            if(imgs && imgs.length>0) endVoters.add(k);
+          });
           html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding:10px 14px">`;
           html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">완료 현황</div>`;
           html+=`<div style="display:flex;flex-wrap:wrap;gap:6px">`;
@@ -3200,9 +3202,14 @@ async function castVote(vid,optIdx){
           const endVid = Object.keys(allVotes3).find(k=>allVotes3[k]===endVote);
           const mondayStr = getWeekKey(titleDate);
           await dbSet(`attendance/${curV.group}/${mondayStr}/${myKey}/${titleDate}`,'프패');
-          // 완료 투표 responses에도 추가 (프패 선택지 인덱스 찾기)
-          const prIdx = (endVote.options||[]).findIndex(o=>(o||'').toLowerCase().includes('프패')||(o||'').includes('연차'));
-          if(prIdx>=0 && endVid) await dbSet(`votes/${endVid}/responses/${myKey}`, prIdx);
+          // 사진 업로드 방식 완료 투표 - images에 연차 마커 추가
+          if(endVote.imageUpload && endVid){
+            await dbSet(`votes/${endVid}/images/${myKey}`, [{url:'연차',uploadedAt:Date.now()}]);
+          } else if(endVid){
+            // 선택지 방식 완료 투표
+            const prIdx = (endVote.options||[]).findIndex(o=>(o||'').toLowerCase().includes('프패')||(o||'').includes('연차'));
+            if(prIdx>=0) await dbSet(`votes/${endVid}/responses/${myKey}`, prIdx);
+          }
         }
       }
     }catch(e){}
