@@ -2921,8 +2921,9 @@ async function deleteMyImages(vid){
   // 출석 기록도 삭제
   const v = await dbGet(`votes/${vid}`);
   if(v && v.group && v.date){
-    const mondayStr = getWeekKey(v.date);
-    await dbDelete(`attendance/${v.group}/${mondayStr}/${CU?.name||myKey}/${v.date}`);
+    const attDate = getTitleDate(v);
+    const mondayStr = getWeekKey(attDate);
+    await dbDelete(`attendance/${v.group}/${mondayStr}/${CU?.name||myKey}/${attDate}`);
   }
   showToast('🗑️ 사진 삭제됨');
   if(_currentTab==='home')loadHome();
@@ -3534,7 +3535,15 @@ async function recordAttendance(vid, optIdx) {
     const isEndVote2 = (v.title||'').includes('완료') || v.imageUpload;
     if(!isStartVote && !isEndVote2) return;
 
-    const date = v.date;
+    // 제목에서 날짜 추출 (예: 5월 27일 → 해당년도 기준)
+    const titleMatch = (v.title||'').match(/(\d+)월\s*(\d+)일/);
+    let date = v.date;
+    if(titleMatch){
+      const now = new Date();
+      const mon = titleMatch[1].padStart(2,'0');
+      const day = titleMatch[2].padStart(2,'0');
+      date = `${now.getFullYear()}-${mon}-${day}`;
+    }
     const mondayStr = getWeekKey(date);
     const myKey = CU?.name || CU?.key || 'guest';
     const optText = (v.options || [])[optIdx] || '';
@@ -3899,207 +3908,193 @@ async function downloadWeekExcel(gid, mondayStr) {
 async function loadSettings(){
   const mb=document.getElementById('mainBody');
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  let html='<div style="padding-bottom:60px">';
 
-  // 오락실 멤버 자동 동기화
-  html+=`<div class="setting-section">`;
-  html+=`<div class="setting-section-title">👥 그룹 멤버 관리</div>`;
-
-  // 독립 멤버 관리 (오락실 미연동 그룹만)
-  const groupMembersData = await dbGet('groupMembers')||{};
-  const gameMembers2 = await gameGet('members')||{};
-  const gameGroupNames = new Set(Object.values(gameMembers2).map(m=>{
-    const name = (m.name||'').replace(/^\*/,'');
-    const matched = Object.values(groups).find(g=>name.startsWith(g.name));
+  // 데이터 미리 로드
+  const [groupMembersData, autoSch, templates, gameMembers2] = await Promise.all([
+    dbGet('groupMembers'),
+    dbGet('autoVoteSchedule'),
+    dbGet('voteTemplates'),
+    gameGet('members')
+  ]);
+  const gmd = groupMembersData||{};
+  const sch = autoSch||{};
+  const tpls = templates||{};
+  const gm2 = gameMembers2||{};
+  const gameGroupNames = new Set(Object.values(gm2).map(m=>{
+    const name=(m.name||'').replace(/^\*/,'');
+    const matched=Object.values(groups).find(g=>name.startsWith(g.name));
     return matched?.name;
   }).filter(Boolean));
-  for(const [gid,g] of Object.entries(groups)){
-    // 오락실에 해당 그룹 멤버가 있으면 스킵
-    if(gameGroupNames.has(g.name)) continue;
-    const gMembers = groupMembersData[gid]||[];
-    html+=`<div style="background:var(--surface2);border-radius:12px;padding:10px 12px;margin-bottom:8px">`;
-    html+=`<div style="font-size:13px;font-weight:700;margin-bottom:8px">${escH(g.name)}</div>`;
-    if(gMembers.length>0){
-      html+=`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">`;
-      gMembers.forEach((m,idx)=>{
-        html+=`<span style="display:flex;align-items:center;gap:4px;background:white;padding:3px 8px;border-radius:20px;font-size:12px;font-weight:600">`;
-        html+=`${escH(m)}<span onclick="removeGroupMember('${gid}',${idx})" style="cursor:pointer;color:var(--red);font-size:10px">✕</span></span>`;
-      });
-      html+=`</div>`;
-    }
-    html+=`<div style="display:flex;gap:6px">`;
-    html+=`<input id="newGMember_${gid}" class="fi" placeholder="닉네임 입력" style="flex:1;font-size:12px;padding:6px 10px">`;
-    html+=`<button onclick="addGroupMember('${gid}')" style="padding:6px 12px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">추가</button>`;
-    html+=`</div></div>`;
+
+  function settingAccordion(id, title, contentHtml){
+    const open = localStorage.getItem('settingOpen_'+id)==='1';
+    return `<div class="setting-section" style="padding:0;overflow:hidden">
+      <div onclick="toggleSettingSection('${id}')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;background:white">
+        <div style="font-size:14px;font-weight:800;color:var(--text2)">${title}</div>
+        <span id="settingArrow_${id}" style="font-size:12px;color:var(--text3);transition:transform 0.2s;display:inline-block;transform:${open?'rotate(180deg)':'rotate(0deg)'}"">▼</span>
+      </div>
+      <div id="settingContent_${id}" style="display:${open?'block':'none'};padding:0 16px 16px">
+        ${contentHtml}
+      </div>
+    </div>`;
   }
 
-  html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">오락실 연동 그룹 전용 · 오락실에 등록된 멤버를 자동으로 불러옵니다.</div>`;
-  html+=`<button class="btn-pri" onclick="syncGameMembers()" style="width:100%;padding:12px">🔄 오락실 연동 멤버 동기화</button>`;
-  html+=`<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
-  html+=`</div>`;
-
-  // 그룹 관리
-  html+=`<div class="setting-section">`;
-  html+=`<div class="setting-section-title">👥 그룹 관리</div>`;
-  // 그룹 추가
-  html+=`<div style="display:flex;gap:8px;margin-bottom:8px">`;
-  html+=`<input id="newGroupName" class="fi" placeholder="새 그룹 이름" style="flex:1;padding:9px 12px;font-size:13px">`;
-  html+=`<button onclick="addGroup()" style="padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer">추가</button>`;
-  html+=`</div>`;
-  html+=`<div style="display:flex;gap:8px;margin-bottom:12px">`;
-  html+=`<div style="flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">🌅 시작투표 마감</div><input id="newGroupStartTime" class="fi" type="time" value="22:00" style="width:100%;padding:8px 10px;font-size:13px"></div>`;
-  html+=`<div style="flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">🌙 완료투표 마감</div><input id="newGroupEndTime" class="fi" type="time" value="13:00" style="width:100%;padding:8px 10px;font-size:13px"></div>`;
-  html+=`</div>`;
-  // 그룹 목록
+  // ── 1. 그룹 관리 ──
+  let grpHtml = '';
+  grpHtml += `<div style="display:flex;gap:8px;margin-bottom:8px">`;
+  grpHtml += `<input id="newGroupName" class="fi" placeholder="새 그룹 이름" style="flex:1;padding:9px 12px;font-size:13px">`;
+  grpHtml += `<button onclick="addGroup()" style="padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer">추가</button>`;
+  grpHtml += `</div>`;
+  grpHtml += `<div style="display:flex;gap:8px;margin-bottom:12px">`;
+  grpHtml += `<div style="flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">🌅 시작투표 마감</div><input id="newGroupStartTime" class="fi" type="time" value="22:00" style="width:100%;padding:8px 10px;font-size:13px"></div>`;
+  grpHtml += `<div style="flex:1"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">🌙 완료투표 마감</div><input id="newGroupEndTime" class="fi" type="time" value="13:00" style="width:100%;padding:8px 10px;font-size:13px"></div>`;
+  grpHtml += `</div>`;
   Object.entries(groups).forEach(([gid,g])=>{
-    html+=`<div class="setting-row">`;
-    html+=`<div><span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
-    html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">🌅 ${g.startTime||'22:00'} 마감 · 🌙 ${g.endTime||'13:00'} 마감</div></div>`;
-    html+=`<div style="display:flex;align-items:center;gap:6px">`;
-    html+=`<input type="number" value="${g.order??''}" placeholder="순서" onchange="setGroupOrder('${gid}',this.value)" style="width:50px;padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px;text-align:center">`;
-    html+=`<button onclick="deleteGroup('${gid}')" style="font-size:11px;padding:4px 12px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;cursor:pointer;font-weight:700">🗑 삭제</button>`;
-    html+=`</div>`;
-    html+=`</div>`;
+    grpHtml += `<div class="setting-row">`;
+    grpHtml += `<div><span style="font-size:14px;font-weight:600">${g.name}</span>`;
+    grpHtml += `<div style="font-size:11px;color:var(--text3);margin-top:2px">🌅 ${g.startTime||'22:00'} · 🌙 ${g.endTime||'13:00'}</div></div>`;
+    grpHtml += `<div style="display:flex;align-items:center;gap:6px">`;
+    grpHtml += `<input type="number" value="${g.order??''}" placeholder="순서" onchange="setGroupOrder('${gid}',this.value)" style="width:50px;padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px;text-align:center">`;
+    grpHtml += `<button onclick="deleteGroup('${gid}')" style="font-size:11px;padding:4px 12px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;cursor:pointer;font-weight:700">🗑</button>`;
+    grpHtml += `</div></div>`;
   });
-  html+=`</div>`;
 
-  // 그룹 진입 잠금
-  html+=`<div class="setting-section">`;
-  html+=`<div class="setting-section-title">🔐 그룹 진입 잠금</div>`;
+  // ── 2. 잠금 설정 ──
+  let lockHtml = '';
+  lockHtml += `<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px">🔐 그룹 진입 잠금</div>`;
   Object.entries(groups).forEach(([gid,g])=>{
-    const gl = g.groupLock;
-    html+=`<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">`;
-    html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
-    html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
-    html+=`<div style="display:flex;gap:6px">`;
+    const gl=g.groupLock;
+    lockHtml += `<div class="setting-row">`;
+    lockHtml += `<span style="font-size:13px;font-weight:600">${g.name}</span>`;
+    lockHtml += `<div style="display:flex;gap:6px">`;
     if(gl){
-      html+=`<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openGroupEntryLockModal('${gid}','unlock')">🔓 해제</button>`;
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupEntryLockModal('${gid}','change')">🔑 변경</button>`;
+      lockHtml += `<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openGroupEntryLockModal('${gid}','unlock')">🔓 해제</button>`;
+      lockHtml += `<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupEntryLockModal('${gid}','change')">🔑 변경</button>`;
     }else{
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupEntryLockModal('${gid}','lock')">🔒 잠금 설정</button>`;
+      lockHtml += `<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupEntryLockModal('${gid}','lock')">🔒 설정</button>`;
     }
-    html+=`</div></div>`;
-    if(gl) html+=`<div style="font-size:12px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px">현재 비번: <b style="color:var(--text)">${escH(String(gl))}</b></div>`;
-    html+=`</div>`;
+    lockHtml += `</div></div>`;
   });
-  html+=`</div>`;
-
-  // 부서 채팅 잠금
-  html+=`<div class="setting-section">`;
-  html+=`<div class="setting-section-title">🔒 부서 채팅 잠금</div>`;
+  lockHtml += `<div style="font-size:12px;font-weight:700;color:var(--text3);margin:12px 0 8px">🔒 채팅 잠금</div>`;
   Object.entries(groups).forEach(([gid,g])=>{
-    const isLocked = g.lock && g.lock !== true && g.lock !== false;
-    html+=`<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">`;
-    html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
-    html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
-    html+=`<div style="display:flex;gap:6px">`;
+    lockHtml += `<div class="setting-row">`;
+    lockHtml += `<span style="font-size:13px;font-weight:600">${g.name}</span>`;
+    lockHtml += `<div style="display:flex;gap:6px">`;
     if(g.lock){
-      html+=`<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openGroupLockModal('${gid}','unlock')">🔓 해제</button>`;
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupLockModal('${gid}','change')">🔑 변경</button>`;
+      lockHtml += `<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openGroupLockModal('${gid}','unlock')">🔓 해제</button>`;
+      lockHtml += `<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupLockModal('${gid}','change')">🔑 변경</button>`;
     }else{
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupLockModal('${gid}','lock')">🔒 잠금 설정</button>`;
+      lockHtml += `<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openGroupLockModal('${gid}','lock')">🔒 설정</button>`;
     }
-    html+=`</div></div>`;
-    if(g.lock){
-      html+=`<div style="font-size:12px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px">현재 비번: <b style="color:var(--text)">${escH(String(g.lock))}</b></div>`;
-    }
-    html+=`</div>`;
+    lockHtml += `</div></div>`;
   });
-  html+=`</div>`;
+  lockHtml += `<div style="font-size:12px;font-weight:700;color:var(--text3);margin:12px 0 8px">👥 멤버 열람 잠금</div>`;
+  Object.entries(groups).forEach(([gid,g])=>{
+    lockHtml += `<div class="setting-row">`;
+    lockHtml += `<span style="font-size:13px;font-weight:600">${g.name}</span>`;
+    lockHtml += `<div style="display:flex;gap:6px">`;
+    if(g.memberLock){
+      lockHtml += `<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openMemberLockModal('${gid}','unlock')">🔓 해제</button>`;
+      lockHtml += `<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openMemberLockModal('${gid}','change')">🔑 변경</button>`;
+    }else{
+      lockHtml += `<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openMemberLockModal('${gid}','lock')">🔒 설정</button>`;
+    }
+    lockHtml += `</div></div>`;
+  });
+  lockHtml += `<div style="font-size:12px;font-weight:700;color:var(--text3);margin:12px 0 8px">🗳️ 투표 열람 잠금</div>`;
+  Object.entries(groups).forEach(([gid,g])=>{
+    lockHtml += `<div class="setting-row">`;
+    lockHtml += `<span style="font-size:13px;font-weight:600">${g.name}</span>`;
+    lockHtml += `<div style="display:flex;gap:6px">`;
+    if(g.voteLock){
+      lockHtml += `<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openVoteLockModal('${gid}','unlock')">🔓 해제</button>`;
+      lockHtml += `<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openVoteLockModal('${gid}','change')">🔑 변경</button>`;
+    }else{
+      lockHtml += `<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openVoteLockModal('${gid}','lock')">🔒 설정</button>`;
+    }
+    lockHtml += `</div></div>`;
+  });
 
-  // 자동 투표 스케줄
-  html+=`<div class="setting-section">`;
-  html+=`<div class="setting-section-title">🤖 자동 투표 생성</div>`;
-  const autoSch = await dbGet('autoVoteSchedule')||{};
-  html+=`<div class="setting-row">`;
-  html+=`<span style="font-size:14px;font-weight:600">자동 생성 활성화</span>`;
-  html+=`<button onclick="toggleAutoVote()" style="padding:6px 16px;border-radius:20px;border:none;cursor:pointer;font-weight:700;font-size:13px;background:${autoSch.enabled?'#FF85C1':'var(--surface2)'};color:${autoSch.enabled?'white':'var(--text3)'}">${autoSch.enabled?'ON':'OFF'}</button>`;
-  html+=`</div>`;
+  // ── 3. 멤버 관리 ──
+  let memberHtml = '';
+  let hasIndependent = false;
   for(const [gid,g] of Object.entries(groups)){
-    const gs = autoSch.groups?.[gid]||{};
-    html+=`<div style="padding:10px 0;border-top:1px solid var(--border)">`;
-    html+=`<div style="font-size:13px;font-weight:700;margin-bottom:8px">${escH(g.name)}</div>`;
-    html+=`<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px">`;
-    html+=`<label>시작투표 생성 <input type="time" value="${gs.startTime||''}" onchange="updateAutoVoteTime('${gid}','startTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
-    html+=`<label>시작투표 마감 <input type="time" value="${gs.startCloseTime||'22:00'}" onchange="updateAutoVoteTime('${gid}','startCloseTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
-    html+=`<label>완료투표 생성 <input type="time" value="${gs.endTime||''}" onchange="updateAutoVoteTime('${gid}','endTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
-    html+=`<label>완료투표 마감 <input type="time" value="${gs.endCloseTime||'13:00'}" onchange="updateAutoVoteTime('${gid}','endCloseTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
-    html+=`</div></div>`;
+    if(gameGroupNames.has(g.name)) continue;
+    hasIndependent = true;
+    const gMembers = gmd[gid]||[];
+    memberHtml += `<div style="background:var(--surface2);border-radius:12px;padding:10px 12px;margin-bottom:8px">`;
+    memberHtml += `<div style="font-size:13px;font-weight:700;margin-bottom:8px">${g.name}</div>`;
+    if(gMembers.length>0){
+      memberHtml += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">`;
+      gMembers.forEach((m,idx)=>{
+        memberHtml += `<span style="display:flex;align-items:center;gap:4px;background:white;padding:3px 8px;border-radius:20px;font-size:12px;font-weight:600">${m}<span onclick="removeGroupMember('${gid}',${idx})" style="cursor:pointer;color:var(--red);font-size:10px">✕</span></span>`;
+      });
+      memberHtml += `</div>`;
+    }
+    memberHtml += `<div style="display:flex;gap:6px">`;
+    memberHtml += `<input id="newGMember_${gid}" class="fi" placeholder="닉네임 입력" style="flex:1;font-size:12px;padding:6px 10px">`;
+    memberHtml += `<button onclick="addGroupMember('${gid}')" style="padding:6px 12px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">추가</button>`;
+    memberHtml += `</div></div>`;
   }
-  html+=`</div>`;
+  if(!hasIndependent) memberHtml += `<div style="font-size:12px;color:var(--text3)">독립 멤버 그룹 없음</div>`;
+  memberHtml += `<div style="font-size:12px;color:var(--text3);margin:12px 0 6px">오락실 연동 그룹 전용</div>`;
+  memberHtml += `<button class="btn-pri" onclick="syncGameMembers()" style="width:100%;padding:12px">🔄 오락실 연동 멤버 동기화</button>`;
+  memberHtml += `<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
 
-  // 투표 템플릿
-  html+=`<div class="setting-section">`;
-  html+=`<div class="setting-section-title">📋 투표 템플릿</div>`;
-  const templates = await dbGet('voteTemplates')||{};
-  Object.entries(templates).forEach(([tid,t])=>{
-    html+=`<div style="background:var(--surface2);border-radius:12px;padding:10px 12px;margin-bottom:8px">`;
-    html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">`;
-    html+=`<span style="font-size:13px;font-weight:700">${escH(t.name||'')}</span>`;
-    html+=`<div style="display:flex;gap:6px">`;
-    html+=`<button onclick="editVoteTemplate('${tid}')" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:11px;cursor:pointer">수정</button>`;
-    html+=`<button onclick="deleteVoteTemplate('${tid}')" style="padding:4px 10px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">삭제</button>`;
-    html+=`</div></div>`;
-    const members2 = (t.members||[]).join(', ');
-    html+=`<div style="font-size:11px;color:var(--text3)">${escH(members2)}</div>`;
-    html+=`</div>`;
+  // ── 4. 자동화 ──
+  let autoHtml = '';
+  autoHtml += `<div class="setting-row">`;
+  autoHtml += `<span style="font-size:14px;font-weight:600">자동 생성 활성화</span>`;
+  autoHtml += `<button onclick="toggleAutoVote()" style="padding:6px 16px;border-radius:20px;border:none;cursor:pointer;font-weight:700;font-size:13px;background:${sch.enabled?'#FF85C1':'var(--surface2)'};color:${sch.enabled?'white':'var(--text3)'};">${sch.enabled?'ON':'OFF'}</button>`;
+  autoHtml += `</div>`;
+  for(const [gid,g] of Object.entries(groups)){
+    const gs=sch.groups?.[gid]||{};
+    autoHtml += `<div style="padding:10px 0;border-top:1px solid var(--border)">`;
+    autoHtml += `<div style="font-size:13px;font-weight:700;margin-bottom:8px">${g.name}</div>`;
+    autoHtml += `<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px">`;
+    autoHtml += `<label>시작 생성 <input type="time" value="${gs.startTime||''}" onchange="updateAutoVoteTime('${gid}','startTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    autoHtml += `<label>시작 마감 <input type="time" value="${gs.startCloseTime||'22:00'}" onchange="updateAutoVoteTime('${gid}','startCloseTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    autoHtml += `<label>완료 생성 <input type="time" value="${gs.endTime||''}" onchange="updateAutoVoteTime('${gid}','endTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    autoHtml += `<label>완료 마감 <input type="time" value="${gs.endCloseTime||'13:00'}" onchange="updateAutoVoteTime('${gid}','endCloseTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    autoHtml += `</div></div>`;
+  }
+
+  // ── 5. 투표 템플릿 ──
+  let tplHtml = '';
+  Object.entries(tpls).forEach(([tid,t])=>{
+    tplHtml += `<div style="background:var(--surface2);border-radius:12px;padding:10px 12px;margin-bottom:8px">`;
+    tplHtml += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">`;
+    tplHtml += `<span style="font-size:13px;font-weight:700">${t.name||''}</span>`;
+    tplHtml += `<div style="display:flex;gap:6px">`;
+    tplHtml += `<button onclick="editVoteTemplate('${tid}')" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:11px;cursor:pointer">수정</button>`;
+    tplHtml += `<button onclick="deleteVoteTemplate('${tid}')" style="padding:4px 10px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">삭제</button>`;
+    tplHtml += `</div></div>`;
+    tplHtml += `<div style="font-size:11px;color:var(--text3)">${(t.members||[]).join(', ')}</div>`;
+    tplHtml += `</div>`;
   });
-  html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
-  html+=`<input id="newTplName" class="fi" placeholder="템플릿 이름" style="flex:1;font-size:13px">`;
-  html+=`<button onclick="addVoteTemplate()" style="padding:8px 14px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">추가</button>`;
-  html+=`</div>`;
-  html+=`<textarea id="newTplMembers" class="fi" placeholder="멤버 (쉼표로 구분, 예: 에이스, 불주먹, 고인물)" style="width:100%;margin-top:6px;height:60px;font-size:12px;resize:none"></textarea>`;
-  html+=`</div>`;
+  tplHtml += `<div style="display:flex;gap:6px;margin-top:8px">`;
+  tplHtml += `<input id="newTplName" class="fi" placeholder="템플릿 이름" style="flex:1;font-size:13px">`;
+  tplHtml += `<button onclick="addVoteTemplate()" style="padding:8px 14px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">추가</button>`;
+  tplHtml += `</div>`;
+  tplHtml += `<textarea id="newTplMembers" class="fi" placeholder="멤버 (쉼표로 구분)" style="width:100%;margin-top:6px;height:60px;font-size:12px;resize:none"></textarea>`;
 
-  // 멤버 열람 잠금
-  html+=`<div class="setting-section">`;
-  html+=`<div class="setting-section-title">👥 멤버 열람 잠금</div>`;
-  Object.entries(groups).forEach(([gid,g])=>{
-    const ml = g.memberLock;
-    const isMLocked = ml && ml !== true && ml !== false;
-    html+=`<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">`;
-    html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
-    html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
-    html+=`<div style="display:flex;gap:6px">`;
-    if(ml){
-      html+=`<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openMemberLockModal('${gid}','unlock')">🔓 해제</button>`;
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openMemberLockModal('${gid}','change')">🔑 변경</button>`;
-    }else{
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openMemberLockModal('${gid}','lock')">🔒 잠금 설정</button>`;
-    }
-    html+=`</div></div>`;
-    if(ml){
-      html+=`<div style="font-size:12px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px">현재 비번: <b style="color:var(--text)">${escH(String(ml))}</b></div>`;
-    }
-    html+=`</div>`;
-  });
-  html+=`</div>`;
+  mb.innerHTML = `<div style="padding-bottom:60px">
+    ${settingAccordion('grp','🏢 그룹 관리',grpHtml)}
+    ${settingAccordion('lock','🔐 잠금 설정',lockHtml)}
+    ${settingAccordion('member','👥 멤버 관리',memberHtml)}
+    ${settingAccordion('auto','🤖 자동화',autoHtml)}
+    ${settingAccordion('tpl','📋 투표 템플릿',tplHtml)}
+  </div>`;
+}
 
-  // 투표 열람 잠금
-  html+=`<div class="setting-section">`;
-  html+=`<div class="setting-section-title">🗳️ 투표 열람 잠금</div>`;
-  Object.entries(groups).forEach(([gid,g])=>{
-    const vl = g.voteLock;
-    html+=`<div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">`;
-    html+=`<div style="display:flex;align-items:center;justify-content:space-between">`;
-    html+=`<span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
-    html+=`<div style="display:flex;gap:6px">`;
-    if(vl){
-      html+=`<button class="btn-sm" style="background:rgba(255,92,92,0.1);color:var(--red)" onclick="openVoteLockModal('${gid}','unlock')">🔓 해제</button>`;
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openVoteLockModal('${gid}','change')">🔑 변경</button>`;
-    }else{
-      html+=`<button class="btn-sm" style="background:rgba(91,155,213,0.1);color:var(--blue)" onclick="openVoteLockModal('${gid}','lock')">🔒 잠금 설정</button>`;
-    }
-    html+=`</div></div>`;
-    if(vl){
-      html+=`<div style="font-size:12px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px">현재 비번: <b style="color:var(--text)">${escH(String(vl))}</b></div>`;
-    }
-    html+=`</div>`;
-  });
-  html+=`</div>`;
-
-  html+='</div>';
-  mb.innerHTML=html;
+function toggleSettingSection(id){
+  const el = document.getElementById('settingContent_'+id);
+  const arrow = document.getElementById('settingArrow_'+id);
+  if(!el) return;
+  const open = el.style.display==='none';
+  el.style.display = open ? 'block' : 'none';
+  if(arrow) arrow.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+  localStorage.setItem('settingOpen_'+id, open?'1':'0');
 }
 
 async function addGroupMember(gid){
