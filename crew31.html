@@ -2506,8 +2506,8 @@ async function renderVoteCard(vid,v){
   const isClosed=v.closed||(deadline&&now>deadline);
   const gName=v.group==='all'?'전체':(groups[v.group]?.name||v.group||'전체');
   const gColor=groups[v.group]?.color||'var(--accent)';
-  const isEndVote = (v.title||'').includes('완료');
-  const isImageVote = v.imageUpload === true || isEndVote; // 완료 투표도 이미지 섹션
+  const isEndVote = (v.title||'').includes('완료') || (v.title||'').includes('마감');
+  const isImageVote = v.imageUpload === true || isEndVote;
 
   let html=`<div class="card" style="margin:0 14px 16px;${isClosed?'opacity:0.75;background:#f8f8f8;':''}">` ;
   html+=`<div style="padding:14px 14px 10px;border-bottom:1px solid var(--border)">`;
