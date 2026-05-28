@@ -340,6 +340,16 @@ document.addEventListener('keydown',e=>{
     <div class="fl"><label>부서</label>
       <select class="fi" id="voteGroup"></select>
     </div>
+    <div class="fl">
+      <label>참여 템플릿 <span style="font-size:10px;color:var(--text3)">(선택사항)</span></label>
+      <select class="fi" id="voteTplSel" onchange="applyVoteTemplate(this)">
+        <option value="">템플릿 선택...</option>
+      </select>
+    </div>
+    <div class="fl">
+      <label>참여 멤버 <span style="font-size:10px;color:var(--text3)">(쉼표로 구분, 없으면 전체)</span></label>
+      <input class="fi" id="voteTplMembers" placeholder="에이스, 불주먹, 고인물">
+    </div>
     <div style="display:flex;gap:8px">
       <div class="fl" style="flex:1"><label>날짜</label><input class="fi" id="voteDate" type="date"></div>
       <div class="fl" style="flex:1"><label>마감시간</label><input class="fi" id="voteTime" type="time" value="22:00"></div>
@@ -2747,6 +2757,46 @@ async function renderVoteCard(vid,v){
   html+=`</div>`; // border-top div 닫기
   } // isEndVote 조건 끝
 
+  // 템플릿 멤버 참여 현황
+  if(v.tplMembers && v.tplMembers.length>0){
+    const voters = Object.keys(v.responses||{});
+    const linkerNicks = [...new Set(Object.values(v.links||{}).map(l=>l.nick).filter(Boolean))];
+    html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding:10px 14px">`;
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">참여 현황</div>`;
+    html+=`<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    v.tplMembers.forEach(n=>{
+      const hasVote = voters.includes(n);
+      const hasLink = linkerNicks.includes(n);
+      const done = hasVote || hasLink;
+      html+=`<span style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;${done?'background:var(--accent);color:white;':'background:transparent;color:var(--text3);border:1.5px solid var(--border);'}">${escH(n)}</span>`;
+    });
+    html+=`</div></div>`;
+  }
+
+  // 시작 투표 - 관리자에게 투표+링크 현황 표시
+  if(!isEndVote && isAdmin && v.group){
+    try{
+      const voters = Object.keys(v.responses||{});
+      const linkers = Object.keys(v.links||{}).map(k=>k.replace(/_[12]$/,'')); // 투피드 _1, _2 제거
+      const linkerNicks = [...new Set(Object.values(v.links||{}).map(l=>l.nick).filter(Boolean))];
+      const allParticipants = [...new Set([...voters, ...linkerNicks])];
+      if(allParticipants.length>0){
+        html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding:10px 14px">`;
+        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">참여 현황 (투표+링크)</div>`;
+        html+=`<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+        allParticipants.forEach(n=>{
+          const hasVote = voters.includes(n);
+          const hasLink = linkerNicks.includes(n);
+          const both = hasVote && hasLink;
+          const bg = both ? 'background:var(--accent);color:white;' : 'background:rgba(255,133,193,0.15);color:var(--accent);border:1.5px solid var(--accent);';
+          const tag = both ? '' : (hasVote ? ' 투표만' : ' 링크만');
+          html+=`<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;${bg}">${escH(n)}${tag}</span>`;
+        });
+        html+=`</div></div>`;
+      }
+    }catch(e){}
+  }
+
   // 완료 투표 - 전일 시작 투표 참여자 완료 여부 표시
   if(isEndVote && v.group && v.date){
     try{
@@ -3126,6 +3176,15 @@ async function openVoteModal(vid, defaultGroup, voteType){
   document.getElementById('editVoteId').value=vid||'';
   const sel=document.getElementById('voteGroup');
   sel.innerHTML=`<option value="all">전체</option>`+Object.entries(groups).map(([id,g])=>`<option value="${id}">${escH(g.name)}</option>`).join('');
+
+  // 템플릿 목록 로드
+  const tplSel = document.getElementById('voteTplSel');
+  if(tplSel){
+    const templates = await dbGet('voteTemplates')||{};
+    tplSel.innerHTML = `<option value="">템플릿 선택...</option>` + Object.entries(templates).map(([tid,t])=>`<option value="${tid}">${escH(t.name||'')}</option>`).join('');
+  }
+  document.getElementById('voteTplMembers').value = '';
+
   if(vid){
     const v=await dbGet(`votes/${vid}`);
     if(v){
@@ -3200,7 +3259,10 @@ async function saveVote(){
   if(!title){showToast('제목을 입력하세요');return;}
   const options=_editOptList.filter(o=>o.trim());
   if(!isImageUpload && options.length<2){showToast('선택지를 2개 이상 입력하세요');return;}
+  const tplMembersRaw = document.getElementById('voteTplMembers')?.value.trim();
+  const tplMembers = tplMembersRaw ? tplMembersRaw.split(',').map(m=>m.trim()).filter(Boolean) : [];
   const data={title,date,time,group,options,createdAt:Date.now(),createdBy:CU.name};
+  if(tplMembers.length>0) data.tplMembers = tplMembers;
   if(isImageUpload) data.imageUpload=true;
   if(vid){
     const existing=await dbGet(`votes/${vid}`);
@@ -3907,6 +3969,29 @@ async function loadSettings(){
   }
   html+=`</div>`;
 
+  // 투표 템플릿
+  html+=`<div class="setting-section">`;
+  html+=`<div class="setting-section-title">📋 투표 템플릿</div>`;
+  const templates = await dbGet('voteTemplates')||{};
+  Object.entries(templates).forEach(([tid,t])=>{
+    html+=`<div style="background:var(--surface2);border-radius:12px;padding:10px 12px;margin-bottom:8px">`;
+    html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">`;
+    html+=`<span style="font-size:13px;font-weight:700">${escH(t.name||'')}</span>`;
+    html+=`<div style="display:flex;gap:6px">`;
+    html+=`<button onclick="editVoteTemplate('${tid}')" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:11px;cursor:pointer">수정</button>`;
+    html+=`<button onclick="deleteVoteTemplate('${tid}')" style="padding:4px 10px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">삭제</button>`;
+    html+=`</div></div>`;
+    const members2 = (t.members||[]).join(', ');
+    html+=`<div style="font-size:11px;color:var(--text3)">${escH(members2)}</div>`;
+    html+=`</div>`;
+  });
+  html+=`<div style="display:flex;gap:6px;margin-top:8px">`;
+  html+=`<input id="newTplName" class="fi" placeholder="템플릿 이름" style="flex:1;font-size:13px">`;
+  html+=`<button onclick="addVoteTemplate()" style="padding:8px 14px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">추가</button>`;
+  html+=`</div>`;
+  html+=`<textarea id="newTplMembers" class="fi" placeholder="멤버 (쉼표로 구분, 예: 에이스, 불주먹, 고인물)" style="width:100%;margin-top:6px;height:60px;font-size:12px;resize:none"></textarea>`;
+  html+=`</div>`;
+
   // 멤버 열람 잠금
   html+=`<div class="setting-section">`;
   html+=`<div class="setting-section-title">👥 멤버 열람 잠금</div>`;
@@ -3956,6 +4041,45 @@ async function loadSettings(){
 
   html+='</div>';
   mb.innerHTML=html;
+}
+
+async function addVoteTemplate(){
+  const name = document.getElementById('newTplName')?.value.trim();
+  const membersRaw = document.getElementById('newTplMembers')?.value.trim();
+  if(!name){showToast('템플릿 이름을 입력하세요');return;}
+  const members2 = membersRaw ? membersRaw.split(',').map(m=>m.trim()).filter(Boolean) : [];
+  await dbPush('voteTemplates',{name,members:members2});
+  showToast('✅ 템플릿 추가됨');
+  loadSettings();
+}
+
+async function deleteVoteTemplate(tid){
+  if(!confirm('템플릿을 삭제할까요?'))return;
+  await dbDelete(`voteTemplates/${tid}`);
+  showToast('🗑️ 템플릿 삭제됨');
+  loadSettings();
+}
+
+async function editVoteTemplate(tid){
+  const t = await dbGet(`voteTemplates/${tid}`);
+  if(!t)return;
+  const name = prompt('템플릿 이름', t.name||'');
+  if(name===null)return;
+  const membersRaw = prompt('멤버 (쉼표로 구분)', (t.members||[]).join(', '));
+  if(membersRaw===null)return;
+  const members2 = membersRaw.split(',').map(m=>m.trim()).filter(Boolean);
+  await dbSet(`voteTemplates/${tid}`,{name,members:members2});
+  showToast('✅ 템플릿 수정됨');
+  loadSettings();
+}
+
+async function applyVoteTemplate(sel){
+  const tid = sel.value;
+  if(!tid)return;
+  const t = await dbGet(`voteTemplates/${tid}`);
+  if(!t)return;
+  document.getElementById('voteTplMembers').value = (t.members||[]).join(', ');
+  showToast(`📋 ${t.name} 템플릿 적용됨`);
 }
 
 function openGroupEntryLockModal(gid, action){
