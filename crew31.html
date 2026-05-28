@@ -3183,6 +3183,31 @@ async function castVote(vid,optIdx){
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   showToast('✅ 투표 완료!');
   await recordAttendance(vid, optIdx);
+
+  // 연차 선택 시 → 같은 날짜 완료 투표에도 자동 기록
+  if(isLeaveOpt){
+    try{
+      const curV = await dbGet(`votes/${vid}`);
+      const titleDate = getTitleDate(curV||{});
+      const allVotes3 = await dbGet('votes');
+      if(allVotes3 && curV){
+        const endVote = Object.values(allVotes3).find(sv=>
+          !sv.deleted && sv.group===curV.group &&
+          (sv.title||'').includes('완료') &&
+          getTitleDate(sv)===titleDate
+        );
+        if(endVote){
+          const endVid = Object.keys(allVotes3).find(k=>allVotes3[k]===endVote);
+          const mondayStr = getWeekKey(titleDate);
+          await dbSet(`attendance/${curV.group}/${mondayStr}/${myKey}/${titleDate}`,'프패');
+          // 완료 투표 responses에도 추가 (프패 선택지 인덱스 찾기)
+          const prIdx = (endVote.options||[]).findIndex(o=>(o||'').toLowerCase().includes('프패')||(o||'').includes('연차'));
+          if(prIdx>=0 && endVid) await dbSet(`votes/${endVid}/responses/${myKey}`, prIdx);
+        }
+      }
+    }catch(e){}
+  }
+
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
