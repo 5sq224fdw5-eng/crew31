@@ -3088,12 +3088,64 @@ async function saveMemo(vid){
 async function cancelVote(vid){
   const myKey=CU?.name||CU?.key||'admin';
   const key=CU?.key||'admin';
+  const v=await dbGet(`votes/${vid}`);
+
+  // 취소 전 선택지 확인해서 연차/투피드 복구
+  if(v && v.responses?.[myKey]!==undefined){
+    const prevOptText=(v.options?.[v.responses[myKey]]||'').toLowerCase();
+    const wasLeave=prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
+    const wasTupide=prevOptText.includes('투피드')||prevOptText.includes('두배');
+
+    if(wasLeave){
+      try{
+        const gameMembers=await gameGet('members');
+        if(gameMembers){
+          const gName=groups[v.group]?.name||'';
+          const gameEntry=Object.entries(gameMembers).find(([k,m])=>{
+            const clean=(m.name||'').replace(/^\*/,'');
+            return clean===(gName+myKey)||clean===myKey;
+          });
+          if(gameEntry){
+            const cur=await gameGet(`memberLeave/${gameEntry[0]}`)||0;
+            await gameSet(`memberLeave/${gameEntry[0]}`,cur+1);
+            showToast('↩️ 연차 복구됨');
+          }
+        }
+      }catch(e){}
+    }
+
+    if(wasTupide){
+      try{
+        const gameMembers=await gameGet('members');
+        if(gameMembers){
+          const gName=groups[v.group]?.name||'';
+          const gameEntry=Object.entries(gameMembers).find(([k,m])=>{
+            const clean=(m.name||'').replace(/^\*/,'');
+            return clean===(gName+myKey)||clean===myKey;
+          });
+          if(gameEntry){
+            const prizesRaw=await gameGet(`memberPrizes/${gameEntry[0]}`);
+            if(prizesRaw){
+              if(Array.isArray(prizesRaw)){
+                const idx=prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('투피드'));
+                if(idx>=0){prizesRaw[idx]={...prizesRaw[idx],deducted:false,usedDate:null};await gameSet(`memberPrizes/${gameEntry[0]}`,prizesRaw);showToast('↩️ 투피드 복구됨');}
+              } else {
+                const found=Object.entries(prizesRaw).find(([k,p])=>p&&p.deducted&&(p.name||'').includes('투피드'));
+                if(found){await gameSet(`memberPrizes/${gameEntry[0]}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gameEntry[0]}/${found[0]}/usedDate`,null);showToast('↩️ 투피드 복구됨');}
+              }
+            }
+          }
+        }
+      }catch(e){}
+    }
+  }
+
   await dbDelete(`votes/${vid}/responses/${myKey}`);
   // 링크도 같이 삭제
   await dbDelete(`votes/${vid}/links/${key}`);
   await dbDelete(`votes/${vid}/links/${key}_1`);
   await dbDelete(`votes/${vid}/links/${key}_2`);
-  showToast('투표 취소됨');
+  if(!wasLeave && !wasTupide) showToast('투표 취소됨');
   if(_currentTab==='home'||_currentTab==='dept') loadDeptPage(_currentDept);
 }
 
