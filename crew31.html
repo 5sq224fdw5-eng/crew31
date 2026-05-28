@@ -2793,14 +2793,14 @@ async function renderVoteCard(vid,v){
         // 첫 번째 링크에서 닉네임/아이디/배지
         const firstLink = entry.links[0];
         const linkType = firstLink.type||'normal';
-        const badgeText = linkType==='tupide'?'투피드':linkType==='bonus'?'열정페이':'';
+        const badgeText = linkType==='tupide'?'투피드':linkType==='bonus'?'열정페이':linkType==='leave'?'연차':'';
         html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">`;
         html+=`<div style="display:flex;align-items:center;gap:4px">`;
         html+=`<span style="font-size:11px;color:var(--text3)">${num++}.</span>`;
         html+=`<span style="font-size:13px;font-weight:700">${escH(firstLink.nick||'')}</span>`;
         if(firstLink.id) html+=`<span style="font-size:12px;color:var(--text3)">@${escH(firstLink.id)}</span>`;
         html+=`</div>`;
-        if(badgeText) html+=`<span style="background:${linkType==='tupide'?'#FF85C1':'#94a3b8'};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${badgeText}</span>`;
+        if(badgeText) html+=`<span style="background:${linkType==='tupide'?'#FF85C1':linkType==='leave'?'#FFB347':'#94a3b8'};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${badgeText}</span>`;
         html+=`</div>`;
         entry.links.forEach(l=>{
           html+=`<div style="margin-bottom:2px">`;
@@ -2819,8 +2819,10 @@ async function renderVoteCard(vid,v){
     html+=`<div style="margin-top:10px">`;
     html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
     html+=`<select id="linkType_${vid}" onchange="onLinkTypeChange('${vid}')" style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<option value="">선택 안함</option>`;
     html+=`<option value="normal">노피드</option>`;
     html+=`<option value="bonus">열정페이</option>`;
+    html+=`<option value="leave">연차</option>`;
     html+=`<option value="tupide">투피드</option>`;
     html+=`</select>`;
     html+=`<input id="linkId_${vid}" placeholder="@아이디" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
