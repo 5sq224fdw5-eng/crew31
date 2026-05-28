@@ -859,7 +859,13 @@ function renderGroupSelectBar(){
   let html = '';
   const allActive = !_currentDept;
   html += `<button onclick="selectGroup('all')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:${allActive?'#FF85C1':'#f8f0f5'};color:${allActive?'white':'#999'}">전체</button>`;
-  Object.entries(groups).forEach(([gid,g])=>{
+  // order 필드 기준 정렬, 없으면 키 순
+  const sortedGroups = Object.entries(groups).sort((a,b)=>{
+    const oa = a[1].order ?? 999;
+    const ob = b[1].order ?? 999;
+    return oa - ob;
+  });
+  sortedGroups.forEach(([gid,g])=>{
     const active = _currentDept===gid;
     const locked = (g.groupLock && CU?.role!=='admin' && !localStorage.getItem('groupUnlocked_'+gid));
     html += `<button onclick="selectGroup('${gid}')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:${active?(g.color||'#FF85C1'):'#f8f0f5'};color:${active?'white':'#999'}">${locked?'🔒 ':''}${escH(g.name)}</button>`;
@@ -3941,7 +3947,10 @@ async function loadSettings(){
     html+=`<div class="setting-row">`;
     html+=`<div><span style="font-size:14px;font-weight:600">${escH(g.name)}</span>`;
     html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">🌅 ${g.startTime||'22:00'} 마감 · 🌙 ${g.endTime||'13:00'} 마감</div></div>`;
+    html+=`<div style="display:flex;align-items:center;gap:6px">`;
+    html+=`<input type="number" value="${g.order??''}" placeholder="순서" onchange="setGroupOrder('${gid}',this.value)" style="width:50px;padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px;text-align:center">`;
     html+=`<button onclick="deleteGroup('${gid}')" style="font-size:11px;padding:4px 12px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;cursor:pointer;font-weight:700">🗑 삭제</button>`;
+    html+=`</div>`;
     html+=`</div>`;
   });
   html+=`</div>`;
@@ -4169,6 +4178,14 @@ async function updateAutoVoteTime(gid, field, val){
   await dbSet(`autoVoteSchedule/groups/${gid}/${field}`, val);
   await dbSet(`autoVoteSchedule/groups/${gid}/enabled`, true);
   showToast('✅ 저장됨');
+}
+
+async function setGroupOrder(gid, val){
+  const order = parseInt(val);
+  await dbSet(`groups/${gid}/order`, isNaN(order) ? null : order);
+  groups[gid].order = isNaN(order) ? undefined : order;
+  renderGroupSelectBar();
+  showToast('✅ 순서 저장됨');
 }
 
 async function addGroup(){
