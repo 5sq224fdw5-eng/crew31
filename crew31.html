@@ -2488,7 +2488,7 @@ async function renderVoteCard(vid,v){
   const gName=v.group==='all'?'전체':(groups[v.group]?.name||v.group||'전체');
   const gColor=groups[v.group]?.color||'var(--accent)';
   const isEndVote = (v.title||'').includes('완료') || (v.title||'').includes('마감') || v.imageUpload===true;
-  const isImageVote = v.imageUpload === true || isEndVote;
+  const isImageVote = v.imageUpload === true;
 
   let html=`<div class="card" style="margin:0 14px 16px;${isClosed?'opacity:0.75;background:#f8f8f8;':''}">` ;
   html+=`<div style="padding:14px 14px 10px;border-bottom:1px solid var(--border)">`;
@@ -2529,7 +2529,8 @@ async function renderVoteCard(vid,v){
       if(allVotes && v.group){
         const titleDate = getTitleDate(v);
         const startV = Object.values(allVotes).find(sv=>{
-          if(sv.deleted||sv.group!==v.group||!(sv.title||'').includes('시작')) return false;
+          if(sv.deleted||sv.group!==v.group) return false;
+          if(!(sv.title||'').includes('시작')&&!(sv.title||'').includes('참여')) return false;
           const t1=(sv.title||'').match(/(\d+)월\s*(\d+)일/);
           const t2=(v.title||'').match(/(\d+)월\s*(\d+)일/);
           if(t1&&t2) return t1[1]===t2[1]&&t1[2]===t2[2];
