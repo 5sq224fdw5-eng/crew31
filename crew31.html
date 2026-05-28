@@ -2430,6 +2430,7 @@ async function loadHome(){
 // ── DEPT PAGE ──
 // ══════════════════════════════════════════════
 async function loadDeptPage(gid){
+  try{
   const mb=document.getElementById('mainBody');
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   const isAdmin=CU?.role==='admin';
@@ -2468,6 +2469,7 @@ async function loadDeptPage(gid){
   });
   html+='</div>';
   mb.innerHTML=html;
+  }catch(e){console.error('loadDeptPage error',e);mb.innerHTML='<div style="padding:20px;color:red">오류: '+e.message+'</div>';}
 }
 
 async function toggleVoteDetail(vid){
