@@ -2518,47 +2518,102 @@ async function renderVoteCard(vid,v){
   html+=`<div style="padding:12px 14px">`;
 
   if(isImageVote){
-    // 이미지 업로드 투표
-    const myImages = v.images?.[myKey] || [];
-    const hasUploaded = myImages.length > 0;
-    if(!isClosed){
-      if(!hasUploaded){
-        html+=`<div style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:10px">`;
-        html+=`<div style="font-size:24px;margin-bottom:6px">📸</div>`;
-        html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-        html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer">📎 이미지 선택</button>`;
-        html+=`</div>`;
+    // 이미지 업로드 투표 - 시작 투표 참여자 버튼 목록
+    const allImages = v.images||{};
+
+    // 같은 날짜 시작 투표 찾기
+    let startVoters = [];
+    let totalCount = 0;
+    try{
+      const allVotes = await dbGet('votes');
+      if(allVotes && v.group){
+        const titleDate = getTitleDate(v);
+        const startV = Object.values(allVotes).find(sv=>{
+          if(sv.deleted||sv.group!==v.group||!(sv.title||'').includes('시작')) return false;
+          const t1=(sv.title||'').match(/(\d+)월\s*(\d+)일/);
+          const t2=(v.title||'').match(/(\d+)월\s*(\d+)일/);
+          if(t1&&t2) return t1[1]===t2[1]&&t1[2]===t2[2];
+          return getTitleDate(sv)===titleDate;
+        });
+        if(startV){
+          const svOpts=startV.options||[];
+          const svResp=startV.responses||{};
+          // 열정페이/봉사 제외한 전체 참여자
+          startVoters = Object.keys(svResp).filter(nick=>{
+            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
+            return !opt.includes('봉사')&&!opt.includes('열정페이');
+          });
+          // 총 인증 수 = 연차 제외
+          totalCount = startVoters.filter(nick=>{
+            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
+            return !opt.includes('프패')&&!opt.includes('연차')&&!opt.includes('프리패스');
+          }).length;
+          // 연차자 목록
+          startVoters._leaveSet = new Set(startVoters.filter(nick=>{
+            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
+            return opt.includes('프패')||opt.includes('연차')||opt.includes('프리패스');
+          }));
+          startVoters._svOpts = svOpts;
+          startVoters._svResp = svResp;
+        }
+      }
+    }catch(e){}
+
+    if(startVoters.length===0) startVoters = Object.keys(allImages);
+    if(totalCount===0) totalCount = startVoters.length;
+
+    html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 0">`;
+    startVoters.forEach(nick=>{
+      const isLeave = startVoters._leaveSet?.has(nick)||false;
+      const imgs = (allImages[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
+      const uploadCount = imgs.length;
+      const isMe = nick===myKey;
+      const collapseId = `imgCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
+
+      let fillPct, label, btnStyle;
+      if(isLeave){
+        fillPct = 100;
+        label = '(연차)';
+        btnStyle = `background:#FF85C1;color:white;border:1.5px solid #FF85C1;`;
       } else {
-        html+=`<div style="text-align:center;margin-bottom:10px"><span class="voted-badge">✅ ${myImages.length}장 업로드 완료</span></div>`;
+        fillPct = totalCount>0 ? Math.min(100, Math.round(uploadCount/totalCount*100)) : 0;
+        label = `(${uploadCount}/${totalCount})`;
+        // 그라디언트로 비율 채움
+        btnStyle = fillPct===100
+          ? `background:#FF85C1;color:white;border:1.5px solid #FF85C1;`
+          : fillPct===0
+            ? `background:transparent;color:#FF85C1;border:1.5px solid #FF85C1;`
+            : `background:linear-gradient(to right,#FF85C1 ${fillPct}%,transparent ${fillPct}%);color:${fillPct>50?'white':'#FF85C1'};border:1.5px solid #FF85C1;`;
+      }
+
+      html+=`<div>`;
+      html+=`<button onclick="toggleImgCollapse('${collapseId}')" style="width:100%;padding:8px 4px;border-radius:20px;${btnStyle}font-size:11px;font-weight:700;cursor:pointer;line-height:1.5;text-align:center">`;
+      html+=`${escH(nick)}<br><span style="font-size:9px">${label}</span>`;
+      html+=`</button>`;
+      html+=`<div id="${collapseId}" style="display:none;margin-top:6px">`;
+      if(isMe && !isClosed && !isLeave){
         html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-        html+=`<div style="display:flex;gap:6px">`;
-        html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">+ 추가 업로드</button>`;
-        html+=`<button onclick="deleteMyImages('${vid}')" style="padding:7px 14px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">🗑️ 삭제</button>`;
+        if(uploadCount>0){
+          html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
+          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">수정</button>`;
+          html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
+          html+=`</div>`;
+        } else {
+          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
+        }
+      }
+      if(imgs.length>0){
+        const sorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+        html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px">`;
+        sorted.forEach(img=>{
+          const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_200/') : img.url;
+          html+=`<div style="aspect-ratio:9/16;border-radius:6px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+        });
         html+=`</div>`;
       }
-    }
-    const imagesToShow = isAdmin ? (v.images||{}) : (v.images?.[myKey]?{[myKey]:v.images[myKey]}:{});
-    if(Object.keys(imagesToShow).length>0){
-      const sortedEntries = Object.entries(imagesToShow).sort((a,b)=>(a[1][0]?.uploadedAt||0)-(b[1][0]?.uploadedAt||0));
-      html+=`<div style="margin-top:8px">`;
-      sortedEntries.forEach(([mkey2,imgs2],idx2)=>{
-        if(!imgs2||imgs2.length===0)return;
-        const realImgs = imgs2.filter(img=>img?.url&&img.url!=='연차');
-        if(realImgs.length===0)return;
-        const collapseId2 = `imgCollapse_${vid}_${btoa(encodeURIComponent(mkey2)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
-        html+=`<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">`;
-        html+=`<div onclick="toggleImgCollapse('${collapseId2}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;background:var(--surface2)">`;
-        html+=`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:13px;font-weight:700">${idx2+1}. ${escH(mkey2)}</span><span style="font-size:11px;color:var(--text3)">(${realImgs.length}장)</span></div><span>▼</span>`;
-        html+=`</div>`;
-        html+=`<div id="${collapseId2}" style="display:none;padding:8px">`;
-        html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
-        [...realImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0)).forEach(img=>{
-          html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')"><img src="${img.url}" style="width:100%;height:100%;object-fit:cover"></div>`;
-        });
-        html+=`</div></div></div>`;
-      });
-      html+=`</div>`;
-    }
+      html+=`</div></div>`;
+    });
+    html+=`</div>`;
 
   } else if(!v.imageUpload) {
     // 일반 투표만
