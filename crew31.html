@@ -2582,12 +2582,12 @@ async function renderVoteCard(vid,v){
     if(totalCount===0) totalCount = startVoters.length;
 
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 0">`;
-    startVoters.forEach(nick=>{
+    startVoters.forEach((nick, idx)=>{
       const isLeave = leaveSet.has(nick);
       const sanitizedNick = nick.replace(/[\.#$\/\[\]\s]/g, '_');
       const imgs = (allImages[sanitizedNick]||allImages[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
       const uploadCount = imgs.length;
-      const collapseId = `imgCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
+      const collapseId = `imgCollapse_${vid}_${idx}`;
       const isBonus = bonusSet.has(nick);
       let fillPct, label, btnStyle, canUpload;
       if(isLeave){
@@ -3125,26 +3125,35 @@ async function uploadImages(vid, input){
   const expireAt = expire.getTime();
 
   const uploaded = [];
-  for(const file of files){
+  const uploadOne = async (file, retry=0) => {
+    if(file.size > 10 * 1024 * 1024){ showToast(`${file.name} 10MB 초과`); return null; }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('upload_preset', CLOUDINARY_PRESET);
+    fd.append('folder', `crew31/${vid}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(()=>controller.abort(), 30000);
     try{
-      // 파일 크기 체크 (10MB 초과 시 안내)
-      if(file.size > 10 * 1024 * 1024){
-        showToast(`${file.name} 파일이 너무 커요 (10MB 이하만 가능)`);
-        continue;
-      }
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('upload_preset', CLOUDINARY_PRESET);
-      fd.append('folder', `crew31/${vid}`);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {method:'POST', body:fd});
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {method:'POST', body:fd, signal:controller.signal});
+      clearTimeout(timeout);
       const data = await res.json();
       if(data.secure_url){
-        const optimUrl = data.secure_url.replace('/upload/','/upload/q_auto,f_auto,w_600/'); uploaded.push({url: optimUrl, publicId: data.public_id, uploadedAt: Date.now(), expireAt});
+        const optimUrl = data.secure_url.replace('/upload/','/upload/q_auto,f_auto,w_600/');
+        return {url:optimUrl, publicId:data.public_id, uploadedAt:Date.now(), expireAt};
       } else {
+        if(retry < 2) return await uploadOne(file, retry+1);
         showToast(`업로드 오류: ${data.error?.message||'알 수 없는 오류'}`);
+        return null;
       }
-    }catch(e){ console.error('upload error', e); }
-  }
+    }catch(e){
+      clearTimeout(timeout);
+      if(retry < 2) return await uploadOne(file, retry+1);
+      showToast(e.name==='AbortError'?'업로드 시간 초과':`업로드 실패: ${e.message}`);
+      return null;
+    }
+  };
+  const results = await Promise.all(files.map(f=>uploadOne(f)));
+  uploaded.push(...results.filter(Boolean));
 
   if(uploaded.length === 0){ showToast('업로드 실패'); return; }
 
