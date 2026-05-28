@@ -2564,7 +2564,7 @@ async function renderVoteCard(vid,v){
             if(opt.includes('프패')||opt.includes('연차')||opt.includes('프리패스')) leaveSet.add(nick);
             else if(opt.includes('봉사')||opt.includes('열정페이')) bonusSet.add(nick);
           });
-          totalCount = startVoters.filter(nick=>!leaveSet.has(nick)&&!bonusSet.has(nick)).length;
+          totalCount = startVoters.filter(nick=>!bonusSet.has(nick)).length;
         }
       }
     }catch(e){}
