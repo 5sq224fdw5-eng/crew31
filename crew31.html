@@ -807,14 +807,26 @@ async function enterApp(){
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
   const lastTab = sessionStorage.getItem('lastTab') || 'notice';
-  try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
-  setTimeout(()=>{
-    renderGroupSelectBar();
-    const lastGroup = localStorage.getItem('lastGroup');
-    if(lastGroup && lastGroup!=='all' && groups[lastGroup]){
-      selectGroup(lastGroup);
-    }
-  }, 600);
+  const savedGroup = localStorage.getItem('lastGroup');
+  const savedTab = localStorage.getItem('lastTab')||'notice';
+  if(savedGroup && savedGroup!=='all' && groups[savedGroup]){
+    _currentDept = savedGroup;
+    _currentTab = savedTab;
+    try{
+      document.querySelectorAll('.tab-item').forEach(b=>b.classList.toggle('active',b.dataset&&b.dataset.tab===savedTab));
+      renderGroupSelectBar();
+      if(savedTab==='notice') loadNoticePage();
+      else if(savedTab==='home') loadDeptPage(savedGroup);
+      else if(savedTab==='chat'){_currentChatRoom=null;loadChatTab();}
+      else if(savedTab==='members') loadMembersPage();
+      else if(savedTab==='calendar') renderCalendar();
+      else if(savedTab==='leave') loadLeave();
+      else goTab(savedTab);
+    }catch(e){goTab('notice');}
+  } else {
+    try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
+    setTimeout(()=>renderGroupSelectBar(), 500);
+  }
   setTimeout(()=>startNotiPolling(),2000);
   setTimeout(()=>startAutoVoteScheduler(),3000);
   setTimeout(()=>checkExistingPushSub(),3000);
@@ -883,6 +895,7 @@ function renderGroupSelectBar(){
 
 function selectGroup(gid){
   localStorage.setItem('lastGroup', gid);
+  localStorage.setItem('lastTab', 'notice');
   if(gid==='all'){
     _currentChatRoom = null;
     clearInterval(window._chatPoll);
@@ -944,6 +957,7 @@ function goTab(tab){
   _currentTab=tab;
   clearInterval(window._chatPoll);
   sessionStorage.setItem('lastTab', tab);
+  localStorage.setItem('lastTab', tab);
 
   // 탭바 활성화
   document.querySelectorAll('.tab-item').forEach(b=>{
@@ -2452,9 +2466,37 @@ async function loadDeptPage(gid){
   if(list.length===0){
     mb.innerHTML=html+'<div class="empty"><div class="empty-icon">📋</div>이 부서의 투표가 없습니다</div></div>';return;
   }
-  for(const [vid,v] of list){try{html+=await renderVoteCard(vid,v);}catch(e){console.error("renderVoteCard error",vid,e);html+=`<div class="card" style="margin:0 14px 16px;padding:14px;color:red">투표 로딩 오류: ${e.message}</div>`;}}
+  // 투표 리스트 먼저 표시
+  html+=`<div style="padding:0 14px 10px">`;
+  list.forEach(([vid2,v2])=>{
+    const isClosed2 = v2.closed||false;
+    const resCount = Object.keys(v2.responses||{}).length;
+    const isEnd2 = (v2.title||'').includes('완료');
+    html+=`<div onclick="toggleVoteDetail('${vid2}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:white;border-radius:12px;margin-bottom:6px;cursor:pointer;border:1px solid var(--border)">`;
+    html+=`<div>`;
+    html+=`<div style="font-size:13px;font-weight:700">${escH(v2.title||'')}</div>`;
+    html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">${isClosed2?'🔒 마감':'⏰ 진행중'} · ${resCount}명 참여 · ${v2.date||''} ${v2.time||''}</div>`;
+    html+=`</div><span style="color:var(--text3);font-size:12px">▼</span>`;
+    html+=`</div>`;
+    html+=`<div id="voteDetail_${vid2}" style="display:none;margin-bottom:10px"></div>`;
+  });
+  html+=`</div>`;
   html+='</div>';
   mb.innerHTML=html;
+}
+
+async function toggleVoteDetail(vid){
+  const el = document.getElementById(`voteDetail_${vid}`);
+  if(!el) return;
+  if(el.style.display==='none'){
+    el.style.display='block';
+    el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+    const v = await dbGet(`votes/${vid}`);
+    try{ el.innerHTML = await renderVoteCard(vid, v); }
+    catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
+  } else {
+    el.style.display='none';
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -2504,84 +2546,111 @@ async function renderVoteCard(vid,v){
   html+=`<div style="padding:12px 14px">`;
 
   if(isImageVote || v.imageUpload){
-    // 이미지 업로드 투표
-    const myImages = v.images?.[myKey] || [];
-    const hasUploaded = myImages.length > 0;
-
-    if(!isClosed){
-      if(!hasUploaded){
-        html+=`<div style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:10px">`;
-        html+=`<div style="font-size:24px;margin-bottom:6px">📸</div>`;
-        html+=`<div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px">이미지를 업로드하세요</div>`;
-        html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-        html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer">📎 이미지 선택</button>`;
-        html+=`</div>`;
-      } else {
-        html+=`<div style="text-align:center;margin-bottom:10px"><span class="voted-badge">✅ ${myImages.length}장 업로드 완료</span></div>`;
-        html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-        html+=`<div style="display:flex;gap:6px">`;
-        html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">+ 추가 업로드</button>`;
-        html+=`<button onclick="deleteMyImages('${vid}')" style="padding:7px 14px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">🗑️ 삭제</button>`;
-        html+=`</div>`;
+    // 완료 투표 - 시작 투표 참여자 버튼 UI
+    if(isEndVote){
+      const allVotesForImg = await dbGet('votes');
+      let startVoters = [];
+      if(allVotesForImg && v.group && v.date){
+        const titleDate2 = getTitleDate(v);
+        const startV = Object.values(allVotesForImg).find(sv=>
+          !sv.deleted && sv.group===v.group &&
+          (sv.title||'').includes('시작') &&
+          ((sv.title||'').includes((v.title||'').match(/\d+월\s*\d+일/)?.[0]||'NOPE') || getTitleDate(sv)===titleDate2)
+        );
+        if(startV) startVoters = Object.keys(startV.responses||{});
       }
-    }
+      const totalCount = startVoters.length;
+      const allImages = v.images||{};
+      const leaveVoters = new Set();
+      // 연차 마커 (더미 이미지) 있는 사람
+      Object.entries(allImages).forEach(([k,imgs])=>{
+        if(imgs && imgs.length>0 && imgs[0]?.url==='연차') leaveVoters.add(k);
+      });
 
-    // 업로드된 이미지 목록 (관리자 전체, 사원 본인것만)
-    const imagesToShow = isAdmin ? (v.images || {}) : (v.images?.[myKey] ? {[myKey]: v.images[myKey]} : {});
-    if(imagesToShow && Object.keys(imagesToShow).length > 0){
-      html+=`<div style="margin-top:8px">`;
-      if(isAdmin) html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">업로드된 이미지 (${Object.values(imagesToShow).flat().length}장)</div>`;
-      // 멤버별 첫 업로드 시간 기준 정렬
-  const sortedEntries = Object.entries(imagesToShow).sort((a,b)=>{
-    const ta = (a[1][0]?.uploadedAt||0);
-    const tb = (b[1][0]?.uploadedAt||0);
-    return ta-tb;
-  });
-  sortedEntries.forEach(([mkey, imgs], entryIdx)=>{
-        if(!imgs||imgs.length===0) return;
-        // 업로드 순서 정렬
-        const sortedImgs = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
-        imgs = sortedImgs;
-        const collapseId = `imgCollapse_${vid}_${btoa(encodeURIComponent(mkey)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
-        // 완료 투표는 접기/펼치기
-        if(isEndVote){
-          html+=`<div style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">`;
-          html+=`<div onclick="toggleImgCollapse('${collapseId}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;background:var(--surface2)">`;
-          html+=`<div style="display:flex;align-items:center;gap:6px">`;
-          html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
-          html+=`<span style="font-size:13px;font-weight:700">${entryIdx+1}. ${escH(mkey)}</span>`;
-          html+=`<span style="font-size:11px;color:var(--text3)">(${imgs.length}장)</span>`;
-          html+=`</div><span style="font-size:12px;color:var(--text3)">▼</span>`;
-          html+=`</div>`;
-          html+=`<div id="${collapseId}" style="display:none;padding:8px">`;
-          html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
-          imgs.forEach(img=>{
-            html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
+      html+=`<div style="padding:10px 0">`;
+      // 버튼 3개씩 그리드
+      html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">`;
+      startVoters.forEach(nick=>{
+        const myImgs = (allImages[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
+        const uploadCount = myImgs.length;
+        const isLeave = leaveVoters.has(nick);
+        const isDone = uploadCount>=totalCount || isLeave;
+        const isMe2 = nick===myKey;
+        const btnCollapseId = `btnCollapse_${vid}_${btoa(encodeURIComponent(nick)).replace(/[^a-zA-Z0-9]/g,'').slice(0,10)}`;
+        const subLabel = isLeave ? '(연차)' : `(${uploadCount}/${totalCount})`;
+        const doneBg = '#FF85C1';
+        const emptyBg = 'transparent';
+        const doneBorder = '#FF85C1';
+        const emptyBorder = '#FF85C1';
+        html+=`<div>`;
+        html+=`<button onclick="toggleImgCollapse('${btnCollapseId}')" style="width:100%;padding:10px 4px;border-radius:20px;border:1.5px solid #FF85C1;background:${isDone?doneBg:emptyBg};color:${isDone?'white':'#FF85C1'};font-size:11px;font-weight:700;cursor:pointer;line-height:1.4;text-align:center">${escH(nick)}<br><span style="font-size:9px;opacity:0.85">${subLabel}</span></button>`;
+        html+=`<div id="${btnCollapseId}" style="display:none;margin-top:4px">`;
+        // 내 버튼이면 업로드 폼 표시
+        if(isMe2 && !isClosed && !isLeave){
+          html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+          if(uploadCount>0){
+            html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
+            html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">+ 추가</button>`;
+            html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
+            html+=`</div>`;
+          } else {
+            html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
+          }
+        }
+        // 사진 목록
+        if(myImgs.length>0){
+          const sortedMyImgs = [...myImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+          html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px">`;
+          sortedMyImgs.forEach(img=>{
+            html+=`<div style="aspect-ratio:9/16;border-radius:6px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
             html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
             html+=`</div>`;
           });
-          html+=`</div></div></div>`;
-        } else {
-          // 시작 투표는 기존 방식
-          html+=`<div style="margin-bottom:10px">`;
-          html+=`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;align-items:center;gap:6px">`;
-          html+=`<span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800">${(mkey||'?')[0]}</span>`;
-          html+=`${entryIdx+1}. ${escH(mkey)} <span style="color:var(--text3);font-weight:400">(${imgs.length}장)</span>`;
           html+=`</div>`;
+        }
+        html+=`</div></div>`;
+      });
+      html+=`</div></div>`;
+
+    } else {
+      // 시작 투표 - 기존 업로드 UI
+      const myImages = v.images?.[myKey] || [];
+      const hasUploaded = myImages.length > 0;
+      if(!isClosed){
+        if(!hasUploaded){
+          html+=`<div style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:10px">`;
+          html+=`<div style="font-size:24px;margin-bottom:6px">📸</div>`;
+          html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer">📎 이미지 선택</button>`;
+          html+=`</div>`;
+        } else {
+          html+=`<div style="text-align:center;margin-bottom:10px"><span class="voted-badge">✅ ${myImages.length}장 업로드 완료</span></div>`;
+          html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+          html+=`<div style="display:flex;gap:6px">`;
+          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">+ 추가 업로드</button>`;
+          html+=`<button onclick="deleteMyImages('${vid}')" style="padding:7px 14px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">🗑️ 삭제</button>`;
+          html+=`</div>`;
+        }
+      }
+      const imagesToShow = isAdmin ? (v.images || {}) : (v.images?.[myKey] ? {[myKey]: v.images[myKey]} : {});
+      if(imagesToShow && Object.keys(imagesToShow).length > 0){
+        const sortedEntries2 = Object.entries(imagesToShow).sort((a,b)=>(a[1][0]?.uploadedAt||0)-(b[1][0]?.uploadedAt||0));
+        html+=`<div style="margin-top:8px">`;
+        sortedEntries2.forEach(([mkey2, imgs2], idx2)=>{
+          if(!imgs2||imgs2.length===0) return;
+          const sortedI = [...imgs2].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+          html+=`<div style="margin-bottom:10px">`;
+          html+=`<div style="font-size:12px;font-weight:700;margin-bottom:6px">${idx2+1}. ${escH(mkey2)} (${imgs2.length}장)</div>`;
           html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">`;
-          imgs.forEach(img=>{
+          sortedI.forEach(img=>{
             html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="window.open('${img.url}','_blank')">`;
             html+=`<img src="${img.url}" style="width:100%;height:100%;object-fit:cover">`;
             html+=`</div>`;
           });
           html+=`</div></div>`;
-        }
-      });
-      html+=`</div>`;
-    }
-
-    if(isClosed){
-      html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${Object.keys(v.images||{}).length}명 참여</span></div>`;
+        });
+        html+=`</div>`;
+      }
     }
   } else {
     // 일반 투표
@@ -2683,30 +2752,13 @@ async function renderVoteCard(vid,v){
   if(!isEndVote){
   html+=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">`;
 
-  // 메모 섹션
-  const myMemo = v.memos?.[myKey]||'';
-  html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">📝 메모</div>`;
-  if(!isClosed){
-    html+=`<div style="display:flex;gap:6px;margin-bottom:8px">`;
-    html+=`<input id="memoInput_${vid}" class="fi" placeholder="메모 입력..." value="${escH(myMemo)}" style="flex:1;font-size:13px;padding:8px 12px">`;
-    html+=`<button onclick="saveMemo('${vid}')" style="padding:8px 14px;background:var(--surface2);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">저장</button>`;
-    html+=`</div>`;
-  } else if(myMemo){
-    html+=`<div style="font-size:12px;color:var(--text2);background:var(--surface2);padding:8px 12px;border-radius:10px;margin-bottom:8px">${escH(myMemo)}</div>`;
-  }
-  // 모든 메모 보기
-  if(v.memos){
-    const memoList = Object.entries(v.memos).filter(([k,m])=>m && typeof m === 'string');
-    if(memoList.length>0){
-      html+=`<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">`;
-      memoList.forEach(([k,m])=>{
-        html+=`<div style="font-size:11px;color:var(--text3);background:var(--surface2);padding:6px 10px;border-radius:8px"><b>${escH(k)}</b>: ${escH(m)}</div>`;
-      });
-      html+=`</div>`;
-    }
-  }
+
 
   html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🔗 링크 제출</div>`;
+  html+=`<div style="margin-bottom:8px">`;
+  html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">아이디 (비우면 닉네임 자동)</div>`;
+  html+=`<input id="linkId_${vid}" placeholder="ex) @instagram_id" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+  html+=`</div>`;
 
   // 열정페이(봉사)/재능기부(노피드) 선택자 자동 표시
   const bonusVoters=[];
@@ -2734,23 +2786,46 @@ async function renderVoteCard(vid,v){
     if(ta&&tb) return ta-tb;
     return a[0]<b[0]?-1:1; // pushId 알파벳순 = 시간순
   }).map(([,l])=>l);
-  if(sortedLinks.length>0){
+  if(sortedLinks.length>0 || bonusVoters.length>0){
+    // 닉네임 기준으로 그룹핑 (투피드 2개 링크 묶기)
+    const grouped = {};
     sortedLinks.forEach(l=>{
-      html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)">`;
-      html+=`<div style="display:flex;align-items:center;gap:8px">`;
-      html+=`<span style="font-size:12px;font-weight:700;min-width:60px;flex-shrink:0">${escH(l.nick||'')}</span>`;
-      html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(l.url||'')}</a>`;
-      html+=`</div>`;
-      if(l.note)html+=`<div style="font-size:11px;color:var(--text3);padding-left:68px">ㄴ${escH(l.note)}</div>`;
-      html+=`</div>`;
+      const nick = l.nick||'';
+      if(!grouped[nick]) grouped[nick] = {nick, links:[], firstTime: l.time||0};
+      grouped[nick].links.push(l);
     });
-  }else if(bonusVoters.length===0){
+    // 연차 포함 전체 목록 (시간순)
+    const allEntries = [
+      ...bonusVoters.map(b=>({type:'bonus', nick:b.nick, label:b.type, time:0})),
+      ...Object.values(grouped).map(g=>({type:'link', nick:g.nick, links:g.links, time:g.firstTime}))
+    ].sort((a,b)=>a.time-b.time);
+    let num=1;
+    allEntries.forEach(entry=>{
+      if(entry.type==='bonus'){
+        html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">`;
+        html+=`<span style="font-size:11px;color:var(--text3);min-width:20px">${num++}.</span>`;
+        html+=`<span style="font-size:12px;font-weight:700;min-width:60px;flex-shrink:0">${escH(entry.nick)}</span>`;
+        html+=`<span style="font-size:12px;color:var(--text3)">${escH(entry.label)}</span>`;
+        html+=`</div>`;
+      } else {
+        html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)">`;
+        entry.links.forEach((l,li)=>{
+          html+=`<div style="display:flex;align-items:center;gap:8px;${li>0?'padding-left:28px':''}">`;
+          if(li===0) html+=`<span style="font-size:11px;color:var(--text3);min-width:20px">${num++}.</span>`;
+          if(li===0) html+=`<span style="font-size:12px;font-weight:700;min-width:60px;flex-shrink:0">${escH(l.nick||'')}</span>`;
+          html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(l.url||'')}</a>`;
+          html+=`</div>`;
+          if(l.note)html+=`<div style="font-size:11px;color:var(--text3);padding-left:${li===0?'96':'28'}px">ㄴ${escH(l.note)}</div>`;
+        });
+        html+=`</div>`;
+      }
+    });
+  }else if(bonusVoters.length===0 && sortedLinks.length===0){
     html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:6px">아직 제출된 링크가 없습니다</div>`;
   }
   if(canSubmitLink){
     if(isTupide){
       html+=`<div style="margin-top:8px">`;
-      html+=`<input id="linkId_${vid}" placeholder="아이디 (선택)" style="width:100%;margin-bottom:6px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">링크 1</div>`;
       html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
       html+=`<input id="linkUrl_${vid}_1" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
