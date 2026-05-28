@@ -340,16 +340,7 @@ document.addEventListener('keydown',e=>{
     <div class="fl"><label>부서</label>
       <select class="fi" id="voteGroup"></select>
     </div>
-    <div class="fl">
-      <label>참여 템플릿 <span style="font-size:10px;color:var(--text3)">(선택사항)</span></label>
-      <select class="fi" id="voteTplSel" onchange="applyVoteTemplate(this)">
-        <option value="">템플릿 선택...</option>
-      </select>
-    </div>
-    <div class="fl">
-      <label>참여 멤버 <span style="font-size:10px;color:var(--text3)">(쉼표로 구분, 없으면 전체)</span></label>
-      <input class="fi" id="voteTplMembers" placeholder="에이스, 불주먹, 고인물">
-    </div>
+
     <div style="display:flex;gap:8px">
       <div class="fl" style="flex:1"><label>날짜</label><input class="fi" id="voteDate" type="date"></div>
       <div class="fl" style="flex:1"><label>마감시간</label><input class="fi" id="voteTime" type="time" value="22:00"></div>
@@ -4138,28 +4129,7 @@ async function loadSettings(){
   memberHtml += `<button class="btn-pri" onclick="syncGameMembers()" style="width:100%;padding:12px">🔄 오락실 연동 멤버 동기화</button>`;
   memberHtml += `<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
 
-  // ── 맞팔방 관리 ──
-  let mafHtml = '';
-  let hasIndependent = false;
-  for(const [gid,g] of Object.entries(groups)){
-    if(gameGroupNames.has(g.name)) continue;
-    hasIndependent = true;
-    const gMembers = gmd[gid]||[];
-    mafHtml += `<div style="background:var(--surface2);border-radius:12px;padding:10px 12px;margin-bottom:12px">`;
-    mafHtml += `<div style="font-size:13px;font-weight:700;margin-bottom:8px">${g.name} 멤버</div>`;
-    if(gMembers.length>0){
-      mafHtml += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">`;
-      gMembers.forEach((m,idx)=>{
-        mafHtml += `<span style="display:flex;align-items:center;gap:4px;background:white;padding:3px 8px;border-radius:20px;font-size:12px;font-weight:600">${m}<span onclick="removeGroupMember('${gid}',${idx})" style="cursor:pointer;color:var(--red);font-size:10px">✕</span></span>`;
-      });
-      mafHtml += `</div>`;
-    }
-    mafHtml += `<div style="display:flex;gap:6px">`;
-    mafHtml += `<input id="newGMember_${gid}" class="fi" placeholder="닉네임 입력" style="flex:1;font-size:12px;padding:6px 10px">`;
-    mafHtml += `<button onclick="addGroupMember('${gid}')" style="padding:6px 12px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">추가</button>`;
-    mafHtml += `</div></div>`;
-  }
-  if(!hasIndependent) mafHtml += `<div style="font-size:12px;color:var(--text3)">독립 그룹 없음</div>`;
+
 
   // ── 4. 자동화 ──
   let autoHtml = '';
@@ -4203,8 +4173,6 @@ async function loadSettings(){
     ${settingAccordion('lock','🔐 잠금 설정',lockHtml)}
     ${settingAccordion('member','👥 멤버 관리',memberHtml)}
     ${settingAccordion('auto','🤖 자동화',autoHtml)}
-    ${settingAccordion('tpl','📋 투표 템플릿',tplHtml)}
-    ${hasIndependent ? settingAccordion('maf','🤝 맞팔방 관리',mafHtml) : ''}
   </div>`;
 }
 
