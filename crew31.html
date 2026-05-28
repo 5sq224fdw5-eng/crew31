@@ -3165,11 +3165,11 @@ async function uploadImages(vid, input){
   // 출석 자동 기록 (완료 처리)
   const v = await dbGet(`votes/${vid}`);
   if(v && v.group && v.date){
-    const mondayStr = getWeekKey(v.date);
+    const attDate = getTitleDate(v); // 제목 날짜 기준
+    const mondayStr = getWeekKey(attDate);
     const isStartV = (v.title||'').includes('시작');
     if(isStartV){
-      // 시작 투표 사진 → 그냥 완료
-      await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${v.date}`, '완료');
+      await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${attDate}`, '완료');
     } else {
       // 완료 투표 사진 → 시작 투표 선택지 결과로 확정
       const allVotes = await dbGet('votes');
@@ -3178,16 +3178,20 @@ async function uploadImages(vid, input){
         const prevDate = new Date(v.date+'T00:00:00');
         prevDate.setDate(prevDate.getDate()-1);
         const prevDateStr = prevDate.toISOString().slice(0,10);
-        const startVote = Object.values(allVotes).find(sv=>
-          !sv.deleted && sv.group===v.group && sv.date===prevDateStr &&
-          (sv.title||'').includes('시작') && sv.responses?.[myKey]!==undefined
-        );
+        const startVote = Object.values(allVotes).find(sv=>{
+          if(sv.deleted||sv.group!==v.group) return false;
+          if(!(sv.title||'').includes('시작')&&!(sv.title||'').includes('참여')) return false;
+          const t1=(sv.title||'').match(/(\d+)월\s*(\d+)일/);
+          const t2=(v.title||'').match(/(\d+)월\s*(\d+)일/);
+          if(t1&&t2) return t1[1]===t2[1]&&t1[2]===t2[2];
+          return sv.responses?.[myKey]!==undefined;
+        });
         if(startVote){
           const optText = (startVote.options||[])[startVote.responses[myKey]]||'';
           const result = mapVoteResult(optText);
-          await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${v.date}`, result);
+          await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${attDate}`, result);
         } else {
-          await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${v.date}`, '완료');
+          await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${attDate}`, '완료');
         }
       }
     }
