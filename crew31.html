@@ -662,6 +662,8 @@ function switchLoginTab(tab){
 
 function forceReload(){
   showToast('🔄 새로고침 중...');
+  // 서비스워커 업데이트 체크(새 버전 있으면 받아옴)
+  try{ navigator.serviceWorker?.getRegistration().then(r=>r&&r.update().catch(()=>{})).catch(()=>{}); }catch(e){}
   loadGroups().then(()=>{
     renderGroupSelectBar();
     const tab = _currentTab||'notice';
@@ -673,6 +675,45 @@ function forceReload(){
     }
   });
 }
+
+// 홈 추가 앱(PWA)이 구버전을 캐시할 때: 캐시 전부 비우고 최신으로 다시 로드
+async function hardUpdate(){
+  showToast('🔄 최신 버전 받는 중...');
+  try{ if('caches' in window){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); } }catch(e){}
+  try{ const reg=await navigator.serviceWorker?.getRegistration(); if(reg){ await reg.update().catch(()=>{}); } }catch(e){}
+  setTimeout(()=>{ try{ location.reload(); }catch(e){ location.href=location.href; } }, 600);
+}
+
+// 새 서비스워커(=새 버전)가 설치되면 즉시 적용하고 한 번만 자동 새로고침
+(function(){
+  if(!('serviceWorker' in navigator)) return;
+  let _swReloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    if(_swReloaded) return; _swReloaded=true;
+    try{ location.reload(); }catch(e){}
+  });
+  async function watch(){
+    try{
+      const reg=await navigator.serviceWorker.getRegistration();
+      if(!reg) return;
+      reg.update().catch(()=>{});
+      if(reg.waiting){ reg.waiting.postMessage('skipWaiting'); }
+      reg.addEventListener('updatefound', ()=>{
+        const nw=reg.installing; if(!nw) return;
+        nw.addEventListener('statechange', ()=>{
+          if(nw.state==='installed' && navigator.serviceWorker.controller){
+            nw.postMessage('skipWaiting');
+            if(reg.waiting) reg.waiting.postMessage('skipWaiting');
+          }
+        });
+      });
+    }catch(e){}
+  }
+  watch();
+  // 앱 다시 보일 때 + 5분마다 업데이트 체크
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') watch(); });
+  setInterval(watch, 5*60*1000);
+})();
 
 async function doLogin(role){
   try{
@@ -4652,6 +4693,11 @@ async function loadSettings(){
   tplHtml += `<textarea id="newTplMembers" class="fi" placeholder="멤버 (쉼표로 구분)" style="width:100%;margin-top:6px;height:60px;font-size:12px;resize:none"></textarea>`;
 
   mb.innerHTML = `<div style="padding-bottom:60px">
+    <div style="margin-bottom:10px;background:white;border-radius:14px;padding:12px 14px">
+      <div style="font-size:13px;font-weight:800;color:var(--text2);margin-bottom:6px">📲 앱 업데이트</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">홈 화면에 추가한 앱이 옛 화면으로 보이거나 반응이 없으면 눌러주세요. 캐시를 비우고 최신 버전을 다시 불러옵니다.</div>
+      <button onclick="hardUpdate()" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🔄 최신 버전으로 강제 업데이트</button>
+    </div>
     ${settingAccordion('grp','🏢 그룹 관리',grpHtml)}
     ${settingAccordion('lock','🔐 잠금 설정',lockHtml)}
     ${settingAccordion('member','👥 멤버 관리',memberHtml)}
