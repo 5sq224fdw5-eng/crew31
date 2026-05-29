@@ -840,6 +840,14 @@ async function enterApp(){
   setTimeout(()=>checkExistingPushSub(),3000);
 }
 
+// ── 페이지 로드 직후 로그인 정보 즉시 복구 (새로고침 시 로그아웃 방지) ──
+if(!CU){
+  const saved = localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User');
+  if(saved){ 
+    try{ CU=JSON.parse(saved); }catch{}
+  }
+}
+
 // Safari bfcache 대응
 window.addEventListener('pageshow', (e)=>{
   if(e.persisted && !CU){
@@ -3240,9 +3248,13 @@ const CLOUDINARY_PRESET = 'crew31_upload'; // unsigned preset 이름
 async function uploadImages(vid, input){
   const files = Array.from(input.files);
   if(!files.length) return;
-  // 마감 체크
+  // 마감 체크 (명시적 종료 + deadline 체크)
   const vCheck = await dbGet(`votes/${vid}`);
   if(vCheck?.closed){ showToast('마감된 투표입니다'); input.value=''; return; }
+  // deadline 기반 자동 마감 체크
+  const deadline = (vCheck?.date && vCheck?.time) ? new Date(vCheck.date + 'T' + vCheck.time).getTime() : 0;
+  const isClosed = deadline && Date.now() > deadline;
+  if(isClosed){ showToast('마감된 투표입니다'); input.value=''; return; }
   showToast('⏳ 업로드 중...');
 
   const myKey = (CU?.name || '').replace(/[\.\#\$\/\[\]\s]/g, '_');
