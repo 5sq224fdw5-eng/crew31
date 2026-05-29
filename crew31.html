@@ -232,6 +232,10 @@ document.addEventListener('keydown',e=>{
 <div class="toast" id="toast"></div>
 
 <!-- ══ LOGIN ══ -->
+<div id="initLoader" style="position:fixed;inset:0;background:#fff5f9;display:flex;align-items:center;justify-content:center;z-index:9999">
+  <div style="font-size:40px;animation:spin 1s linear infinite">🌸</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 <div id="loginPage">
   <div style="width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;align-items:center;padding:10px 20px 20px;position:relative;z-index:1">
     <!-- 상단 로고/타이틀 -->
@@ -848,7 +852,10 @@ window.addEventListener('pageshow', (e)=>{
 (async()=>{
   // 10초 후에도 로그인 안되면 로그인 화면으로
   const loginTimeout = setTimeout(()=>{
-    if(!CU) document.getElementById('loginPage').style.display='flex';
+    if(!CU){
+      document.getElementById('initLoader').style.display='none';
+      document.getElementById('loginPage').style.display='flex';
+    }
   }, 10000);
   const saved=localStorage.getItem('crew31User') || (()=>{
     const m=document.cookie.match(/crew31User=([^;]+)/);
@@ -859,13 +866,16 @@ window.addEventListener('pageshow', (e)=>{
       CU=JSON.parse(saved);
       localStorage.setItem('crew31User',saved);
       clearTimeout(loginTimeout);
+      document.getElementById('initLoader').style.display='none';
       await enterApp();
     }catch{
       localStorage.removeItem('crew31User');
+      document.getElementById('initLoader').style.display='none';
       document.getElementById('loginPage').style.display='flex';
     }
   } else {
     clearTimeout(loginTimeout);
+    document.getElementById('initLoader').style.display='none';
     document.getElementById('loginPage').style.display='flex';
   }
 })();
@@ -3414,18 +3424,20 @@ async function castVote(vid,optIdx){
   const isTupideOpt = newOptText.includes('투피드')||newOptText.includes('두배');
 
   if(isLeaveOpt){
-    const gameMembers = await gameGet('members');
-    if(gameMembers){
-      const gName = groups[v.group]?.name||'';
-      const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
-        const clean=(m.name||'').replace(/^\*/,'');
-        return clean===(gName+myKey)||clean===myKey;
-      });
-      if(gameEntry){
-        const cur = await gameGet(`memberLeave/${gameEntry[0]}`) || 0;
-        if(cur <= 0){showToast('⚠️ 보유 연차가 없어요. 다른 선택지를 골라주세요!');return;}
+    try{
+      const gameMembers = await gameGet('members');
+      if(gameMembers){
+        const gName = groups[v.group]?.name||'';
+        const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
+          const clean=(m.name||'').replace(/^\*/,'');
+          return clean===(gName+myKey)||clean===myKey||clean.endsWith(myKey);
+        });
+        if(gameEntry){
+          const cur = await gameGet(`memberLeave/${gameEntry[0]}`) || 0;
+          if(cur <= 0){showToast('⚠️ 보유 연차가 없어요. 다른 선택지를 골라주세요!');return;}
+        }
       }
-    }
+    }catch(e){}
   }
 
   if(isTupideOpt){
