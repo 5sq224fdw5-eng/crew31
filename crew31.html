@@ -4851,8 +4851,16 @@ function openImgViewer(urls, idx){
   el.addEventListener('touchend', _imgTouchEnd, {passive:true});
 }
 function _showImgViewer(){
-  document.getElementById('imgViewerImg').src = _imgViewerUrls[_imgViewerIdx];
+  const url = _imgViewerUrls[_imgViewerIdx];
+  document.getElementById('imgViewerImg').src = url;
   document.getElementById('imgViewerCount').textContent = (_imgViewerIdx+1)+'/'+_imgViewerUrls.length;
+  // 앞뒤 사진 미리 로드
+  [_imgViewerIdx-1, _imgViewerIdx+1].forEach(i=>{
+    if(i>=0 && i<_imgViewerUrls.length){
+      const pre = new Image();
+      pre.src = _imgViewerUrls[i];
+    }
+  });
 }
 function closeImgViewer(){
   document.getElementById('imgViewer').style.display='none';
