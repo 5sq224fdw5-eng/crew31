@@ -602,6 +602,20 @@ let _currentChatRoom=null; // {type:'all'|'dept'|'dm', id:..., name:...}
 let _pendingFeedVid=null;
 let _lockAction=null;
 
+// ── 세션 영속화 헬퍼 (인앱브라우저/PWA에서 localStorage가 휘발돼도 Firebase로 복원) ──
+function getSessionKey(){
+  try{ return btoa(unescape(encodeURIComponent(navigator.userAgent))).replace(/[^a-zA-Z0-9]/g,'').slice(0,20); }
+  catch{ return 'default_session_key'; }
+}
+async function persistSession(){
+  if(!CU) return;
+  const s = JSON.stringify(CU);
+  try{ localStorage.setItem('crew31User',s); }catch{}
+  try{ sessionStorage.setItem('crew31User',s); }catch{}
+  try{ document.cookie = `crew31User=${encodeURIComponent(s)};max-age=2592000;path=/`; }catch{}
+  try{ await dbSet(`sessions/${getSessionKey()}`,{user:CU,t:Date.now()}); }catch{}
+}
+
 function showToast(msg,dur=2200){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',dur);}
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmtDate(ts){if(!ts)return '';const d=new Date(ts);return d.toLocaleDateString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});}
@@ -674,12 +688,8 @@ async function doLogin(role){
       if(!entry){showToast('등록되지 않은 이름입니다');return;}
       CU={name,role:'member',key:entry[0]};
     }
-    localStorage.setItem('crew31User',JSON.stringify(CU));
-    sessionStorage.setItem('crew31User',JSON.stringify(CU));
-    document.cookie = `crew31User=${encodeURIComponent(JSON.stringify(CU))};max-age=2592000;path=/`;
-    // Firebase에도 세션 저장 (Safari ITP 대비)
-    const sessionKey = btoa(navigator.userAgent).replace(/[^a-zA-Z0-9]/g,'').slice(0,20);
-    dbSet(`sessions/${sessionKey}`,{user:CU,t:Date.now()}).catch(()=>{});
+    // 모든 저장소 + Firebase에 세션 저장 (await로 확실히 기록 후 진입)
+    await persistSession();
     await enterApp();
   }catch(e){
     console.error('login error',e);
@@ -797,7 +807,12 @@ function startAutoVoteScheduler(){
 }
 
 function logout(){
-  CU=null;localStorage.removeItem('crew31User');
+  const key=getSessionKey();
+  CU=null;
+  try{ localStorage.removeItem('crew31User'); }catch{}
+  try{ sessionStorage.removeItem('crew31User'); }catch{}
+  try{ document.cookie='crew31User=;max-age=0;path=/'; }catch{}
+  try{ dbDelete(`sessions/${key}`); }catch{}
   document.getElementById('loginPage').style.display='flex';
   document.getElementById('app').style.display='none';
   clearInterval(window._chatPoll);
@@ -806,6 +821,9 @@ function logout(){
 async function enterApp(){
   document.getElementById('loginPage').style.display='none';
   document.getElementById('app').style.display='flex';
+
+  // 진입할 때마다 세션 재저장 (복원된 경우에도 저장소/Firebase 갱신해 다음 새로고침 대비)
+  persistSession();
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
@@ -844,62 +862,74 @@ async function enterApp(){
 }
 
 // Safari bfcache 대응
-window.addEventListener('pageshow', (e)=>{
-  if(e.persisted && !CU){
-    const saved = localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User') || (()=>{
-      const m=document.cookie.match(/crew31User=([^;]+)/);
-      return m?decodeURIComponent(m[1]):null;
-    })();
-    if(saved){ try{ CU=JSON.parse(saved); enterApp(); }catch{} }
+// ── 세션 복원 헬퍼 ──
+function readLocalUser(){
+  try{ const s=localStorage.getItem('crew31User'); if(s) return s; }catch{}
+  try{ const s=sessionStorage.getItem('crew31User'); if(s) return s; }catch{}
+  try{ const m=document.cookie.match(/crew31User=([^;]+)/); if(m) return decodeURIComponent(m[1]); }catch{}
+  return null;
+}
+async function readRemoteUser(){
+  for(let i=0;i<2;i++){
+    try{
+      const s=await dbGet(`sessions/${getSessionKey()}`);
+      if(s && s.user && s.t && Date.now()-s.t < 30*24*60*60*1000) return JSON.stringify(s.user);
+    }catch{}
+    if(i===0) await new Promise(r=>setTimeout(r,600));
   }
+  return null;
+}
+async function restoreSession(){
+  if(CU) return true;
+  let saved = readLocalUser();
+  if(!saved) saved = await readRemoteUser();
+  if(saved){
+    try{ CU=JSON.parse(saved); await enterApp(); return true; }
+    catch(e){ console.error('restoreSession error', e); }
+  }
+  return false;
+}
+
+window.addEventListener('pageshow', (e)=>{
+  if(e.persisted && !CU) restoreSession();
 });
 
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState==='visible' && !CU){
-    const saved = localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User') || (()=>{
-      const m=document.cookie.match(/crew31User=([^;]+)/);
-      return m?decodeURIComponent(m[1]):null;
-    })();
-    if(saved){ try{ CU=JSON.parse(saved); enterApp(); }catch{} }
-  }
+  if(document.visibilityState==='visible' && !CU) restoreSession();
 });
 
 // ── 자동 로그인 ──
 (async()=>{
-  // 10초 후에도 로그인 안되면 로그인 화면으로
+  // 로컬 저장소 빠른 경로: 있으면 즉시 복원 (네트워크 대기 없음)
+  const localSaved = readLocalUser();
+  if(localSaved){
+    try{
+      CU=JSON.parse(localSaved);
+      document.getElementById('initLoader').style.display='none';
+      await enterApp();
+      return;
+    }catch(e){ CU=null; console.error('local restore error', e); }
+  }
+  // 로컬에 없으면 Firebase 세션으로 복원 시도 (인앱브라우저/PWA 저장소 휘발 대비)
+  // 15초 후에도 복원 안 되면 로그인 화면
   const loginTimeout = setTimeout(()=>{
     if(!CU){
       document.getElementById('initLoader').style.display='none';
       document.getElementById('loginPage').style.display='flex';
     }
-  }, 10000);
-  const saved=localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User') || (()=>{
-    const m=document.cookie.match(/crew31User=([^;]+)/);
-    return m?decodeURIComponent(m[1]):null;
-  })() || await (async()=>{
+  }, 15000);
+  const remoteSaved = await readRemoteUser();
+  if(remoteSaved && !CU){
     try{
-      const sessionKey = btoa(navigator.userAgent).replace(/[^a-zA-Z0-9]/g,'').slice(0,20);
-      const s = await dbGet(`sessions/${sessionKey}`);
-      if(s?.user && s.t && Date.now()-s.t < 30*24*60*60*1000) return JSON.stringify(s.user);
-    }catch{}
-    return null;
-  })();
-  if(saved){
-    try{
-      CU=JSON.parse(saved);
-      localStorage.setItem('crew31User',saved);
+      CU=JSON.parse(remoteSaved);
       clearTimeout(loginTimeout);
       document.getElementById('initLoader').style.display='none';
       await enterApp();
-    }catch(e){
-      console.error('enterApp error', e);
-      // 로그인 정보 지우지 않고 다시 시도
-      try{ await enterApp(); }catch{
-        document.getElementById('initLoader').style.display='none';
-        document.getElementById('loginPage').style.display='flex';
-      }
-    }
-  } else {
+      return;
+    }catch(e){ console.error('remote restore error', e); }
+  }
+  // 복원 실패 시에만 로그인 화면
+  if(!CU){
     clearTimeout(loginTimeout);
     document.getElementById('initLoader').style.display='none';
     document.getElementById('loginPage').style.display='flex';
@@ -3182,14 +3212,16 @@ async function toggleNickBtn(vid, collapseId, nick){
   // 마감 여부, 이미지 동시 조회
   const myKey = (CU?.name||'').replace(/[\.#$\/\[\]\s]/g,'_');
   const sanitized = nick.replace(/[\.#$\/\[\]\s]/g,'_');
-  const [v, imgs1, imgs2] = await Promise.all([
+  const [v, imgsSan, imgsRaw] = await Promise.all([
     dbGet(`votes/${vid}`),
     dbGet(`votes/${vid}/images/${sanitized}`),
-    dbGet(`votes/${vid}/images/${myKey}`)
+    dbGet(`votes/${vid}/images/${nick}`)
   ]);
+  // 투표 데이터를 못 불러왔으면(null) 종료로 간주 → 업로드 버튼 노출 방지(fail-safe)
   const deadline = v?.date&&v?.time ? new Date(v.date+'T'+v.time).getTime() : null;
-  const isClosed = v?.closed ? true : !!(deadline && Date.now() > deadline);
-  const imgs = imgs1 || imgs2 || [];
+  const isClosed = !v ? true : (v.closed ? true : !!(deadline && Date.now() > deadline));
+  // 클릭한 닉네임 본인의 사진만 조회 (내 사진으로 폴백하지 않음)
+  const imgs = imgsSan || imgsRaw || [];
   const realImgs = imgs.filter(img=>img?.url&&img.url!=='연차');
   const isMe = nick===(CU?.name||'') || sanitized===myKey;
 
@@ -3926,7 +3958,8 @@ async function loadStatusGroup(gid) {
     sortedMembers.forEach(([mname, mdates]) => {
       const fullCount = dates.filter(d => {
         const r = mdates[d];
-        return ['완료','공게','봉사','투피드','노피드','프패'].includes(r);
+        // 봉사(열정페이)는 풀참 합산에서 제외
+        return ['완료','공게','투피드','노피드','프패'].includes(r);
       }).length;
       const isFull = fullCount >= 7;
       const isAdminM = ADMIN_NAMES.includes(mname);
@@ -4060,7 +4093,8 @@ async function checkFullAttendance(gid, mondayStr, memberKey) {
     const att = await dbGet(`attendance/${gid}/${mondayStr}/${memberKey}`);
     if(!att) return;
     const results = Object.values(att);
-    const validCount = results.filter(r => ['완료','공게','봉사','투피드','노피드','프패','확인증'].includes(r)).length;
+    // 봉사(열정페이)는 풀참 합산에서 제외
+    const validCount = results.filter(r => ['완료','공게','투피드','노피드','프패','확인증'].includes(r)).length;
     if(validCount >= 7) {
       // 연차 지급 (오락실 Firebase)
       const gameMembers = await gameGet('members');
@@ -4303,7 +4337,8 @@ async function downloadWeekExcel(gid, mondayStr) {
     // 멤버 행
     allMembers.forEach((m, idx) => {
       const row = [null, idx+1, m.name, ''];
-      const valid = ['완료','공게','투피드','노피드','봉사','프패'];
+      // 봉사(열정페이)는 풀참 합산에서 제외
+      const valid = ['완료','공게','투피드','노피드','프패'];
       let ppCount = 0;
       dates.forEach(d => {
         const r = memberResults[m.name]?.[d] || '';
