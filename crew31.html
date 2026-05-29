@@ -360,7 +360,7 @@ document.addEventListener('keydown',e=>{
     <div class="fl" id="optListWrap">
       <label>선택지</label>
       <div id="optList"></div>
-      <button class="btn-sm sec" style="margin-top:6px;width:100%" onclick="addOpt()">+ 선택지 추가</button>
+      <button id="addOptBtn" class="btn-sm sec" style="margin-top:6px;width:100%" onclick="addOpt()">+ 선택지 추가</button>
     </div>
     <div class="btn-row">
       <button class="btn-sec" onclick="closeVoteModal()">취소</button>
@@ -842,9 +842,22 @@ async function enterApp(){
 
 // Safari bfcache 대응
 window.addEventListener('pageshow', (e)=>{
-  if(e.persisted){
-    // bfcache에서 복원된 경우 강제 재로드
-    window.location.reload();
+  if(e.persisted && !CU){
+    const saved = localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User') || (()=>{
+      const m=document.cookie.match(/crew31User=([^;]+)/);
+      return m?decodeURIComponent(m[1]):null;
+    })();
+    if(saved){ try{ CU=JSON.parse(saved); enterApp(); }catch{} }
+  }
+});
+
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && !CU){
+    const saved = localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User') || (()=>{
+      const m=document.cookie.match(/crew31User=([^;]+)/);
+      return m?decodeURIComponent(m[1]):null;
+    })();
+    if(saved){ try{ CU=JSON.parse(saved); enterApp(); }catch{} }
   }
 });
 
@@ -3217,6 +3230,9 @@ const CLOUDINARY_PRESET = 'crew31_upload'; // unsigned preset 이름
 async function uploadImages(vid, input){
   const files = Array.from(input.files);
   if(!files.length) return;
+  // 마감 체크
+  const vCheck = await dbGet(`votes/${vid}`);
+  if(vCheck?.closed){ showToast('마감된 투표입니다'); input.value=''; return; }
   showToast('⏳ 업로드 중...');
 
   const myKey = (CU?.name || '').replace(/[\.\#\$\/\[\]\s]/g, '_');
@@ -3647,6 +3663,8 @@ async function openVoteModal(vid, defaultGroup, voteType){
     imgCb.onchange = ()=>{ if(wrap) wrap.style.display = imgCb.checked ? 'none' : ''; };
   }
   renderOptList();
+  const addOptBtn = document.getElementById('addOptBtn');
+  if(addOptBtn) addOptBtn.style.display = (voteType==='start'||voteType==='end') ? 'none' : '';
   document.getElementById('voteModal').classList.add('active');
 }
 function renderOptList(){
