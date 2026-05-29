@@ -291,13 +291,13 @@ document.addEventListener('keydown',e=>{
           <div id="headerWeeklyAtt" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
         </div>
       </div>
-      <div style="display:flex;gap:6px">
-        <button onclick="goTab('noti')" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;position:relative">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;align-items:center">
+        <button onclick="goTab('noti')" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;position:relative;justify-self:center">
           🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
         </button>
-        <button onclick="goToGame()" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;color:white;gap:3px">🎡 오락실</button>
-        <button onclick="forceReload()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:15px;cursor:pointer;color:white">🔄</button>
-        <button onclick="logout()" style="height:32px;padding:0 10px;border-radius:16px;background:rgba(255,255,255,0.2);border:none;font-size:11px;font-weight:700;cursor:pointer;color:white">🚪 나가기</button>
+        <button onclick="goToGame()" style="height:28px;padding:0 8px;border-radius:14px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white">🎡 오락실</button>
+        <button onclick="forceReload()" style="width:32px;height:28px;border-radius:14px;background:rgba(255,255,255,0.2);border:none;font-size:13px;cursor:pointer;color:white;justify-self:center">🔄</button>
+        <button onclick="logout()" style="height:28px;padding:0 8px;border-radius:14px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white">🚪 나가기</button>
       </div>
     </div>
 
@@ -800,14 +800,12 @@ async function enterApp(){
   const savedTab = localStorage.getItem('lastTab')||'notice';
   if(savedGroup && groups[savedGroup]){
     _currentDept = savedGroup;
-    setTimeout(()=>{
-      renderGroupSelectBar();
-      selectGroup(savedGroup);
-      setTimeout(()=>goTab(savedTab),100);
-    },300);
+    renderGroupSelectBar();
+    selectGroup(savedGroup);
+    goTab(savedTab);
   } else {
     try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
-    setTimeout(()=>renderGroupSelectBar(), 500);
+    renderGroupSelectBar();
   }
   setTimeout(()=>startNotiPolling(),2000);
   setTimeout(()=>startAutoVoteScheduler(),3000);
