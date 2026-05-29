@@ -675,7 +675,7 @@ async function doLogin(role){
       CU={name,role:'member',key:entry[0]};
     }
     localStorage.setItem('crew31User',JSON.stringify(CU));
-    // 쿠키에도 백업 (Safari PWA 새로고침 대비)
+    sessionStorage.setItem('crew31User',JSON.stringify(CU));
     document.cookie = `crew31User=${encodeURIComponent(JSON.stringify(CU))};max-age=2592000;path=/`;
     await enterApp();
   }catch(e){
@@ -857,7 +857,7 @@ window.addEventListener('pageshow', (e)=>{
       document.getElementById('loginPage').style.display='flex';
     }
   }, 10000);
-  const saved=localStorage.getItem('crew31User') || (()=>{
+  const saved=localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User') || (()=>{
     const m=document.cookie.match(/crew31User=([^;]+)/);
     return m?decodeURIComponent(m[1]):null;
   })();
