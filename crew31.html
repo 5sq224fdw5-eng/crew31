@@ -677,6 +677,9 @@ async function doLogin(role){
     localStorage.setItem('crew31User',JSON.stringify(CU));
     sessionStorage.setItem('crew31User',JSON.stringify(CU));
     document.cookie = `crew31User=${encodeURIComponent(JSON.stringify(CU))};max-age=2592000;path=/`;
+    // Firebase에도 세션 저장 (Safari ITP 대비)
+    const sessionKey = btoa(navigator.userAgent).replace(/[^a-zA-Z0-9]/g,'').slice(0,20);
+    dbSet(`sessions/${sessionKey}`,{user:CU,t:Date.now()}).catch(()=>{});
     await enterApp();
   }catch(e){
     console.error('login error',e);
@@ -840,14 +843,6 @@ async function enterApp(){
   setTimeout(()=>checkExistingPushSub(),3000);
 }
 
-// ── 페이지 로드 직후 로그인 정보 즉시 복구 (새로고침 시 로그아웃 방지) ──
-if(!CU){
-  const saved = localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User');
-  if(saved){ 
-    try{ CU=JSON.parse(saved); }catch{}
-  }
-}
-
 // Safari bfcache 대응
 window.addEventListener('pageshow', (e)=>{
   if(e.persisted && !CU){
@@ -881,6 +876,13 @@ document.addEventListener('visibilitychange', ()=>{
   const saved=localStorage.getItem('crew31User') || sessionStorage.getItem('crew31User') || (()=>{
     const m=document.cookie.match(/crew31User=([^;]+)/);
     return m?decodeURIComponent(m[1]):null;
+  })() || await (async()=>{
+    try{
+      const sessionKey = btoa(navigator.userAgent).replace(/[^a-zA-Z0-9]/g,'').slice(0,20);
+      const s = await dbGet(`sessions/${sessionKey}`);
+      if(s?.user && s.t && Date.now()-s.t < 30*24*60*60*1000) return JSON.stringify(s.user);
+    }catch{}
+    return null;
   })();
   if(saved){
     try{
@@ -3248,13 +3250,9 @@ const CLOUDINARY_PRESET = 'crew31_upload'; // unsigned preset 이름
 async function uploadImages(vid, input){
   const files = Array.from(input.files);
   if(!files.length) return;
-  // 마감 체크 (명시적 종료 + deadline 체크)
+  // 마감 체크
   const vCheck = await dbGet(`votes/${vid}`);
   if(vCheck?.closed){ showToast('마감된 투표입니다'); input.value=''; return; }
-  // deadline 기반 자동 마감 체크
-  const deadline = (vCheck?.date && vCheck?.time) ? new Date(vCheck.date + 'T' + vCheck.time).getTime() : 0;
-  const isClosed = deadline && Date.now() > deadline;
-  if(isClosed){ showToast('마감된 투표입니다'); input.value=''; return; }
   showToast('⏳ 업로드 중...');
 
   const myKey = (CU?.name || '').replace(/[\.\#\$\/\[\]\s]/g, '_');
