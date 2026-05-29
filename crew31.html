@@ -4852,13 +4852,18 @@ function openImgViewer(urls, idx){
 }
 function _showImgViewer(){
   const url = _imgViewerUrls[_imgViewerIdx];
-  document.getElementById('imgViewerImg').src = url;
+  // 뷰어용 중간 해상도 URL
+  const viewUrl = url.includes('/upload/') ? url.replace('/upload/q_auto,f_auto,w_600/','/upload/q_auto,f_auto,w_1000/').replace('/upload/','/upload/q_auto,f_auto,w_1000/') : url;
+  const img = document.getElementById('imgViewerImg');
+  img.style.opacity = '0.3';
+  img.src = viewUrl;
+  img.onload = ()=>{ img.style.opacity = '1'; img.style.transition = 'opacity 0.2s'; };
   document.getElementById('imgViewerCount').textContent = (_imgViewerIdx+1)+'/'+_imgViewerUrls.length;
   // 앞뒤 사진 미리 로드
   [_imgViewerIdx-1, _imgViewerIdx+1].forEach(i=>{
     if(i>=0 && i<_imgViewerUrls.length){
       const pre = new Image();
-      pre.src = _imgViewerUrls[i];
+      pre.src = _imgViewerUrls[i].includes('/upload/') ? _imgViewerUrls[i].replace('/upload/','/upload/q_auto,f_auto,w_1000/') : _imgViewerUrls[i];
     }
   });
 }
