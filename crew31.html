@@ -881,10 +881,13 @@ document.addEventListener('visibilitychange', ()=>{
       clearTimeout(loginTimeout);
       document.getElementById('initLoader').style.display='none';
       await enterApp();
-    }catch{
-      localStorage.removeItem('crew31User');
-      document.getElementById('initLoader').style.display='none';
-      document.getElementById('loginPage').style.display='flex';
+    }catch(e){
+      console.error('enterApp error', e);
+      // 로그인 정보 지우지 않고 다시 시도
+      try{ await enterApp(); }catch{
+        document.getElementById('initLoader').style.display='none';
+        document.getElementById('loginPage').style.display='flex';
+      }
     }
   } else {
     clearTimeout(loginTimeout);
@@ -3166,16 +3169,21 @@ async function toggleNickBtn(vid, collapseId, nick){
     el.style.display = 'none';
     return;
   }
-  el.style.display = 'block';
-  // Firebase에서 최신 이미지 읽기
+  // 마감 여부, 이미지 동시 조회
   const myKey = (CU?.name||'').replace(/[\.#$\/\[\]\s]/g,'_');
   const sanitized = nick.replace(/[\.#$\/\[\]\s]/g,'_');
-  const imgs = await dbGet(`votes/${vid}/images/${sanitized}`) || await dbGet(`votes/${vid}/images/${myKey}`) || [];
+  const [v, imgs1, imgs2] = await Promise.all([
+    dbGet(`votes/${vid}`),
+    dbGet(`votes/${vid}/images/${sanitized}`),
+    dbGet(`votes/${vid}/images/${myKey}`)
+  ]);
+  const deadline = v?.date&&v?.time ? new Date(v.date+'T'+v.time).getTime() : null;
+  const isClosed = v?.closed ? true : !!(deadline && Date.now() > deadline);
+  const imgs = imgs1 || imgs2 || [];
   const realImgs = imgs.filter(img=>img?.url&&img.url!=='연차');
   const isMe = nick===(CU?.name||'') || sanitized===myKey;
-  const v = await dbGet(`votes/${vid}`);
-  const isClosed = v?.closed||false;
 
+  el.style.display = 'block';
   let html = '';
   if(isMe && !isClosed && realImgs.length===0){
     html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
@@ -3190,7 +3198,8 @@ async function toggleNickBtn(vid, collapseId, nick){
   if(realImgs.length>0){
     const sorted = [...realImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
-    window._imgGallery_v = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url); sorted.forEach((img,imgIdx)=>{
+    window._imgGallery_v = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url);
+    sorted.forEach((img,imgIdx)=>{
       const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
       html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
     });
@@ -3198,6 +3207,7 @@ async function toggleNickBtn(vid, collapseId, nick){
   }
   el.innerHTML = html;
 }
+
 
 function toggleImgCollapse(id){
   const el = document.getElementById(id);
