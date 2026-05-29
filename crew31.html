@@ -873,8 +873,10 @@ function renderGroupSelectBar(){
     const ob = b[1].order ?? 999;
     return oa - ob;
   });
+  const standalone = ['calendar','leave','status','settings','noti'];
+  const isStandalone = standalone.includes(_currentTab);
   sortedGroups.forEach(([gid,g])=>{
-    const active = _currentDept===gid;
+    const active = !isStandalone && _currentDept===gid;
     const locked = (g.groupLock && CU?.role!=='admin' && !localStorage.getItem('groupUnlocked_'+gid));
     html += `<button onclick="selectGroup('${gid}')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:${active?(g.color||'#FF85C1'):'#f8f0f5'};color:${active?'white':'#999'}">${locked?'🔒 ':''}${escH(g.name)}</button>`;
   });
@@ -948,15 +950,14 @@ function goTab(tab){
   sessionStorage.setItem('lastTab', tab);
   if(_currentDept) localStorage.setItem('lastTab', tab);
 
-  // 탭바 활성화
+  // 탭바 활성화 - 모든 tab-item active 초기화 후 해당 탭만 활성화
   document.querySelectorAll('.tab-item').forEach(b=>{
-    const isActive = b.dataset&&b.dataset.tab===tab;
-    b.classList.toggle('active', isActive);
-    if(!isActive){
-      b.style.background = '';
-      b.style.color = '';
-    }
+    b.classList.remove('active');
+    b.style.background = '';
+    b.style.color = '';
   });
+  const activeBtn = document.querySelector(`.tab-item[data-tab="${tab}"]`);
+  if(activeBtn) activeBtn.classList.add('active');
   renderGroupSelectBar();
   renderDeptSubMenu();
 
@@ -2500,7 +2501,7 @@ async function loadHeaderWeeklyAtt(){
       const total = 7;
       const cnt = myDays.length;
       const c = g.color||'var(--accent)';
-      el.innerHTML += `<span style="background:${c}33;color:${c};padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap">${g.name} ${cnt}/${total}</span>`;
+      el.innerHTML += `<span style="background:rgba(255,255,255,0.25);color:white;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap">${g.name} ${cnt}/${total}</span>`;
     }
   }catch(e){}
 }
@@ -3830,9 +3831,14 @@ async function recordAttendance(vid, optIdx) {
     const optText = (v.options || [])[optIdx] || '';
     const result = mapVoteResult(optText);
 
-    // 사진 올렸으면 완료, 없으면 선택지 기준
+    // 시작 투표 → '시작', 완료 투표 → 선택지/사진 기준 완료
     const myImages = v.images?.[myKey] || [];
-    const finalResult = myImages.length > 0 ? '완료' : result;
+    let finalResult;
+    if(isStartVote){
+      finalResult = result === '프패' ? '프패' : result === '봉사' ? '봉사' : '시작';
+    } else {
+      finalResult = myImages.length > 0 ? '완료' : result;
+    }
 
     await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
 
