@@ -2669,7 +2669,7 @@ async function renderVoteCard(vid,v){
       if(imgs.length>0){
         const sorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
         html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
-        window._imgGallery_v = sorted.map(x=>x.url); sorted.forEach((img,imgIdx)=>{
+        window._imgGallery_v = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url); sorted.forEach((img,imgIdx)=>{
           const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
           html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
         });
@@ -3104,7 +3104,7 @@ async function toggleNickBtn(vid, collapseId, nick){
   if(realImgs.length>0){
     const sorted = [...realImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
-    window._imgGallery_v = sorted.map(x=>x.url); sorted.forEach((img,imgIdx)=>{
+    window._imgGallery_v = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url); sorted.forEach((img,imgIdx)=>{
       const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
       html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
     });
@@ -4852,20 +4852,10 @@ function openImgViewer(urls, idx){
 }
 function _showImgViewer(){
   const url = _imgViewerUrls[_imgViewerIdx];
-  // 뷰어용 중간 해상도 URL
-  const viewUrl = url.includes('/upload/') ? url.replace('/upload/q_auto,f_auto,w_600/','/upload/q_auto,f_auto,w_1000/').replace('/upload/','/upload/q_auto,f_auto,w_1000/') : url;
+  // 이미 w_600 압축된 URL 그대로 사용 (빠른 로딩)
   const img = document.getElementById('imgViewerImg');
-  img.style.opacity = '0.3';
-  img.src = viewUrl;
-  img.onload = ()=>{ img.style.opacity = '1'; img.style.transition = 'opacity 0.2s'; };
+  img.src = url;
   document.getElementById('imgViewerCount').textContent = (_imgViewerIdx+1)+'/'+_imgViewerUrls.length;
-  // 앞뒤 사진 미리 로드
-  [_imgViewerIdx-1, _imgViewerIdx+1].forEach(i=>{
-    if(i>=0 && i<_imgViewerUrls.length){
-      const pre = new Image();
-      pre.src = _imgViewerUrls[i].includes('/upload/') ? _imgViewerUrls[i].replace('/upload/','/upload/q_auto,f_auto,w_1000/') : _imgViewerUrls[i];
-    }
-  });
 }
 function closeImgViewer(){
   document.getElementById('imgViewer').style.display='none';
