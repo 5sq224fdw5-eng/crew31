@@ -161,6 +161,7 @@ button{cursor:pointer;}
 .cal-cell.today .cal-dn{background:var(--accent);color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
 .cal-cell.selected{background:var(--peach);border-radius:8px;}
 .cal-cell.selected .cal-dn{color:#FF85C1;font-weight:800;}
+.cal-cell.today.selected .cal-dn{background:var(--accent);color:white;font-weight:800;}
 .cal-dn{font-size:12px;font-weight:600;color:var(--text);width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
 .cal-dn.sun{color:var(--red);}
 .cal-dn.sat{color:var(--blue);}
@@ -287,6 +288,7 @@ document.addEventListener('keydown',e=>{
         <div>
           <div id="headerName" style="font-size:15px;font-weight:700;color:#fff"></div>
           <div id="headerRole" style="font-size:10px;color:rgba(255,255,255,0.85)"></div>
+          <div id="headerWeeklyAtt" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
         </div>
       </div>
       <div style="display:flex;gap:6px">
@@ -790,6 +792,8 @@ async function enterApp(){
   const roleEl = document.getElementById('headerRole');
   if(avatarEl) avatarEl.textContent = initial;
   if(nameEl) nameEl.textContent = CU.name+'님';
+  // 주간 참여 현황 헤더 표시
+  setTimeout(loadHeaderWeeklyAtt, 1000);
   if(roleEl) roleEl.textContent = userRole;
 
   // 관리자 탭 표시
@@ -2276,16 +2280,22 @@ async function renderCalendar(){
     html+=`<div class="cal-cell${isToday?' today':''}${isSel?' selected':''}" onclick="calSelect('${ds}')">`;
     html+=`<div class="cal-dn${dow===0?' sun':dow===6?' sat':''}">${d}</div>`;
     if(dayEvts.length) html+=`<div class="cal-dot"></div>`;
-    // 출석 도트 (결과 색상으로)
+    // 출석 도트 (그룹별 색상)
     if(dayAtt.length>0){
       if(!isAdmin){
-        // 사원: 본인 결과 색상 도트
         const r=dayAtt[0]?.result||'';
-        const c=resultColor[r]||'var(--accent)';
+        const gid=dayAtt[0]?.gid||'';
+        const c=groups[gid]?.color||resultColor[r]||'var(--accent)';
         html+=`<div style="width:6px;height:6px;border-radius:50%;background:${c};margin:1px auto"></div>`;
       } else {
-        // 관리자: 참여 인원수
-        html+=`<div style="font-size:9px;color:var(--accent);font-weight:700;text-align:center">${dayAtt.length}명</div>`;
+        // 관리자: 그룹별 색 도트들
+        const gids=[...new Set(dayAtt.map(a=>a.gid).filter(Boolean))];
+        html+=`<div style="display:flex;gap:2px;justify-content:center;flex-wrap:wrap">`;
+        gids.forEach(gid=>{
+          const c=groups[gid]?.color||'var(--accent)';
+          html+=`<div style="width:5px;height:5px;border-radius:50%;background:${c}"></div>`;
+        });
+        html+=`</div>`;
       }
     }
     html+=`</div>`;
@@ -2303,12 +2313,14 @@ async function renderCalendar(){
     if(selAtt.length>0){
       html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">📋 출석 현황</div>`;
       if(!isAdmin){
-        // 사원: 본인 결과만
         selAtt.forEach(a=>{
-          const c=resultColor[a.result]||'#ccc';
+          const gid=a.gid||'';
+          const c=groups[gid]?.color||resultColor[a.result]||'#ccc';
+          const gName=groups[gid]?.name||'';
           html+=`<div style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:${c}22;border-radius:10px;margin:0 4px 4px 0">`;
-          html+=`<span style="font-size:12px;font-weight:700;color:${c}">${a.result}</span>`;
-          html+=`<span style="font-size:11px;color:var(--text3)">${a.group}</span>`;
+          html+=`<div style="width:8px;height:8px;border-radius:50%;background:${c};flex-shrink:0"></div>`;
+          html+=`<span style="font-size:12px;font-weight:700;color:${c}">${gName}</span>`;
+          html+=`<span style="font-size:11px;color:var(--text3)">${a.result}</span>`;
           html+=`</div>`;
         });
       } else {
@@ -2472,6 +2484,25 @@ async function loadDeptPage(gid){
   html+='</div>';
   mb.innerHTML=html;
   }catch(e){console.error('loadDeptPage error',e);mb.innerHTML='<div style="padding:20px;color:red">오류: '+e.message+'</div>';}
+}
+
+async function loadHeaderWeeklyAtt(){
+  const el = document.getElementById('headerWeeklyAtt');
+  if(!el||!CU) return;
+  try{
+    const myKey = CU.name||'';
+    const mondayStr = getWeekKey(todayStr);
+    const allAtt = await dbGet(`attendance`) || {};
+    el.innerHTML = '';
+    for(const [gid,g] of Object.entries(groups)){
+      const weekData = allAtt[gid]?.[mondayStr] || {};
+      const myDays = Object.keys(weekData[myKey]||{}).filter(d=>weekData[myKey][d]);
+      const total = 7;
+      const cnt = myDays.length;
+      const c = g.color||'var(--accent)';
+      el.innerHTML += `<span style="background:${c}33;color:${c};padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap">${g.name} ${cnt}/${total}</span>`;
+    }
+  }catch(e){}
 }
 
 async function toggleVoteDetail(vid){
