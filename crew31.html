@@ -627,19 +627,11 @@ function switchLoginTab(tab){
 }
 
 function forceReload(){
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.getRegistrations().then(regs=>{
-      Promise.all(regs.map(r=>r.unregister())).then(()=>{
-        caches.keys().then(keys=>{
-          Promise.all(keys.map(k=>caches.delete(k))).then(()=>{
-            window.location.replace(window.location.pathname+'?v='+Date.now());
-          });
-        });
-      });
-    });
-  } else {
-    window.location.replace(window.location.pathname+'?v='+Date.now());
-  }
+  showToast('🔄 새로고침 중...');
+  loadGroups().then(()=>{
+    renderGroupSelectBar();
+    goTab(_currentTab||'notice');
+  });
 }
 
 async function doLogin(role){
@@ -2269,6 +2261,18 @@ async function renderCalendar(){
     html+=`<div class="cal-dh" style="color:${i===0?'var(--red)':i===6?'var(--blue)':'var(--text3)'}">${d}</div>`;
   });
   html+=`</div>`;
+  // 그룹 색상 범례
+  const sortedGroupsLegend = Object.entries(groups).sort((a,b)=>(a[1].order??999)-(b[1].order??999));
+  html+=`<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 8px">`;
+  sortedGroupsLegend.forEach(([gid,g])=>{
+    const c=g.color||'var(--accent)';
+    html+=`<div style="display:flex;align-items:center;gap:4px">`;
+    html+=`<div style="width:8px;height:8px;border-radius:50%;background:${c};flex-shrink:0"></div>`;
+    html+=`<span style="font-size:10px;color:var(--text3);font-weight:600">${escH(g.name)}</span>`;
+    html+=`</div>`;
+  });
+  html+=`</div>`;
+
   html+=`<div class="cal-grid">`;
   for(let i=0;i<first;i++)html+=`<div></div>`;
   for(let d=1;d<=days;d++){
