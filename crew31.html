@@ -2493,7 +2493,7 @@ async function loadDeptPage(gid){
 
 async function loadHeaderWeeklyAtt(){
   const el = document.getElementById('headerWeeklyAtt');
-  if(!el||!CU) return;
+  if(!el||!CU||CU.role==='admin') return;
   try{
     const myKey = CU.name||'';
     const mondayStr = getWeekKey(todayStr);
@@ -2505,7 +2505,7 @@ async function loadHeaderWeeklyAtt(){
       const total = 7;
       const cnt = myDays.length;
       const c = g.color||'var(--accent)';
-      el.innerHTML += `<span style="background:rgba(255,255,255,0.25);color:white;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap">${g.name} ${cnt}/${total}</span>`;
+      el.innerHTML += `<span style="background:rgba(255,255,255,0.25);color:white;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap">${(g.name||'')[0]} ${cnt}/${total}</span>`;
     }
   }catch(e){}
 }
