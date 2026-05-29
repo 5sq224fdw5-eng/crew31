@@ -781,9 +781,11 @@ async function checkAutoVote(){
       if(localStorage.getItem(lastKey)) continue;
       const gData = groups[gid]||{};
       const opts = ['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
-      await dbPush('votes',{title:`${dateLabel} 업무(참여) 시작`,group:gid,date:todayStr2,time:sch.startCloseTime||'22:00',options:opts,createdAt:Date.now()});
+      const startData = {title:`${dateLabel} 업무(참여) 시작`,group:gid,date:todayStr2,time:sch.startCloseTime||'22:00',options:opts,createdAt:Date.now()};
+      if(sch.startMode==='image') startData.imageUpload=true;
+      await dbPush('votes',startData);
       localStorage.setItem(lastKey,'1');
-      showToast(`🗳️ ${gData.name} 시작 투표 자동 생성됨`);
+      showToast(`🗳️ ${gData.name} 시작 투표 자동 생성됨${sch.startMode==='image'?' (이미지)':''}`);
       loadHome();
     }
 
@@ -793,9 +795,11 @@ async function checkAutoVote(){
       if(localStorage.getItem(lastKey)) continue;
       const gData = groups[gid]||{};
       const opts = ['퇴근할게요 (완료)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
-      await dbPush('votes',{title:`${dateLabel} 업무 완료`,group:gid,date:tomorrowStr2,time:sch.endCloseTime||'13:00',options:opts,createdAt:Date.now()});
+      const endData = {title:`${dateLabel} 업무 완료`,group:gid,date:tomorrowStr2,time:sch.endCloseTime||'13:00',options:opts,createdAt:Date.now()};
+      if(sch.endMode==='image') endData.imageUpload=true;
+      await dbPush('votes',endData);
       localStorage.setItem(lastKey,'1');
-      showToast(`🗳️ ${gData.name} 완료 투표 자동 생성됨`);
+      showToast(`🗳️ ${gData.name} 완료 투표 자동 생성됨${sch.endMode==='image'?' (이미지)':''}`);
       loadHome();
     }
   }
@@ -3259,12 +3263,46 @@ function toggleImgCollapse(id){
 
 async function copyAllLinks(vid){
   const v = await dbGet(`votes/${vid}`);
-  if(!v||!v.links){showToast('링크 없음');return;}
-  const text = Object.values(v.links)
-    .sort((a,b)=>(a.time||0)-(b.time||0))
-    .filter(l=>l.url)
-    .map(l=>`${l.nick||''} ${l.url}${l.note?'\nㄴ'+l.note:''}`)
-    .join('\n');
+  if(!v){showToast('링크 없음');return;}
+  // 화면 목록과 동일한 순서/넘버링 재현 (열정페이·노피드 + 링크 그룹핑)
+  const bonusVoters=[];
+  if(v.responses && v.options){
+    Object.entries(v.responses).forEach(([k,optIdx])=>{
+      const optText=(v.options[optIdx]||'').toLowerCase();
+      if(optText.includes('봉사')||optText.includes('열정페이')||optText.includes('노피드')||optText.includes('재능기부')){
+        bonusVoters.push({nick:k, type:optText.includes('봉사')||optText.includes('열정페이')?'열정페이':'재능기부'});
+      }
+    });
+  }
+  const sortedLinks = (v.links?Object.entries(v.links):[]).sort((a,b)=>{
+    const ta=a[1].time||0, tb=b[1].time||0;
+    if(ta&&tb) return ta-tb;
+    return a[0]<b[0]?-1:1;
+  }).map(([,l])=>l);
+  const grouped={};
+  sortedLinks.forEach(l=>{const nick=l.nick||'';if(!grouped[nick])grouped[nick]={nick,links:[],firstTime:l.time||0};grouped[nick].links.push(l);});
+  const allEntries=[
+    ...bonusVoters.map(b=>({type:'bonus',nick:b.nick,label:b.type,time:0})),
+    ...Object.values(grouped).map(g=>({type:'link',nick:g.nick,links:g.links,time:g.firstTime}))
+  ].sort((a,b)=>a.time-b.time);
+  if(allEntries.length===0){showToast('복사할 내용 없음');return;}
+  let num=1;
+  const lines=[];
+  allEntries.forEach(entry=>{
+    if(entry.type==='bonus'){
+      lines.push(`${num++}. ${entry.nick} ${entry.label}`);
+    }else{
+      const fl=entry.links[0];
+      const parts=[`${num++}. ${fl.nick||''}${fl.id?` @${fl.id}`:''}`];
+      entry.links.forEach(l=>{
+        if(l.url) parts.push(l.url);
+        if(l.note) parts.push('ㄴ'+l.note);
+      });
+      lines.push(parts.join('\n'));
+    }
+  });
+  const dateStr = getTitleDate(v) || v.date || '';
+  const text = (dateStr?`${dateStr}일\n\n`:'') + lines.join('\n');
   await navigator.clipboard.writeText(text);
   showToast('📋 전체 복사됨');
 }
@@ -4503,6 +4541,8 @@ async function loadSettings(){
     autoHtml += `<label>시작 마감 <input type="time" value="${gs.startCloseTime||'22:00'}" onchange="updateAutoVoteTime('${gid}','startCloseTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
     autoHtml += `<label>완료 생성 <input type="time" value="${gs.endTime||''}" onchange="updateAutoVoteTime('${gid}','endTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
     autoHtml += `<label>완료 마감 <input type="time" value="${gs.endCloseTime||'13:00'}" onchange="updateAutoVoteTime('${gid}','endCloseTime',this.value)" style="font-size:12px;padding:2px 6px;border-radius:6px;border:1px solid var(--border)"></label>`;
+    autoHtml += `<label>시작 유형 <select onchange="updateAutoVoteTime('${gid}','startMode',this.value)" style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid var(--border)"><option value="option" ${(gs.startMode||'option')==='option'?'selected':''}>선택지</option><option value="image" ${gs.startMode==='image'?'selected':''}>이미지</option></select></label>`;
+    autoHtml += `<label>완료 유형 <select onchange="updateAutoVoteTime('${gid}','endMode',this.value)" style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid var(--border)"><option value="option" ${(gs.endMode||'option')==='option'?'selected':''}>선택지</option><option value="image" ${gs.endMode==='image'?'selected':''}>이미지</option></select></label>`;
     autoHtml += `</div></div>`;
   }
 
