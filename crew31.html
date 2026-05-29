@@ -605,7 +605,15 @@ function getKSTDate(){const d=new Date();d.setHours(d.getHours()+9);return d.toI
 
 // ── DB ──
 async function dbGet(p){try{const r=await fetch(`${DB}/${p}.json`);return await r.json();}catch{return null;}}
-async function dbSet(p,d){try{await fetch(`${DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});}catch{}}
+async function dbSet(p,d,retry=0){
+  try{
+    const res=await fetch(`${DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});
+    if(!res.ok && retry<2){ await new Promise(r=>setTimeout(r,500)); return dbSet(p,d,retry+1); }
+  }catch(e){
+    if(retry<2){ await new Promise(r=>setTimeout(r,500)); return dbSet(p,d,retry+1); }
+    console.error('dbSet error',p,e);
+  }
+}
 async function dbDelete(p){try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
 async function dbPush(p,d){try{const r=await fetch(`${DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 async function dbDel(p){try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
@@ -810,7 +818,7 @@ async function enterApp(){
     _currentDept = savedGroup;
     renderGroupSelectBar();
     selectGroup(savedGroup);
-    goTab(savedTab);
+    setTimeout(()=>goTab(savedTab), 200);
   } else {
     try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
     renderGroupSelectBar();
@@ -2543,6 +2551,7 @@ async function renderVoteCard(vid,v){
   const responses=v.responses||{};
   const myKey=CU?.name||CU?.key||'admin'; // 이름 기반
   const myVote=responses[myKey];
+  const hasVoted = myVote !== undefined && myVote !== null;
   const totalVotes=Object.keys(responses).length;
   const now=Date.now();
   const deadline=(v.date&&v.time)?new Date(v.date+'T'+v.time).getTime():0;
@@ -2621,8 +2630,17 @@ async function renderVoteCard(vid,v){
       }
     }catch(e){}
 
-    if(startVoters.length===0){
-      startVoters = Object.keys(allImages);
+    if(startVoters.length===0 && Object.keys(allImages).length===0){
+      // 시작 투표도 없고 이미지도 없으면 본인 업로드 버튼만 표시
+      if(!isClosed){
+        html+=`<div style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:10px">`;
+        html+=`<div style="font-size:24px;margin-bottom:6px">📸</div>`;
+        html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+        html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer">📎 이미지 선택</button>`;
+        html+=`</div>`;
+      }
+    } else {
+      if(startVoters.length===0) startVoters = Object.keys(allImages);
     }
     if(totalCount===0) totalCount = startVoters.length;
 
@@ -2712,7 +2730,7 @@ async function renderVoteCard(vid,v){
         html+=`</div>`;
       }
     });
-    if(myVote!==undefined&&!isClosed){
+    if(hasVoted&&!isClosed){
       html+=`<div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span><button onclick="cancelVote('${vid}')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid #ddd;background:white;color:var(--text3);cursor:pointer">취소</button></div>`;
     }
     if(isClosed){
