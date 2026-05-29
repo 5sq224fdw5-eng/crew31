@@ -604,7 +604,15 @@ function fmtDate(ts){if(!ts)return '';const d=new Date(ts);return d.toLocaleDate
 function getKSTDate(){const d=new Date();d.setHours(d.getHours()+9);return d.toISOString().slice(0,10);}
 
 // ── DB ──
-async function dbGet(p){try{const r=await fetch(`${DB}/${p}.json`);return await r.json();}catch{return null;}}
+async function dbGet(p){
+  try{
+    const controller=new AbortController();
+    const t=setTimeout(()=>controller.abort(),8000);
+    const r=await fetch(`${DB}/${p}.json`,{signal:controller.signal});
+    clearTimeout(t);
+    return await r.json();
+  }catch{return null;}
+}
 async function dbSet(p,d,retry=0){
   try{
     const res=await fetch(`${DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});
@@ -828,13 +836,38 @@ async function enterApp(){
   setTimeout(()=>checkExistingPushSub(),3000);
 }
 
+// Safari bfcache 대응
+window.addEventListener('pageshow', (e)=>{
+  if(e.persisted){
+    // bfcache에서 복원된 경우 강제 재로드
+    window.location.reload();
+  }
+});
+
 // ── 자동 로그인 ──
 (async()=>{
+  // 10초 후에도 로그인 안되면 로그인 화면으로
+  const loginTimeout = setTimeout(()=>{
+    if(!CU) document.getElementById('loginPage').style.display='flex';
+  }, 10000);
   const saved=localStorage.getItem('crew31User') || (()=>{
     const m=document.cookie.match(/crew31User=([^;]+)/);
     return m?decodeURIComponent(m[1]):null;
   })();
-  if(saved){try{CU=JSON.parse(saved);localStorage.setItem('crew31User',saved);await enterApp();}catch{localStorage.removeItem('crew31User');}}
+  if(saved){
+    try{
+      CU=JSON.parse(saved);
+      localStorage.setItem('crew31User',saved);
+      clearTimeout(loginTimeout);
+      await enterApp();
+    }catch{
+      localStorage.removeItem('crew31User');
+      document.getElementById('loginPage').style.display='flex';
+    }
+  } else {
+    clearTimeout(loginTimeout);
+    document.getElementById('loginPage').style.display='flex';
+  }
 })();
 
 // ══════════════════════════════════════════════
@@ -2889,22 +2922,23 @@ async function renderVoteCard(vid,v){
     // 드롭박스 + @아이디 + 링크 + 메모 구조
     html+=`<div style="margin-top:10px">`;
     html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
+    const defaultLinkType = isTupide ? 'tupide' : '';
     html+=`<select id="linkType_${vid}" onchange="onLinkTypeChange('${vid}')" style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-    html+=`<option value="">선택 안함</option>`;
+    html+=`<option value="" ${!defaultLinkType?'selected':''}>선택 안함</option>`;
     html+=`<option value="normal">노피드</option>`;
     html+=`<option value="bonus">열정페이</option>`;
     html+=`<option value="leave">연차</option>`;
-    html+=`<option value="tupide">투피드</option>`;
+    html+=`<option value="tupide" ${isTupide?'selected':''}>투피드</option>`;
     html+=`</select>`;
     html+=`<input id="linkId_${vid}" placeholder="@아이디" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     html+=`</div>`;
-    html+=`<div id="linkInputArea_${vid}">`;
+    html+=`<div id="linkInputArea_${vid}" style="${isTupide?'display:none':''}">`;
     html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
     html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     html+=`<input id="linkNote_${vid}" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     html+=`</div>`;
     html+=`</div>`;
-    html+=`<div id="linkInputArea2_${vid}" style="display:none">`;
+    html+=`<div id="linkInputArea2_${vid}" style="${isTupide?'':'display:none'}">`;
     html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
     html+=`<input id="linkUrl_${vid}_1" placeholder="링크 1" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     html+=`<input id="linkNote_${vid}_1" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
@@ -3367,6 +3401,8 @@ async function cancelVote(vid){
 }
 
 async function castVote(vid,optIdx){
+  if(window._castVoting) return;
+  window._castVoting = true;
   const myKey=CU?.name||CU?.key||'admin';
   const v=await dbGet(`votes/${vid}`);
   if(!v){showToast('투표를 찾을 수없습니다');return;}
@@ -3517,6 +3553,7 @@ async function castVote(vid,optIdx){
 
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
+  window._castVoting = false;
 }
 async function toggleVoteClose(vid,close){
   await dbSet(`votes/${vid}/closed`,close);
