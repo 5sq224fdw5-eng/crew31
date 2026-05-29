@@ -3457,51 +3457,37 @@ async function cancelVote(vid){
   const key=CU?.key||'admin';
   const v=await dbGet(`votes/${vid}`);
 
-  // 취소 전 선택지 확인해서 연차/투피드 복구
+  let wasLeave=false, wasTupide=false;
+  const usedDate = v ? (getTitleDate(v)||todayStr) : todayStr;
+  // 취소 전 선택지 확인해서 연차 복구
   if(v && v.responses?.[myKey]!==undefined){
     const prevOptText=(v.options?.[v.responses[myKey]]||'').toLowerCase();
-    const wasLeave=prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
-    const wasTupide=prevOptText.includes('투피드')||prevOptText.includes('두배');
+    wasLeave=prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
+    wasTupide=prevOptText.includes('투피드')||prevOptText.includes('두배');
 
     if(wasLeave){
       try{
-        const gameMembers=await gameGet('members');
-        if(gameMembers){
-          const gName=groups[v.group]?.name||'';
-          const gameEntry=Object.entries(gameMembers).find(([k,m])=>{
-            const clean=(m.name||'').replace(/^\*/,'');
-            return clean===(gName+myKey)||clean===myKey;
-          });
-          if(gameEntry){
-            const cur=await gameGet(`memberLeave/${gameEntry[0]}`)||0;
-            await gameSet(`memberLeave/${gameEntry[0]}`,cur+1);
+        const gmKey=await _gameKeyFor(myKey, v.group);
+        if(gmKey){
+          const usedType = v.leaveUsed?.[myKey];
+          if(usedType==='prize'){
+            const prizesRaw=await gameGet(`memberPrizes/${gmKey}`);
+            if(Array.isArray(prizesRaw)){
+              const idx=prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
+              if(idx>=0){const arr=[...prizesRaw];arr[idx]={...arr[idx],deducted:false,usedDate:null};await gameSet(`memberPrizes/${gmKey}`,arr);}
+            }else if(prizesRaw){
+              const found=Object.entries(prizesRaw).find(([k,p])=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
+              if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);}
+            }
+            showToast('↩️ 경품 연차 복구됨');
+          }else{
+            // 마커가 없거나 manual이면 수동 연차로 복구 (구버전 호환)
+            const cur=await gameGet(`memberLeave/${gmKey}`)||0;
+            await gameSet(`memberLeave/${gmKey}`,cur+1);
+            await gamePush(`leaveLog/${gmKey}`,{type:'give',amount:1,date:usedDate,memo:'투표 취소 연차 복구',time:Date.now()});
             showToast('↩️ 연차 복구됨');
           }
-        }
-      }catch(e){}
-    }
-
-    if(wasTupide){
-      try{
-        const gameMembers=await gameGet('members');
-        if(gameMembers){
-          const gName=groups[v.group]?.name||'';
-          const gameEntry=Object.entries(gameMembers).find(([k,m])=>{
-            const clean=(m.name||'').replace(/^\*/,'');
-            return clean===(gName+myKey)||clean===myKey;
-          });
-          if(gameEntry){
-            const prizesRaw=await gameGet(`memberPrizes/${gameEntry[0]}`);
-            if(prizesRaw){
-              if(Array.isArray(prizesRaw)){
-                const idx=prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('투피드'));
-                if(idx>=0){prizesRaw[idx]={...prizesRaw[idx],deducted:false,usedDate:null};await gameSet(`memberPrizes/${gameEntry[0]}`,prizesRaw);showToast('↩️ 투피드 복구됨');}
-              } else {
-                const found=Object.entries(prizesRaw).find(([k,p])=>p&&p.deducted&&(p.name||'').includes('투피드'));
-                if(found){await gameSet(`memberPrizes/${gameEntry[0]}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gameEntry[0]}/${found[0]}/usedDate`,null);showToast('↩️ 투피드 복구됨');}
-              }
-            }
-          }
+          await dbDelete(`votes/${vid}/leaveUsed/${myKey}`);
         }
       }catch(e){}
     }
@@ -3512,8 +3498,103 @@ async function cancelVote(vid){
   await dbDelete(`votes/${vid}/links/${key}`);
   await dbDelete(`votes/${vid}/links/${key}_1`);
   await dbDelete(`votes/${vid}/links/${key}_2`);
+
+  // 투피드: 응답 삭제 후 그날 정합 (같은 날 다른 투표에 투피드 남아있으면 경품 유지, 없으면 복구)
+  if(wasTupide && v){ await reconcileTupide(v.group, usedDate, myKey); }
+
   if(!wasLeave && !wasTupide) showToast('투표 취소됨');
   if(_currentTab==='home'||_currentTab==='dept') loadDeptPage(_currentDept);
+}
+
+// 오락실 멤버 키 찾기 (그룹명+닉네임 매칭)
+async function _gameKeyFor(myKey, group){
+  const gameMembers = await gameGet('members');
+  if(!gameMembers) return null;
+  const gName = groups[group]?.name||'';
+  const entry = Object.entries(gameMembers).find(([k,m])=>{
+    const clean=(m.name||'').replace(/^\*/,'');
+    return clean===(gName+myKey)||clean===myKey||clean.endsWith(myKey);
+  });
+  return entry?entry[0]:null;
+}
+
+// 연차 현황: 수동(memberLeave 숫자) + 경품 연차(memberPrizes 중 이름에 '연차') 합산.
+// 가장 오래 적립된 출처를 판별해서 차감 순서를 정함.
+async function _leaveInfo(gmKey){
+  const [manualRaw, prizesRaw, logRaw] = await Promise.all([
+    gameGet(`memberLeave/${gmKey}`),
+    gameGet(`memberPrizes/${gmKey}`),
+    gameGet(`leaveLog/${gmKey}`)
+  ]);
+  const manual = manualRaw||0;
+  const isArr = Array.isArray(prizesRaw);
+  const prizeUnits = prizesRaw
+    ? (isArr ? prizesRaw.map((p,i)=>({p,ref:i})) : Object.entries(prizesRaw).map(([k,p])=>({p,ref:k})))
+    : [];
+  const leavePrizes = prizeUnits
+    .filter(x=>x.p&&!x.p.deducted&&(x.p.name||'').includes('연차'))
+    .sort((a,b)=>(a.p.time||0)-(b.p.time||0)); // 오래된 순
+  const oldestPrizeTime = leavePrizes.length ? (leavePrizes[0].p.time||0) : Infinity;
+  // 수동 연차 최초 적립 시각(give 로그 중 가장 이른 것). 기록 없으면 0(가장 오래된 것으로 간주)
+  let manualRepTime = Infinity;
+  if(manual>0){
+    manualRepTime = 0;
+    if(logRaw){
+      const gives = Object.values(logRaw).filter(l=>l&&l.type==='give'&&l.time);
+      if(gives.length) manualRepTime = Math.min(...gives.map(l=>l.time));
+    }
+  }
+  return {manual, isArr, prizesRaw, leavePrizes, oldestPrizeTime, manualRepTime, total: manual + leavePrizes.length};
+}
+
+// 투피드 경품 정합: 같은 날(dayKey)·같은 그룹에서 이 멤버가 투피드를 고른 투표가
+// 하나라도 있으면 경품 1개만 차감(usedDate=dayKey), 하나도 없으면 그날 차감분 복구.
+// → 시작/완료 둘 다 골라도 1개만 차감됨.
+async function reconcileTupide(group, dayKey, myKey){
+  try{
+    const allV = await dbGet('votes') || {};
+    let active = false;
+    for(const sv of Object.values(allV)){
+      if(!sv || sv.deleted || sv.group!==group) continue;
+      if(getTitleDate(sv)!==dayKey) continue;
+      const idx = sv.responses?.[myKey];
+      if(idx===undefined||idx===null) continue;
+      const t=(sv.options?.[idx]||'').toLowerCase();
+      if(t.includes('투피드')||t.includes('두배')){ active=true; break; }
+    }
+    const gmKey = await _gameKeyFor(myKey, group);
+    if(!gmKey) return;
+    const prizesRaw = await gameGet(`memberPrizes/${gmKey}`);
+    if(!prizesRaw) return;
+    if(Array.isArray(prizesRaw)){
+      const arr=[...prizesRaw];
+      const deductedIdxs=arr.map((p,i)=>({p,i})).filter(x=>x.p&&x.p.deducted&&(x.p.name||'').includes('투피드')&&x.p.usedDate===dayKey).map(x=>x.i);
+      if(active && deductedIdxs.length===0){
+        const idx=arr.findIndex(p=>p&&!p.deducted&&(p.name||'').includes('투피드'));
+        if(idx>=0){arr[idx]={...arr[idx],deducted:true,usedDate:dayKey};await gameSet(`memberPrizes/${gmKey}`,arr);showToast('☕ 투피드 경품 1개 사용 처리됨');}
+      } else if(!active && deductedIdxs.length>0){
+        deductedIdxs.forEach(i=>{arr[i]={...arr[i],deducted:false,usedDate:null};});
+        await gameSet(`memberPrizes/${gmKey}`,arr);
+        showToast('↩️ 투피드 경품 복구됨');
+      } else if(active && deductedIdxs.length>1){
+        // 혹시 그날 2개 이상 차감돼 있으면 1개만 남기고 복구
+        deductedIdxs.slice(1).forEach(i=>{arr[i]={...arr[i],deducted:false,usedDate:null};});
+        await gameSet(`memberPrizes/${gmKey}`,arr);
+      }
+    } else {
+      const entriesArr=Object.entries(prizesRaw);
+      const deductedKeys=entriesArr.filter(([k,p])=>p&&p.deducted&&(p.name||'').includes('투피드')&&p.usedDate===dayKey).map(([k])=>k);
+      if(active && deductedKeys.length===0){
+        const found=entriesArr.find(([k,p])=>p&&!p.deducted&&(p.name||'').includes('투피드'));
+        if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,true);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,dayKey);showToast('☕ 투피드 경품 1개 사용 처리됨');}
+      } else if(!active && deductedKeys.length>0){
+        for(const k of deductedKeys){await gameSet(`memberPrizes/${gmKey}/${k}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${k}/usedDate`,null);}
+        showToast('↩️ 투피드 경품 복구됨');
+      } else if(active && deductedKeys.length>1){
+        for(const k of deductedKeys.slice(1)){await gameSet(`memberPrizes/${gmKey}/${k}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${k}/usedDate`,null);}
+      }
+    }
+  }catch(e){}
 }
 
 async function castVote(vid,optIdx){
@@ -3521,123 +3602,128 @@ async function castVote(vid,optIdx){
   window._castVoting = true;
   const myKey=CU?.name||CU?.key||'admin';
   const v=await dbGet(`votes/${vid}`);
-  if(!v){showToast('투표를 찾을 수없습니다');return;}
-  if(v.closed){showToast('마감된 투표입니다');return;}
+  if(!v){showToast('투표를 찾을 수없습니다');window._castVoting=false;return;}
+  if(v.closed){showToast('마감된 투표입니다');window._castVoting=false;return;}
 
-  // 선택지 체크 - 연차/투피드 없으면 막기
+  // 선택지 타입 판별
   const newOptText = (v.options?.[optIdx]||'').toLowerCase();
   const isLeaveOpt = newOptText.includes('프패')||newOptText.includes('연차')||newOptText.includes('프리패스');
   const isTupideOpt = newOptText.includes('투피드')||newOptText.includes('두배');
+  const prevOptIdx = v.responses?.[myKey];
+  const prevOptText = (prevOptIdx!==undefined) ? (v.options?.[prevOptIdx]||'').toLowerCase() : '';
+  const wasLeave = prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
+  const wasTupide = prevOptText.includes('투피드')||prevOptText.includes('두배');
+  const usedDate = getTitleDate(v) || todayStr;
 
-  if(isLeaveOpt){
+  // 오락실 멤버 키 찾기
+  async function _findGameKey(){
+    const gameMembers = await gameGet('members');
+    if(!gameMembers) return null;
+    const gName = groups[v.group]?.name||'';
+    const entry = Object.entries(gameMembers).find(([k,m])=>{
+      const clean=(m.name||'').replace(/^\*/,'');
+      return clean===(gName+myKey)||clean===myKey||clean.endsWith(myKey);
+    });
+    return entry?entry[0]:null;
+  }
+
+  // 보유 확인 (신규 선택일 때만 막기) — 수동+경품 연차 합산
+  if(isLeaveOpt && !wasLeave){
     try{
-      const gameMembers = await gameGet('members');
-      if(gameMembers){
-        const gName = groups[v.group]?.name||'';
-        const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
-          const clean=(m.name||'').replace(/^\*/,'');
-          return clean===(gName+myKey)||clean===myKey||clean.endsWith(myKey);
-        });
-        if(gameEntry){
-          const cur = await gameGet(`memberLeave/${gameEntry[0]}`) || 0;
-          if(cur <= 0){showToast('⚠️ 보유 연차가 없어요. 다른 선택지를 골라주세요!');return;}
-        }
+      const gmKey=await _findGameKey();
+      if(gmKey){
+        const info=await _leaveInfo(gmKey);
+        if(info.total<=0){showToast('⚠️ 보유 연차가 없어요. 다른 선택지를 골라주세요!');window._castVoting=false;return;}
+      }
+    }catch(e){}
+  }
+  if(isTupideOpt && !wasTupide){
+    try{
+      const gmKey=await _findGameKey();
+      if(gmKey){
+        const prizesRaw=await gameGet(`memberPrizes/${gmKey}`);
+        const prizes=prizesRaw?(Array.isArray(prizesRaw)?prizesRaw:Object.values(prizesRaw)):[];
+        const hasUndeducted=prizes.some(p=>p&&!p.deducted&&(p.name||'').includes('투피드'));
+        const hasThisDay=prizes.some(p=>p&&p.deducted&&(p.name||'').includes('투피드')&&p.usedDate===usedDate);
+        // 미사용 경품도 없고, 그날 이미 차감된 것도 없으면 막기
+        if(!hasUndeducted && !hasThisDay){showToast('⚠️ 보유 투피드 경품이 없어요. 다른 선택지를 골라주세요!');window._castVoting=false;return;}
       }
     }catch(e){}
   }
 
-  if(isTupideOpt){
-    const gameMembers = await gameGet('members');
-    if(gameMembers){
-      const gName = groups[v.group]?.name||'';
-      const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
-        const clean=(m.name||'').replace(/^\*/,'');
-        return clean===(gName+myKey)||clean===myKey;
-      });
-      if(gameEntry){
-        const prizesRaw = await gameGet(`memberPrizes/${gameEntry[0]}`);
-        const prizes = prizesRaw ? (Array.isArray(prizesRaw)?prizesRaw:Object.values(prizesRaw)) : [];
-        const hasTupide = prizes.some(p=>p&&!p.deducted&&(p.name||'').includes('투피드'));
-        if(!hasTupide){showToast('⚠️ 보유 투피드 경품이 없어요. 다른 선택지를 골라주세요!');return;}
+  // ── 차감 (신규로 연차 선택) ── 수동/경품 중 먼저 적립된 순으로 1일 차감
+  if(isLeaveOpt && !wasLeave){
+    try{
+      const gmKey=await _findGameKey();
+      if(gmKey){
+        const info=await _leaveInfo(gmKey);
+        // 경품 연차가 수동보다 먼저 적립됐으면 경품부터, 아니면 수동부터
+        const usePrize = info.leavePrizes.length>0 && info.oldestPrizeTime <= info.manualRepTime;
+        if(usePrize){
+          const target=info.leavePrizes[0];
+          if(info.isArr){
+            const arr=[...info.prizesRaw];
+            arr[target.ref]={...arr[target.ref],deducted:true,usedDate};
+            await gameSet(`memberPrizes/${gmKey}`,arr);
+          }else{
+            await gameSet(`memberPrizes/${gmKey}/${target.ref}/deducted`,true);
+            await gameSet(`memberPrizes/${gmKey}/${target.ref}/usedDate`,usedDate);
+          }
+          await dbSet(`votes/${vid}/leaveUsed/${myKey}`,'prize');
+          showToast('🏖️ 경품 연차 1일 사용');
+        }else{
+          const cur=info.manual;
+          await gameSet(`memberLeave/${gmKey}`,Math.max(0,cur-1));
+          await gamePush(`leaveLog/${gmKey}`,{type:'deduct',amount:1,date:usedDate,memo:'투표 연차 사용',time:Date.now()});
+          await dbSet(`votes/${vid}/leaveUsed/${myKey}`,'manual');
+          showToast('🏖️ 연차 1일 차감됨');
+        }
       }
-    }
+    }catch(e){}
   }
+  // 투피드 차감은 아래 reconcileTupide()에서 "그날 1개만" 처리
 
-  // 이전 선택지 확인 - 연차/투피드였으면 복구
-  const prevOptIdx = v.responses?.[myKey];
-  if(prevOptIdx !== undefined && prevOptIdx !== optIdx){
-    const prevOptText = (v.options?.[prevOptIdx]||'').toLowerCase();
-    const newOptText = (v.options?.[optIdx]||'').toLowerCase();
-    const wasLeave = prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
-    const wasTupide = prevOptText.includes('투피드')||prevOptText.includes('두배');
-    const isLeave = newOptText.includes('프패')||newOptText.includes('연차')||newOptText.includes('프리패스');
-    const isTupide = newOptText.includes('투피드')||newOptText.includes('두배');
-
-    // 연차 복구 (프패 → 다른거로 바꿀 때)
-    if(wasLeave && !isLeave){
+  // ── 복구 (연차/투피드였다가 다른 선택지로 변경) ──
+  if(prevOptIdx!==undefined && prevOptIdx!==optIdx){
+    // 연차 복구 — 사용했던 출처(경품/수동)대로 되돌림
+    if(wasLeave && !isLeaveOpt){
       try{
-        const gameMembers = await gameGet('members');
-        if(gameMembers){
-          const gName = groups[v.group]?.name||'';
-          const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
-            const clean=(m.name||'').replace(/^\*/,'');
-            return clean===(gName+myKey)||clean===myKey;
-          });
-          if(gameEntry){
-            const [gmKey] = gameEntry;
-            const cur = await gameGet(`memberLeave/${gmKey}`) || 0;
-            await gameSet(`memberLeave/${gmKey}`, cur+1);
+        const gmKey=await _findGameKey();
+        if(gmKey){
+          const usedType = v.leaveUsed?.[myKey];
+          if(usedType==='prize'){
+            // 그날 사용된 경품 연차 복구
+            const prizesRaw=await gameGet(`memberPrizes/${gmKey}`);
+            if(Array.isArray(prizesRaw)){
+              const idx=prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
+              if(idx>=0){const arr=[...prizesRaw];arr[idx]={...arr[idx],deducted:false,usedDate:null};await gameSet(`memberPrizes/${gmKey}`,arr);}
+            }else if(prizesRaw){
+              const found=Object.entries(prizesRaw).find(([k,p])=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
+              if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);}
+            }
+            showToast('↩️ 경품 연차 복구됨');
+          }else if(usedType==='manual'){
+            const cur=await gameGet(`memberLeave/${gmKey}`)||0;
+            await gameSet(`memberLeave/${gmKey}`,cur+1);
+            await gamePush(`leaveLog/${gmKey}`,{type:'give',amount:1,date:usedDate,memo:'투표 연차 복구',time:Date.now()});
             showToast('↩️ 연차 복구됨');
           }
+          await dbDelete(`votes/${vid}/leaveUsed/${myKey}`);
         }
       }catch(e){showToast('⚠️ 연차 복구 실패');}
     }
-    // 투피드 → 다른 선택지: 링크 삭제
-    if(wasTupide && !isTupide){
+    // 투피드 → 다른 선택지: 링크 삭제 (경품 정합은 아래 reconcileTupide에서 처리)
+    if(wasTupide && !isTupideOpt){
       const key=CU?.key||'admin';
       await dbDelete(`votes/${vid}/links/${key}_1`);
       await dbDelete(`votes/${vid}/links/${key}_2`);
       await dbDelete(`votes/${vid}/links/${key}`);
     }
-    // 투피드 경품 복구
-    if(wasTupide && !isTupide){
-      try{
-        const gameMembers = await gameGet('members');
-        if(gameMembers){
-          const gName = groups[v.group]?.name||'';
-          const entry = Object.entries(gameMembers).find(([k,m])=>{
-            const n=m.name||'';
-            return n===myKey||n===(gName+myKey)||n.endsWith(myKey);
-          });
-          if(entry){
-            const [gmKey] = entry;
-            const prizesRaw = await gameGet(`memberPrizes/${gmKey}`);
-            if(prizesRaw){
-              if(Array.isArray(prizesRaw)){
-                const idx = prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('투피드'));
-                if(idx>=0){
-                  prizesRaw[idx]={...prizesRaw[idx],deducted:false,usedDate:null};
-                  await gameSet(`memberPrizes/${gmKey}`,prizesRaw);
-                  showToast('↩️ 투피드 경품 복구됨');
-                }
-              } else {
-                const entries = Object.entries(prizesRaw);
-                const found = entries.find(([k,p])=>p&&p.deducted&&(p.name||'').includes('투피드'));
-                if(found){
-                  await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);
-                  await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);
-                  showToast('↩️ 투피드 경품 복구됨');
-                }
-              }
-            }
-          }
-        }
-      }catch(e){showToast('⚠️ 투피드 복구 실패');}
-    }
   }
 
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   showToast('✅ 투표 완료!');
+  await reconcileTupide(v.group, usedDate, myKey);
   await recordAttendance(vid, optIdx);
 
   // 연차 선택 시 → 같은 날짜 완료 투표에도 자동 기록
