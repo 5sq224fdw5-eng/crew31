@@ -938,8 +938,10 @@ async function checkAutoVote(){
 }
 
 function startAutoVoteScheduler(){
-  setInterval(checkAutoVote, 60000); // 1분마다 체크
-  checkAutoVote();
+  // 자동 투표 생성은 서버(Cloudflare Worker)가 담당합니다.
+  // 폰에서도 만들면 중복되므로 폰 기반 생성은 비활성화.
+  // (설정 화면에서 시간/유형/on-off 수정은 그대로 가능 — 서버가 그 설정을 읽어 실행함)
+  return;
 }
 
 function logout(){
