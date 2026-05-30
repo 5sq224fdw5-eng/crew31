@@ -270,6 +270,12 @@ document.addEventListener('keydown',e=>{
         <button class="login-btn admin" onclick="doLogin('admin')">입장하기</button>
       </div>
     </div>
+    <!-- 인앱 브라우저 안내 (카드 아래, 간결하게) -->
+    <div id="inappWarn" style="display:none;width:100%;max-width:400px;margin-top:12px;text-align:center">
+      <span style="font-size:12px;color:#C97A40">카톡에서 열면 로그인이 섞일 수 있어요. </span>
+      <a onclick="copyIntranetUrl()" style="font-size:12px;color:#FF85C1;font-weight:800;text-decoration:underline;cursor:pointer">주소 복사 →</a>
+      <span style="font-size:12px;color:#C97A40"> 후 브라우저로 열기</span>
+    </div>
     <!-- 오락실 바로가기 -->
     <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
       style="margin-top:16px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.4);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
@@ -300,7 +306,7 @@ document.addEventListener('keydown',e=>{
           🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
         </button>
         <button onclick="goToGame()" style="height:28px;padding:0 8px;border-radius:14px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white;white-space:nowrap">🎡 오락실</button>
-        <button onclick="forceReload()" style="width:30px;height:26px;border-radius:12px;background:rgba(255,255,255,0.2);border:none;font-size:13px;cursor:pointer;color:white">🔄</button>
+        <button id="reloadBtn" onclick="forceReload()" ondblclick="hardUpdate()" title="탭: 새로고침 · 길게/더블탭: 강제 업데이트" style="width:30px;height:26px;border-radius:12px;background:rgba(255,255,255,0.2);border:none;font-size:13px;cursor:pointer;color:white">🔄</button>
         <button onclick="logout()" style="height:26px;padding:0 8px;border-radius:12px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white;white-space:nowrap">🚪 나가기</button>
       </div>
     </div>
@@ -602,9 +608,46 @@ let _currentChatRoom=null; // {type:'all'|'dept'|'dm', id:..., name:...}
 let _pendingFeedVid=null;
 let _lockAction=null;
 
+// ── 인앱 브라우저(카톡/인스타/페북/네이버 등) 감지 ──
+function isInAppBrowser(){
+  const ua=(navigator.userAgent||'').toLowerCase();
+  return /kakaotalk|instagram|fban|fbav|fb_iab|line\/|naver|daum|band|everytimeapp|snapchat|wechat|whale|trill|musical_ly|tiktok/.test(ua);
+}
+function copyIntranetUrl(){
+  const url='https://5sq224fdw5-eng.github.io/crew31/crew31.html';
+  const done=()=>showToast('🔗 주소 복사됨! 브라우저 주소창에 붙여넣어 주세요');
+  try{
+    navigator.clipboard.writeText(url).then(done).catch(()=>{
+      const t=document.createElement('textarea');t.value=url;document.body.appendChild(t);t.select();
+      try{document.execCommand('copy');done();}catch(e){prompt('아래 주소를 복사하세요',url);}
+      document.body.removeChild(t);
+    });
+  }catch(e){prompt('아래 주소를 복사하세요',url);}
+}
+function showInAppWarnIfNeeded(){
+  try{
+    const el=document.getElementById('inappWarn');
+    if(el && isInAppBrowser()) el.style.display='block';
+  }catch(e){}
+}
+
 // ── 세션 영속화 헬퍼 (인앱브라우저/PWA에서 localStorage가 휘발돼도 Firebase로 복원) ──
+function getDeviceId(){
+  // 기기마다 고유한 영구 ID (다른 사람의 서버 세션으로 잘못 복원되는 것 방지)
+  try{
+    let id=localStorage.getItem('crew31DeviceId');
+    if(!id){
+      id=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10));
+      localStorage.setItem('crew31DeviceId',id);
+    }
+    return id;
+  }catch{ return 'nodev'; }
+}
 function getSessionKey(){
-  try{ return btoa(unescape(encodeURIComponent(navigator.userAgent))).replace(/[^a-zA-Z0-9]/g,'').slice(0,20); }
+  try{
+    const ua=btoa(unescape(encodeURIComponent(navigator.userAgent))).replace(/[^a-zA-Z0-9]/g,'').slice(0,12);
+    return (ua+'_'+getDeviceId()).slice(0,40);
+  }
   catch{ return 'default_session_key'; }
 }
 async function persistSession(){
@@ -684,6 +727,28 @@ async function hardUpdate(){
   setTimeout(()=>{ try{ location.reload(); }catch(e){ location.href=location.href; } }, 600);
 }
 
+// 헤더 새로고침 버튼 길게 누르면(0.6초) 강제 업데이트 (사원/관리자 공통)
+(function(){
+  function bindLongPress(){
+    const btn=document.getElementById('reloadBtn');
+    if(!btn||btn._lpBound)return;
+    btn._lpBound=true;
+    let timer=null,fired=false;
+    const start=()=>{fired=false;timer=setTimeout(()=>{fired=true;hardUpdate();},600);};
+    const cancel=()=>{ if(timer){clearTimeout(timer);timer=null;} };
+    btn.addEventListener('touchstart',start,{passive:true});
+    btn.addEventListener('touchend',cancel);
+    btn.addEventListener('touchmove',cancel,{passive:true});
+    btn.addEventListener('mousedown',start);
+    btn.addEventListener('mouseup',cancel);
+    btn.addEventListener('mouseleave',cancel);
+    // 길게 눌러 강제업데이트가 실행된 경우, 뒤이은 click(새로고침) 무시
+    btn.addEventListener('click',(e)=>{ if(fired){e.stopImmediatePropagation();e.preventDefault();fired=false;} },true);
+  }
+  if(document.readyState!=='loading')bindLongPress();
+  else document.addEventListener('DOMContentLoaded',bindLongPress);
+})();
+
 // 새 서비스워커(=새 버전)가 설치되면 즉시 적용하고 한 번만 자동 새로고침
 (function(){
   if(!('serviceWorker' in navigator)) return;
@@ -729,6 +794,11 @@ async function doLogin(role){
       if(!entry){showToast('등록되지 않은 이름입니다');return;}
       CU={name,role:'member',key:entry[0]};
     }
+    // 로그인 시 이 기기에 '새 세션 ID'를 발급 → 이전 사용자의 서버세션과 완전히 분리
+    try{
+      const newId=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10));
+      localStorage.setItem('crew31DeviceId',newId);
+    }catch(e){}
     // 모든 저장소 + Firebase에 세션 저장 (await로 확실히 기록 후 진입)
     await persistSession();
     await enterApp();
@@ -813,33 +883,54 @@ async function checkAutoVote(){
   const tomorrowStr2 = tomorrow.toISOString().slice(0,10);
   const dateLabel = `${now.getMonth()+1}월 ${now.getDate()}일`;
 
+  // 이미 같은 제목의 투표가 오늘 존재하는지 확인 (여러 기기 중복 생성 방지)
+  const existingVotes = await dbGet('votes') || {};
+  function voteExists(title, group){
+    return Object.values(existingVotes).some(sv=>sv && !sv.deleted && sv.group===group && sv.title===title);
+  }
+  // 서버 가드: autoVoteGuard/{gid}_{date}_{type} 를 원자적으로 선점
+  async function claimGuard(key){
+    try{
+      const existing = await dbGet(`autoVoteGuard/${key}`);
+      if(existing) return false;          // 이미 누군가 생성함
+      await dbSet(`autoVoteGuard/${key}`, {t:Date.now(), by:CU?.name||'admin'});
+      return true;
+    }catch(e){ return false; }
+  }
+
   for(const [gid, sch] of Object.entries(schedule.groups||{})){
     if(!sch.enabled) continue;
 
     // 시작 투표 자동 생성
     if(sch.startTime && hhmm === sch.startTime){
-      const lastKey = `autoVoteDone_start_${gid}_${todayStr2}`;
-      if(localStorage.getItem(lastKey)) continue;
+      const title = `${dateLabel} 업무(참여) 시작`;
+      const guardKey = `start_${gid}_${todayStr2}`;
+      if(localStorage.getItem('autoVoteDone_'+guardKey)) continue;
+      localStorage.setItem('autoVoteDone_'+guardKey,'1');   // 같은 기기 즉시 차단
+      if(voteExists(title, gid)) continue;                  // 이미 생성됨
+      if(!(await claimGuard(guardKey))) continue;           // 서버 선점 실패 → 다른 기기가 생성
       const gData = groups[gid]||{};
       const opts = ['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
-      const startData = {title:`${dateLabel} 업무(참여) 시작`,group:gid,date:todayStr2,time:sch.startCloseTime||'22:00',options:opts,createdAt:Date.now()};
+      const startData = {title,group:gid,date:todayStr2,time:sch.startCloseTime||'22:00',options:opts,createdAt:Date.now()};
       if(sch.startMode==='image') startData.imageUpload=true;
       await dbPush('votes',startData);
-      localStorage.setItem(lastKey,'1');
       showToast(`🗳️ ${gData.name} 시작 투표 자동 생성됨${sch.startMode==='image'?' (이미지)':''}`);
       loadHome();
     }
 
     // 완료 투표 자동 생성
     if(sch.endTime && hhmm === sch.endTime){
-      const lastKey = `autoVoteDone_end_${gid}_${todayStr2}`;
-      if(localStorage.getItem(lastKey)) continue;
+      const title = `${dateLabel} 업무 완료`;
+      const guardKey = `end_${gid}_${todayStr2}`;
+      if(localStorage.getItem('autoVoteDone_'+guardKey)) continue;
+      localStorage.setItem('autoVoteDone_'+guardKey,'1');
+      if(voteExists(title, gid)) continue;
+      if(!(await claimGuard(guardKey))) continue;
       const gData = groups[gid]||{};
       const opts = ['퇴근할게요 (완료)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
-      const endData = {title:`${dateLabel} 업무 완료`,group:gid,date:tomorrowStr2,time:sch.endCloseTime||'13:00',options:opts,createdAt:Date.now()};
+      const endData = {title,group:gid,date:tomorrowStr2,time:sch.endCloseTime||'13:00',options:opts,createdAt:Date.now()};
       if(sch.endMode==='image') endData.imageUpload=true;
       await dbPush('votes',endData);
-      localStorage.setItem(lastKey,'1');
       showToast(`🗳️ ${gData.name} 완료 투표 자동 생성됨${sch.endMode==='image'?' (이미지)':''}`);
       loadHome();
     }
@@ -924,10 +1015,15 @@ async function readRemoteUser(){
   }
   return null;
 }
+// 인앱 브라우저는 기기 구분이 불안정 → 서버세션 복원을 막아 남의 계정으로 들어가는 것 방지
+async function readRemoteUserSafe(){
+  if(isInAppBrowser()) return null;
+  return await readRemoteUser();
+}
 async function restoreSession(){
   if(CU) return true;
   let saved = readLocalUser();
-  if(!saved) saved = await readRemoteUser();
+  if(!saved) saved = await readRemoteUserSafe();
   if(saved){
     try{ CU=JSON.parse(saved); await enterApp(); return true; }
     catch(e){ console.error('restoreSession error', e); }
@@ -955,15 +1051,16 @@ document.addEventListener('visibilitychange', ()=>{
       return;
     }catch(e){ CU=null; console.error('local restore error', e); }
   }
-  // 로컬에 없으면 Firebase 세션으로 복원 시도 (인앱브라우저/PWA 저장소 휘발 대비)
+  // 로컬에 없으면 Firebase 세션으로 복원 시도 (인앱브라우저는 제외 → 남의 계정 복원 방지)
   // 15초 후에도 복원 안 되면 로그인 화면
   const loginTimeout = setTimeout(()=>{
     if(!CU){
       document.getElementById('initLoader').style.display='none';
       document.getElementById('loginPage').style.display='flex';
+      showInAppWarnIfNeeded();
     }
   }, 15000);
-  const remoteSaved = await readRemoteUser();
+  const remoteSaved = await readRemoteUserSafe();
   if(remoteSaved && !CU){
     try{
       CU=JSON.parse(remoteSaved);
@@ -978,6 +1075,7 @@ document.addEventListener('visibilitychange', ()=>{
     clearTimeout(loginTimeout);
     document.getElementById('initLoader').style.display='none';
     document.getElementById('loginPage').style.display='flex';
+    showInAppWarnIfNeeded();
   }
 })();
 
@@ -2044,7 +2142,8 @@ async function loadLeave(){
     });
   }
 
-  const GAME_GROUPS=['좋아요','댓글','시크릿'];
+  // 오락실 그룹 접두어: 하드코딩 3개 + crew31 실제 그룹명 전부
+  const GAME_GROUPS=Array.from(new Set(['좋아요','댓글','시크릿',...Object.values(groups).map(g=>g.name).filter(Boolean)]));
   const byGroup={};
   GAME_GROUPS.forEach(g=>{byGroup[g]=[];});
   byGroup['기타']=[];
@@ -2055,15 +2154,19 @@ async function loadLeave(){
     const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
     const realName=group?cleanName.replace(group,''):cleanName;
 
-    // 사원이면 본인 이름 매칭되는 것만
-    if(!isAdmin&&realName!==CU?.name)return;
+    // 사원이면 본인 것만 — 접두어 제거 이름, 전체 이름, 끝부분 일치까지 폭넓게 매칭
+    if(!isAdmin){
+      const me=CU?.name||'';
+      const match = realName===me || cleanName===me || cleanName.endsWith(me);
+      if(!match) return;
+    }
 
     const gid=Object.keys(groups).find(id=>groups[id].name===group);
     const color=groups[gid]?.color||'#FF9F7A';
     const stock=m.stock||0;
     const leave=allMemberLeave?.[k]||0;
     const prizes=(allMemberPrizes[k]||[]).filter(p=>p&&(p.name||p.emoji));
-    (byGroup[group||'기타']).push({key:k,realName,color,stock,leave,prizes});
+    (byGroup[group||'기타']).push({key:k,realName:realName||cleanName,color,stock,leave,prizes});
   });
 
   let html='<div style="padding-bottom:60px">';
@@ -3322,6 +3425,23 @@ async function copyAllLinks(vid){
   }).map(([,l])=>l);
   const grouped={};
   sortedLinks.forEach(l=>{const nick=l.nick||'';if(!grouped[nick])grouped[nick]={nick,links:[],firstTime:l.time||0};grouped[nick].links.push(l);});
+
+  // 닉네임별 선택지 → 유형 라벨 매핑 (투피드/연차 표시용)
+  function _optTextOf(nick){
+    if(!v.responses||!v.options) return '';
+    const idx=v.responses[nick];
+    if(idx===undefined||idx===null) return '';
+    return (v.options[idx]||'').toLowerCase();
+  }
+  function _typeLabel(nick, links){
+    const t=_optTextOf(nick);
+    if(t.includes('투피드')||t.includes('두배')) return '투피드';
+    if(t.includes('프패')||t.includes('연차')||t.includes('프리패스')) return '연차';
+    // 선택지 정보가 없으면 링크 개수로 보조 판단(투피드는 보통 링크 2개)
+    if((links?.length||0)>=2) return '투피드';
+    return '';
+  }
+
   const allEntries=[
     ...bonusVoters.map(b=>({type:'bonus',nick:b.nick,label:b.type,time:0})),
     ...Object.values(grouped).map(g=>({type:'link',nick:g.nick,links:g.links,time:g.firstTime}))
@@ -3334,9 +3454,11 @@ async function copyAllLinks(vid){
       lines.push(`${num++}. ${entry.nick} ${entry.label}`);
     }else{
       const fl=entry.links[0];
-      const parts=[`${num++}. ${fl.nick||''}${fl.id?` @${fl.id}`:''}`];
-      entry.links.forEach(l=>{
-        if(l.url) parts.push(l.url);
+      const label=_typeLabel(entry.nick, entry.links);
+      const head=`${num++}. ${fl.nick||''}${fl.id?` @${fl.id}`:''}${label?` [${label}]`:''}`;
+      const parts=[head];
+      entry.links.forEach((l,i)=>{
+        if(l.url) parts.push(entry.links.length>1?`(${i+1}) ${l.url}`:l.url);
         if(l.note) parts.push('ㄴ'+l.note);
       });
       lines.push(parts.join('\n'));
@@ -3642,6 +3764,7 @@ async function castVote(vid,optIdx){
   if(window._castVoting) return;
   window._castVoting = true;
   const myKey=CU?.name||CU?.key||'admin';
+  const _voteStartUser=CU?.name||CU?.key||'admin'; // 시작 시점 사용자 고정
   const v=await dbGet(`votes/${vid}`);
   if(!v){showToast('투표를 찾을 수없습니다');window._castVoting=false;return;}
   if(v.closed){showToast('마감된 투표입니다');window._castVoting=false;return;}
@@ -3762,10 +3885,17 @@ async function castVote(vid,optIdx){
     }
   }
 
+  // 저장 직전: 처리 중 로그인 사용자가 바뀌지 않았는지 확인 (세션 꼬임 방지)
+  const _nowUser=CU?.name||CU?.key||'admin';
+  if(_nowUser!==_voteStartUser){
+    showToast('⚠️ 로그인 정보가 바뀌었어요. 다시 로그인 후 투표해주세요');
+    window._castVoting=false;
+    return;
+  }
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   showToast('✅ 투표 완료!');
   await reconcileTupide(v.group, usedDate, myKey);
-  await recordAttendance(vid, optIdx);
+  await recordAttendance(vid, optIdx, myKey);
 
   // 연차 선택 시 → 같은 날짜 완료 투표에도 자동 기록
   if(isLeaveOpt){
@@ -4145,7 +4275,7 @@ async function loadStatusGroup(gid) {
 }
 
 // ── 출석 자동 기록 (castVote 후 호출) ──
-async function recordAttendance(vid, optIdx) {
+async function recordAttendance(vid, optIdx, voterKey) {
   try {
     const v = await dbGet(`votes/${vid}`);
     if(!v || !v.date || !v.group || v.group === 'all') return;
@@ -4168,7 +4298,7 @@ async function recordAttendance(vid, optIdx) {
       date = `${now.getFullYear()}-${mon}-${day}`;
     }
     const mondayStr = getWeekKey(date);
-    const myKey = CU?.name || CU?.key || 'guest';
+    const myKey = voterKey || CU?.name || CU?.key || 'guest';
     const optText = (v.options || [])[optIdx] || '';
     const result = mapVoteResult(optText);
 
@@ -4183,71 +4313,8 @@ async function recordAttendance(vid, optIdx) {
 
     await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
 
-    // 투피드 선택 시 → 보유 경품 중 투피드 1개 차감
-    // 프패 선택 시 → 보유 연차 1일 차감
-    const crewMembers = await dbGet('members');
-    if(crewMembers){
-      const crewEntry = Object.entries(crewMembers).find(([k,m])=>
-        m.name===myKey || (m.name||'').endsWith(myKey)
-      );
-      if(crewEntry){
-        const [ck] = crewEntry;
-        if(result === '투피드'){
-          const gameMembers = await gameGet('members');
-          if(gameMembers){
-            const gName = groups[gid]?.name || '';
-            const fullName = gName + myKey;
-            const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
-              const clean = (m.name||'').replace(/^\*/,'');
-              return clean === fullName;
-            });
-            if(gameEntry){
-              const [gmKey] = gameEntry;
-              const prizesRaw = await gameGet(`memberPrizes/${gmKey}`);
-              if(prizesRaw){
-                // 배열이든 객체든 처리
-                const prizeArr = Array.isArray(prizesRaw) ? [...prizesRaw] : Object.values(prizesRaw);
-                const tupiIdx = prizeArr.findIndex(p=>p && !p.deducted && (p.name||'').includes('투피드'));
-                if(tupiIdx >= 0){
-                  prizeArr[tupiIdx] = {...prizeArr[tupiIdx], deducted: true, usedDate: date};
-                  await gameSet(`memberPrizes/${gmKey}`, prizeArr);
-                  showToast(`🎁 ${gName}${myKey} 투피드 경품 사용됨 (${date})`);
-                } else {
-                  showToast(`⚠️ ${gName}${myKey} 투피드 경품 없음`);
-                }
-              } else {
-                showToast(`⚠️ ${gName}${myKey} 보유 경품 없음`);
-              }
-            } else {
-              showToast(`⚠️ 오락실에서 ${gName}${myKey} 를 찾을 수 없음`);
-            }
-          }
-        } else if(result === '프패'){
-          // 오락실 연차 1일 차감
-          const gameMembers = await gameGet('members');
-          if(gameMembers){
-            const gName = groups[gid]?.name||'';
-            const gameEntry = Object.entries(gameMembers).find(([k,m])=>{
-              const clean=(m.name||'').replace(/^\*/,'');
-              return clean===(gName+myKey)||clean===myKey;
-            });
-            if(gameEntry){
-              const [gmKey] = gameEntry;
-              const cur = await gameGet(`memberLeave/${gmKey}`) || 0;
-              if(cur > 0){
-                await gameSet(`memberLeave/${gmKey}`, cur-1);
-                await dbPush(`leaveLog/${ck}`, {type:'deduct',amount:1,date,time:Date.now(),memo:`연차 사용 ${date}`});
-                showToast(`🏖️ 연차 1일 차감 · ${date} (잔여 ${cur-1}일)`);
-              } else {
-                showToast(`⚠️ 잔여 연차 없음`);
-              }
-            } else {
-              showToast(`⚠️ 오락실에서 멤버를 찾을 수 없음`);
-            }
-          }
-        }
-      }
-    }
+    // ※ 연차/투피드 경품 차감은 castVote()에서 단일 처리함.
+    //   (예전엔 여기서도 차감해 '중복 차감'·오작동이 있었으므로 제거)
 
     checkFullAttendance(gid, mondayStr, myKey);
   } catch(e) { console.warn('recordAttendance error', e); }
@@ -4907,6 +4974,8 @@ function openLinkModal(vid){
   document.getElementById('linkNick').value=CU.name||'';
   document.getElementById('linkUrl').value='';
   document.getElementById('linkNote').value='';
+  // 모달을 연 시점의 로그인 사용자를 고정 기록 (제출 시 본인 확인용)
+  window._linkModalUser = CU?.name||'';
   document.getElementById('linkModal').classList.add('active');
 }
 function closeLinkModal(){document.getElementById('linkModal').classList.remove('active');}
@@ -4916,7 +4985,15 @@ async function submitLink(){
   const url=document.getElementById('linkUrl').value.trim();
   const note=document.getElementById('linkNote').value.trim();
   if(!nick||!url){showToast('닉네임과 URL을 입력하세요');return;}
-  await dbPush(`voteLinks/${vid}`,{nick,url,note,submittedBy:CU.name,time:Date.now()});
+  // 보안: 모달 열 때 로그인 사용자와 현재 로그인 사용자가 다르면 중단 (세션 꼬임 방지)
+  if(window._linkModalUser && CU?.name && window._linkModalUser!==CU.name){
+    showToast('⚠️ 로그인 정보가 바뀌었어요. 다시 로그인 후 시도해주세요');
+    closeLinkModal();
+    return;
+  }
+  // submittedBy는 입력 닉이 아니라 "실제 로그인한 본인"으로 고정
+  const owner = CU?.name || window._linkModalUser || nick;
+  await dbPush(`voteLinks/${vid}`,{nick,url,note,submittedBy:owner,time:Date.now()});
   showToast('✅ 링크 제출됨');closeLinkModal();
 }
 
