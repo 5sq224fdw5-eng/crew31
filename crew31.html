@@ -271,10 +271,10 @@ document.addEventListener('keydown',e=>{
       </div>
     </div>
     <!-- 인앱 브라우저 안내 (카드 아래, 간결하게) -->
-    <div id="inappWarn" style="display:none;width:100%;max-width:400px;margin-top:12px;text-align:center">
-      <span style="font-size:12px;color:#C97A40">카톡에서 열면 로그인이 섞일 수 있어요. </span>
-      <a onclick="copyIntranetUrl()" style="font-size:12px;color:#FF85C1;font-weight:800;text-decoration:underline;cursor:pointer">주소 복사 →</a>
-      <span style="font-size:12px;color:#C97A40"> 후 브라우저로 열기</span>
+    <div id="inappWarn" style="display:none;width:100%;max-width:400px;margin-top:14px;background:#fff;border:2px solid #FF7043;border-radius:14px;padding:13px 16px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.12)">
+      <div style="font-size:13px;font-weight:800;color:#E64A19;margin-bottom:4px">⚠️ 카톡에서 바로 열면 로그인이 섞여요</div>
+      <div style="font-size:12px;color:#5a5a5a;line-height:1.5;margin-bottom:9px">아래 버튼으로 주소를 복사해<br><b style="color:#333">Safari·Chrome 브라우저에 붙여넣어</b> 열어주세요</div>
+      <button onclick="copyIntranetUrl()" style="width:100%;padding:11px;background:#FF7043;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer">🔗 주소 복사하기</button>
     </div>
     <!-- 오락실 바로가기 -->
     <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
