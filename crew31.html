@@ -2243,7 +2243,7 @@ async function loadLeave(){
           html+=`<span style="font-size:18px">${prizeEmoji}</span>`;
           html+=`<div>`;
           html+=`<div style="font-size:13px;font-weight:600;${isUsed?'text-decoration:line-through;color:var(--text3)':''}">${escH(prizeName)}</div>`;
-          if(isUsed && p.usedDate) html+=`<div style="font-size:10px;color:var(--text3)">${p.usedDate} 사용</div>`;
+          if(isUsed){ const ud=p.usedDate||p.deductDate; if(ud) html+=`<div style="font-size:10px;color:var(--text3)">${ud} 사용</div>`; }
           html+=`</div>`;
           html+=`</div>`;
           html+=`<span style="font-size:11px;padding:4px 12px;border-radius:10px;font-weight:700;`;
@@ -2321,8 +2321,9 @@ async function togglePrizeUsed(memberKey, prizeIdx, newDeducted){
   const raw=await gameGet(`memberPrizes/${memberKey}`);
   const arr=Array.isArray(raw)?raw:(raw?Object.values(raw):[]);
   if(!arr[prizeIdx])return;
-  const today=new Date().toLocaleDateString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit'}).replace(/\.\s*/g,'.').slice(0,-1);
-  arr[prizeIdx]={...arr[prizeIdx],deducted:newDeducted,deductDate:newDeducted?today:null};
+  const today=todayStr; // YYYY-MM-DD (투표 차감과 동일 형식)
+  // usedDate(표시용) + deductDate(호환) 둘 다 기록
+  arr[prizeIdx]={...arr[prizeIdx],deducted:newDeducted,usedDate:newDeducted?today:null,deductDate:newDeducted?today:null};
   await gameSet(`memberPrizes/${memberKey}`,arr);
   showToast(newDeducted?'✅ 사용완료 처리':'↩️ 미사용으로 변경');
   loadLeave();
