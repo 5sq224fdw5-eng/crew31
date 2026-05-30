@@ -2231,38 +2231,52 @@ async function loadLeave(){
         html+=`</div>`;
       }
 
-      // 경품 내역
-      if(prizes.length){
-        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:10px 0 6px">🎁 경품 내역</div>`;
-        prizes.forEach((p,pidx)=>{
-          const isUsed=p.deducted===true;
-          const prizeName=p.name||(p.emoji||'경품');
-          const prizeEmoji=p.emoji||'🎁';
-          html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">`;
-          html+=`<div style="display:flex;align-items:center;gap:8px">`;
-          html+=`<span style="font-size:18px">${prizeEmoji}</span>`;
-          html+=`<div>`;
-          html+=`<div style="font-size:13px;font-weight:600;${isUsed?'text-decoration:line-through;color:var(--text3)':''}">${escH(prizeName)}</div>`;
-          if(isUsed){ const ud=p.usedDate||p.deductDate; if(ud) html+=`<div style="font-size:10px;color:var(--text3)">${ud} 사용</div>`; }
-          html+=`</div>`;
-          html+=`</div>`;
-          html+=`<span style="font-size:11px;padding:4px 12px;border-radius:10px;font-weight:700;`;
-          html+=isUsed?`background:rgba(93,184,138,0.15);color:var(--green)">✓ 사용완료`:`background:var(--surface2);color:var(--text3)">보유중`;
-          html+=`</span>`;
-          html+=`</div>`;
+      // 경품 + 수동연차 통합 내역 (모두 같은 카드 형식: 이름 / 사용완료 / 사용 날짜)
+      // 표시할 항목 모으기
+      const items=[];
+      // 1) 경품(연차 경품·투피드·출근확인증 등)
+      prizes.forEach(p=>{
+        items.push({
+          emoji:p.emoji||'🎁',
+          name:p.name||(p.emoji||'경품'),
+          used:p.deducted===true,
+          date:(p.usedDate||p.deductDate||''),
+          sortTime:p.time||0
         });
-      }
-      // 수동 연차 사용/지급 내역 (사용일 표시)
+      });
+      // 2) 수동 연차: 지급(give)=보유 1건, 차감(deduct)=사용완료 1건 으로 환산
       if(leaveLogs && leaveLogs.length){
-        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:10px 0 6px">🏖️ 연차 내역</div>`;
         leaveLogs.forEach(lg=>{
           const isDeduct=lg.type==='deduct';
-          html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">`;
-          html+=`<div style="display:flex;align-items:center;gap:6px">`;
-          html+=`<span style="font-size:12px;color:${isDeduct?'var(--red)':'var(--green)'};font-weight:700">${isDeduct?'−':'+'}${lg.amount||1}일</span>`;
-          if(lg.memo) html+=`<span style="font-size:11px;color:var(--text3)">${escH(lg.memo)}</span>`;
-          html+=`</div>`;
-          html+=`<span style="font-size:10px;color:var(--text3)">${escH(lg.date||'')}</span>`;
+          items.push({
+            emoji:'🏖️',
+            name:'연차',
+            used:isDeduct,
+            date:(lg.date||''),
+            memo:lg.memo||'',
+            sortTime:lg.time||0
+          });
+        });
+      }
+      if(items.length){
+        // 보유중 먼저, 그 안에서 최신순
+        items.sort((a,b)=>{
+          if(a.used!==b.used) return a.used?1:-1;
+          return (b.sortTime||0)-(a.sortTime||0);
+        });
+        html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:10px 0 6px">🎁 경품 · 연차 내역</div>`;
+        items.forEach(it=>{
+          html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">`;
+          html+=`<div style="display:flex;align-items:center;gap:8px">`;
+          html+=`<span style="font-size:18px">${it.emoji}</span>`;
+          html+=`<div>`;
+          html+=`<div style="font-size:13px;font-weight:600;${it.used?'text-decoration:line-through;color:var(--text3)':''}">${escH(it.name)}</div>`;
+          if(it.used && it.date) html+=`<div style="font-size:10px;color:var(--text3)">${escH(it.date)} 사용</div>`;
+          if(it.memo) html+=`<div style="font-size:10px;color:var(--text3)">📝 ${escH(it.memo)}</div>`;
+          html+=`</div></div>`;
+          html+=`<span style="font-size:11px;padding:4px 12px;border-radius:10px;font-weight:700;`;
+          html+=it.used?`background:rgba(93,184,138,0.15);color:var(--green)">✓ 사용완료`:`background:var(--surface2);color:var(--text3)">보유중`;
+          html+=`</span>`;
           html+=`</div>`;
         });
       }
