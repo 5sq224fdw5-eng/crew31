@@ -2117,6 +2117,29 @@ function toggleLeaveGroup(gName){
   if(arrow)arrow.textContent=open?'▾':'▸';
 }
 
+// 개인 카드 상세 펼치기/접기
+function togglePerson(pid){
+  const el=document.getElementById(pid);
+  const arrow=document.getElementById(pid+'_arrow');
+  if(!el)return;
+  const open=el.style.display==='none'||el.style.display==='';
+  el.style.display=open?'block':'none';
+  if(arrow)arrow.textContent=open?'▾':'▸';
+}
+
+// 연차탭 이름 검색: 일치하는 사람만 보이고, 검색 중엔 그룹도 자동 펼침
+function filterLeaveList(q){
+  const kw=(q||'').trim().toLowerCase();
+  // 그룹 펼침 상태 제어
+  document.querySelectorAll('[id^="lgroup_"]').forEach(g=>{
+    if(kw) g.style.display='block';
+  });
+  document.querySelectorAll('.leave-person').forEach(card=>{
+    const name=(card.getAttribute('data-name')||'').toLowerCase();
+    card.style.display=(!kw||name.includes(kw))?'':'none';
+  });
+}
+
 // ══════════════════════════════════════════════
 // ── LEAVE (연차·경품) ──
 // ══════════════════════════════════════════════
@@ -2179,6 +2202,8 @@ async function loadLeave(){
   });
 
   let html='<div style="padding-bottom:60px">';
+  // 이름 검색창
+  html+=`<div style="padding:10px 14px 4px"><input id="leaveSearchInput" oninput="filterLeaveList(this.value)" placeholder="🔍 이름 검색" autocomplete="off" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box"></div>`;
 
   [...GAME_GROUPS,'기타'].forEach(gName=>{
     const list=byGroup[gName];
@@ -2206,11 +2231,16 @@ async function loadLeave(){
 
     sortedList.forEach(({key:k,realName,color,stock,leave,manualLeave,prizes,leaveLogs})=>{
       const isAdminMember = ADMIN_NAMES.includes(realName);
-      html+=`<div style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);${isAdminMember?'border:1.5px solid var(--accent)':''}">`;
-      html+=`<div style="display:flex;align-items:center;gap:10px">`;
+      const pid='lp_'+k.replace(/[^a-zA-Z0-9]/g,'');
+      html+=`<div class="leave-person" data-name="${escH(realName)}" style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);${isAdminMember?'border:1.5px solid var(--accent)':''}">`;
+      // 헤더 (클릭 시 상세 토글)
+      html+=`<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="togglePerson('${pid}')">`;
       html+=`<div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${color},${color}bb);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white">${(realName||'?')[0]}</div>`;
       html+=`<div style="flex:1"><div style="font-size:14px;font-weight:800">${escH(realName)}</div>`;
-      html+=`<div style="font-size:11px;color:var(--text3)">코인 ${stock}개 · 연차 ${leave}일</div></div></div>`;
+      html+=`<div style="font-size:11px;color:var(--text3)">코인 ${stock}개 · 연차 ${leave}일</div></div>`;
+      html+=`<span id="${pid}_arrow" style="font-size:12px;color:var(--text3)">▸</span></div>`;
+      // 상세 (기본 접힘)
+      html+=`<div id="${pid}" style="display:none">`;
 
       // 관리자: 연차 지급/차감 버튼
       if(isAdmin){
@@ -2282,7 +2312,8 @@ async function loadLeave(){
           html+=`</div>`;
         });
       }
-      html+=`</div>`;
+      html+=`</div>`; // 상세(접이식) 닫기
+      html+=`</div>`; // 카드 닫기
     });
     html+=`</div>`;
   });
