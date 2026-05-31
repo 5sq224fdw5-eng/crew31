@@ -2157,7 +2157,7 @@ async function loadLeave(){
     const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
     const realName=group?cleanName.replace(group,''):cleanName;
 
-    // 사원이면 본인 것만 — 접두어 뗀 이름 또는 전체 이름이 정확히 일치할 때만
+    // 사원이면 본인 것만 — 접두어 제거 이름, 전체 이름, 끝부분 일치까지 폭넓게 매칭
     if(!isAdmin){
       const me=CU?.name||'';
       const match = realName===me || cleanName===me;
@@ -2231,51 +2231,53 @@ async function loadLeave(){
         html+=`</div>`;
       }
 
-      // 경품 + 수동연차 통합 내역 (모두 같은 카드 형식: 이름 / 사용완료 / 사용 날짜)
-      // 표시할 항목 모으기
-      const items=[];
+      // 경품 + 수동연차 통합 내역 → 받음(+)/사용(-) 이벤트 타임라인 + 종류별 잔액 누적
+      // 종류 키: 연차는 경품연차+수동연차를 '연차'로 합산, 그 외 경품은 이름별
+      const evs=[];
       // 1) 경품(연차 경품·투피드·출근확인증 등)
       prizes.forEach(p=>{
-        items.push({
-          emoji:p.emoji||'🎁',
-          name:p.name||(p.emoji||'경품'),
-          used:p.deducted===true,
-          date:(p.usedDate||p.deductDate||''),
-          sortTime:p.time||0
-        });
+        const nm=p.name||(p.emoji||'경품');
+        const key=nm.includes('연차')?'연차':nm;
+        evs.push({type:key,emoji:p.emoji||(key==='연차'?'🏖️':'🎁'),kind:'give',name:nm,t:p.time||0,date:fmtMDc(p.time)});
+        if(p.deducted===true){
+          const dt=p.usedDate||p.deductDate||'';
+          const dts=parseYMDc(dt);
+          evs.push({type:key,emoji:p.emoji||(key==='연차'?'🏖️':'🎁'),kind:'use',name:nm,t:(dts!=null?dts+86399000:(p.time||0)+1),date:dt?fmtYMDc(dt):''});
+        }
       });
-      // 2) 수동 연차: 지급(give)=보유 1건, 차감(deduct)=사용완료 1건 으로 환산
+      // 2) 수동 연차 로그: give=+amount, deduct=-amount (모두 '연차' 종류)
       if(leaveLogs && leaveLogs.length){
         leaveLogs.forEach(lg=>{
-          const isDeduct=lg.type==='deduct';
-          items.push({
-            emoji:'🏖️',
-            name:'연차',
-            used:isDeduct,
-            date:(lg.date||''),
-            memo:lg.memo||'',
-            sortTime:lg.time||0
-          });
+          const amt=Math.abs(lg.amount||1);
+          const dts=parseYMDc(lg.date||'');
+          const baseT=lg.time||(dts!=null?dts:0);
+          evs.push({type:'연차',emoji:'🏖️',kind:(lg.type==='deduct'?'use':'give'),name:'연차',t:baseT,date:lg.date?fmtYMDc(lg.date):'',memo:lg.memo||'',amount:amt});
         });
       }
-      if(items.length){
-        // 보유중 먼저, 그 안에서 최신순
-        items.sort((a,b)=>{
-          if(a.used!==b.used) return a.used?1:-1;
-          return (b.sortTime||0)-(a.sortTime||0);
+      if(evs.length){
+        evs.sort((a,b)=>(a.t||0)-(b.t||0));
+        const bal={};
+        const rows=evs.map(ev=>{
+          const amt=ev.amount||1;
+          const prev=bal[ev.type]||0;
+          const now=ev.kind==='give'?prev+amt:Math.max(0,prev-amt);
+          bal[ev.type]=now;
+          const isUse=ev.kind==='use';
+          return {ev,prev,now,isUse,amt};
         });
         html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:10px 0 6px">🎁 경품 · 연차 내역</div>`;
-        items.forEach(it=>{
+        rows.forEach(({ev,prev,now,isUse,amt})=>{
           html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">`;
           html+=`<div style="display:flex;align-items:center;gap:8px">`;
-          html+=`<span style="font-size:18px">${it.emoji}</span>`;
+          html+=`<span style="font-size:18px">${ev.emoji}</span>`;
           html+=`<div>`;
-          html+=`<div style="font-size:13px;font-weight:600;${it.used?'text-decoration:line-through;color:var(--text3)':''}">${escH(it.name)}</div>`;
-          if(it.used && it.date) html+=`<div style="font-size:10px;color:var(--text3)">${escH(it.date)} 사용</div>`;
-          if(it.memo) html+=`<div style="font-size:10px;color:var(--text3)">📝 ${escH(it.memo)}</div>`;
+          html+=`<div style="font-size:13px;font-weight:600;${isUse?'color:var(--red)':''}">${escH(ev.name)} <span style="font-size:10px;color:var(--text3)">${isUse?'사용':'받음'}</span></div>`;
+          if(ev.date) html+=`<div style="font-size:10px;color:var(--text3)">${escH(ev.date)} ${isUse?'사용':'지급'}</div>`;
+          if(ev.memo) html+=`<div style="font-size:10px;color:var(--text3)">📝 ${escH(ev.memo)}</div>`;
+          html+=`<div style="font-size:10px;color:${isUse?'var(--red)':'#3b9'}">직전 ${prev}개 → ${isUse?'-':'+'}${amt} → ${now}개</div>`;
           html+=`</div></div>`;
           html+=`<span style="font-size:11px;padding:4px 12px;border-radius:10px;font-weight:700;`;
-          html+=it.used?`background:rgba(93,184,138,0.15);color:var(--green)">✓ 사용완료`:`background:var(--surface2);color:var(--text3)">보유중`;
+          html+=isUse?`background:rgba(93,184,138,0.15);color:var(--green)">✓ 사용완료`:`background:var(--surface2);color:var(--text3)">받음`;
           html+=`</span>`;
           html+=`</div>`;
         });
@@ -2288,27 +2290,70 @@ async function loadLeave(){
   html+='</div>';
   mb.innerHTML=html;
 }
+// 날짜 헬퍼 (crew31)
+function fmtMDc(ts){if(!ts)return '';const d=new Date(ts);return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;}
+function parseYMDc(s){if(!s)return null;const m=String(s).match(/(\d{2,4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);if(!m)return null;let y=parseInt(m[1]);if(y<100)y+=2000;return new Date(y,parseInt(m[2])-1,parseInt(m[3])).getTime();}
+function fmtYMDc(s){const ts=parseYMDc(s);return ts!=null?fmtMDc(ts):s;}
+
+// ── 연차 적용 헬퍼 (game.html과 동일 규칙) ──
+// delta>0: memberLeave에 적립 + leaveLog give 로그
+// delta<0: memberLeave 먼저 차감 → 부족분은 경품연차(오래된 것부터) deducted 처리 + leaveLog deduct 로그
+// 반환: {ok, manualLeave(반영후), prizeLeave(반영후), applied}
+async function applyLeaveDelta(gameKey,delta,memo){
+  const manualLeave=await gameGet(`memberLeave/${gameKey}`)||0;
+  if(delta>=0){
+    await gameSet(`memberLeave/${gameKey}`,manualLeave+delta);
+    await gamePush(`leaveLog/${gameKey}`,{type:'give',amount:delta,date:todayStr,memo:memo||'',time:Date.now()});
+    return {ok:true,applied:delta};
+  }
+  // 차감
+  const need=Math.abs(delta);
+  const raw=await gameGet(`memberPrizes/${gameKey}`);
+  const arr=Array.isArray(raw)?[...raw]:(raw?Object.values(raw):[]);
+  const prizeLeaveCount=arr.filter(p=>p&&!p.deducted&&(p.name||'').includes('연차')).length;
+  const totalLeave=manualLeave+prizeLeaveCount;
+  if(totalLeave<need){showToast(`연차 부족 (보유 ${totalLeave}일)`);return {ok:false};}
+
+  await gamePush(`leaveLog/${gameKey}`,{type:'deduct',amount:need,date:todayStr,memo:memo||'',time:Date.now()});
+  let remaining=need;
+  // 1) 수동 연차 먼저
+  const fromManual=Math.min(manualLeave,remaining);
+  if(fromManual>0){await gameSet(`memberLeave/${gameKey}`,manualLeave-fromManual);remaining-=fromManual;}
+  // 2) 부족분은 경품연차(오래된 것부터)
+  if(remaining>0){
+    let cnt=0;
+    for(let i=0;i<arr.length&&cnt<remaining;i++){
+      const p=arr[i];
+      if(p&&!p.deducted&&(p.name||'').includes('연차')){
+        arr[i]={...p,deducted:true,usedDate:todayStr,deductDate:todayStr};
+        cnt++;
+      }
+    }
+    await gameSet(`memberPrizes/${gameKey}`,arr);
+  }
+  return {ok:true,applied:-need};
+}
 
 // 연차 빠른 지급/차감
 async function quickLeave(gameKey,name,days){
-  const cur=await gameGet(`memberLeave/${gameKey}`)||0;
-  const next=Math.max(0,cur+days);
-  await gameSet(`memberLeave/${gameKey}`,next);
-  showToast(`${name}: 연차 ${days>0?'+':''}${days}일 → ${next}일`);
+  const r=await applyLeaveDelta(gameKey,days,'');
+  if(!r.ok)return;
+  showToast(`${name}: 연차 ${days>0?'+':''}${days}일 적용`);
   loadLeave();
 }
 
 // 연차 직접 입력
 async function customLeave(gameKey,name){
-  const input=prompt(`${name}의 연차 변경\n현재: ${await gameGet(`memberLeave/${gameKey}`)||0}일\n변경할 일수를 입력하세요 (예: +2, -1, 5)`);
+  const cur=await gameGet(`memberLeave/${gameKey}`)||0;
+  const input=prompt(`${name}의 연차 변경\n현재 수동연차: ${cur}일\n변경할 일수를 입력하세요 (예: +2, -1)`);
   if(!input)return;
   const num=parseFloat(input.replace('+',''));
-  if(isNaN(num)){showToast('올바른 숫자를 입력하세요');return;}
+  if(isNaN(num)||num===0){showToast('올바른 숫자를 입력하세요 (예: +2, -1)');return;}
   const isRelative=input.startsWith('+')||input.startsWith('-');
-  const cur=await gameGet(`memberLeave/${gameKey}`)||0;
-  const next=isRelative?Math.max(0,cur+num):Math.max(0,num);
-  await gameSet(`memberLeave/${gameKey}`,next);
-  showToast(`${name}: 연차 → ${next}일`);
+  if(!isRelative){showToast('+ 또는 - 로 입력하세요 (예: +2, -1)');return;}
+  const r=await applyLeaveDelta(gameKey,num,'');
+  if(!r.ok)return;
+  showToast(`${name}: 연차 ${num>0?'+':''}${num}일 적용`);
   loadLeave();
 }
 
@@ -3677,10 +3722,10 @@ async function cancelVote(vid){
             const prizesRaw=await gameGet(`memberPrizes/${gmKey}`);
             if(Array.isArray(prizesRaw)){
               const idx=prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
-              if(idx>=0){const arr=[...prizesRaw];arr[idx]={...arr[idx],deducted:false,usedDate:null,deductDate:null};await gameSet(`memberPrizes/${gmKey}`,arr);}
+              if(idx>=0){const arr=[...prizesRaw];arr[idx]={...arr[idx],deducted:false,usedDate:null};await gameSet(`memberPrizes/${gmKey}`,arr);}
             }else if(prizesRaw){
               const found=Object.entries(prizesRaw).find(([k,p])=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
-              if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);await gameSet(`memberPrizes/${gmKey}/${found[0]}/deductDate`,null);}
+              if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);}
             }
             showToast('↩️ 경품 연차 복구됨');
           }else{
@@ -3709,7 +3754,7 @@ async function cancelVote(vid){
   if(_currentTab==='home'||_currentTab==='dept') loadDeptPage(_currentDept);
 }
 
-// 오락실 멤버 키 찾기 — "그 그룹의 그 닉네임"만 (동명이인 오차감 방지)
+// 오락실 멤버 키 찾기 (그룹명+닉네임 매칭)
 async function _gameKeyFor(myKey, group){
   const gameMembers = await gameGet('members');
   if(!gameMembers) return null;
@@ -3779,14 +3824,14 @@ async function reconcileTupide(group, dayKey, myKey){
       const deductedIdxs=arr.map((p,i)=>({p,i})).filter(x=>x.p&&x.p.deducted&&(x.p.name||'').includes('투피드')&&x.p.usedDate===dayKey).map(x=>x.i);
       if(active && deductedIdxs.length===0){
         const idx=arr.findIndex(p=>p&&!p.deducted&&(p.name||'').includes('투피드'));
-        if(idx>=0){arr[idx]={...arr[idx],deducted:true,usedDate:dayKey,deductDate:dayKey};await gameSet(`memberPrizes/${gmKey}`,arr);showToast('☕ 투피드 경품 1개 사용 처리됨');}
+        if(idx>=0){arr[idx]={...arr[idx],deducted:true,usedDate:dayKey};await gameSet(`memberPrizes/${gmKey}`,arr);showToast('☕ 투피드 경품 1개 사용 처리됨');}
       } else if(!active && deductedIdxs.length>0){
-        deductedIdxs.forEach(i=>{arr[i]={...arr[i],deducted:false,usedDate:null,deductDate:null};});
+        deductedIdxs.forEach(i=>{arr[i]={...arr[i],deducted:false,usedDate:null};});
         await gameSet(`memberPrizes/${gmKey}`,arr);
         showToast('↩️ 투피드 경품 복구됨');
       } else if(active && deductedIdxs.length>1){
         // 혹시 그날 2개 이상 차감돼 있으면 1개만 남기고 복구
-        deductedIdxs.slice(1).forEach(i=>{arr[i]={...arr[i],deducted:false,usedDate:null,deductDate:null};});
+        deductedIdxs.slice(1).forEach(i=>{arr[i]={...arr[i],deducted:false,usedDate:null};});
         await gameSet(`memberPrizes/${gmKey}`,arr);
       }
     } else {
@@ -3794,12 +3839,12 @@ async function reconcileTupide(group, dayKey, myKey){
       const deductedKeys=entriesArr.filter(([k,p])=>p&&p.deducted&&(p.name||'').includes('투피드')&&p.usedDate===dayKey).map(([k])=>k);
       if(active && deductedKeys.length===0){
         const found=entriesArr.find(([k,p])=>p&&!p.deducted&&(p.name||'').includes('투피드'));
-        if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,true);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,dayKey);await gameSet(`memberPrizes/${gmKey}/${found[0]}/deductDate`,dayKey);showToast('☕ 투피드 경품 1개 사용 처리됨');}
+        if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,true);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,dayKey);showToast('☕ 투피드 경품 1개 사용 처리됨');}
       } else if(!active && deductedKeys.length>0){
-        for(const k of deductedKeys){await gameSet(`memberPrizes/${gmKey}/${k}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${k}/usedDate`,null);await gameSet(`memberPrizes/${gmKey}/${k}/deductDate`,null);}
+        for(const k of deductedKeys){await gameSet(`memberPrizes/${gmKey}/${k}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${k}/usedDate`,null);}
         showToast('↩️ 투피드 경품 복구됨');
       } else if(active && deductedKeys.length>1){
-        for(const k of deductedKeys.slice(1)){await gameSet(`memberPrizes/${gmKey}/${k}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${k}/usedDate`,null);await gameSet(`memberPrizes/${gmKey}/${k}/deductDate`,null);}
+        for(const k of deductedKeys.slice(1)){await gameSet(`memberPrizes/${gmKey}/${k}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${k}/usedDate`,null);}
       }
     }
   }catch(e){}
@@ -3824,18 +3869,16 @@ async function castVote(vid,optIdx){
   const wasTupide = prevOptText.includes('투피드')||prevOptText.includes('두배');
   const usedDate = getTitleDate(v) || todayStr;
 
-  // 오락실 멤버 키 찾기 — 반드시 "이 투표 그룹의 그 닉네임"만 매칭 (다른 그룹 동명이인 차감 방지)
+  // 오락실 멤버 키 찾기 — 그 투표 그룹의 그 닉네임만 (동명이인 오차감 방지)
   async function _findGameKey(){
     const gameMembers = await gameGet('members');
     if(!gameMembers) return null;
     const gName = groups[v.group]?.name||'';
     const entries = Object.entries(gameMembers);
-    // 1순위: 그룹명+닉 정확 일치 (예: 시크릿쭈니맘)
     let hit = entries.find(([k,m])=>{
       const clean=(m.name||'').replace(/^\*/,'');
       return clean===(gName+myKey);
     });
-    // 2순위: 접두어 없이 닉 정확 일치 (그룹명 안 붙은 등록)
     if(!hit) hit = entries.find(([k,m])=>{
       const clean=(m.name||'').replace(/^\*/,'');
       return clean===myKey;
@@ -3881,12 +3924,11 @@ async function castVote(vid,optIdx){
           const target=info.leavePrizes[0];
           if(info.isArr){
             const arr=[...info.prizesRaw];
-            arr[target.ref]={...arr[target.ref],deducted:true,usedDate,deductDate:usedDate};
+            arr[target.ref]={...arr[target.ref],deducted:true,usedDate};
             await gameSet(`memberPrizes/${gmKey}`,arr);
           }else{
             await gameSet(`memberPrizes/${gmKey}/${target.ref}/deducted`,true);
             await gameSet(`memberPrizes/${gmKey}/${target.ref}/usedDate`,usedDate);
-            await gameSet(`memberPrizes/${gmKey}/${target.ref}/deductDate`,usedDate);
           }
           await dbSet(`votes/${vid}/leaveUsed/${myKey}`,'prize');
           showToast('🏖️ 경품 연차 1일 사용 ('+usedDate+')');
@@ -3917,10 +3959,10 @@ async function castVote(vid,optIdx){
             const prizesRaw=await gameGet(`memberPrizes/${gmKey}`);
             if(Array.isArray(prizesRaw)){
               const idx=prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
-              if(idx>=0){const arr=[...prizesRaw];arr[idx]={...arr[idx],deducted:false,usedDate:null,deductDate:null};await gameSet(`memberPrizes/${gmKey}`,arr);}
+              if(idx>=0){const arr=[...prizesRaw];arr[idx]={...arr[idx],deducted:false,usedDate:null};await gameSet(`memberPrizes/${gmKey}`,arr);}
             }else if(prizesRaw){
               const found=Object.entries(prizesRaw).find(([k,p])=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
-              if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);await gameSet(`memberPrizes/${gmKey}/${found[0]}/deductDate`,null);}
+              if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);}
             }
             showToast('↩️ 경품 연차 복구됨');
           }else if(usedType==='manual'){
@@ -5185,18 +5227,16 @@ async function pollVotes(){
   const seenTs=getSeenTs('votes');
   const votes=await dbGet('votes');
   if(!votes)return;
-  // 이미 알림 띄운 투표 ID 기록 (중복 알림 방지)
   let notified={};
   try{ notified=JSON.parse(localStorage.getItem('crew31NotifiedVotes')||'{}'); }catch{}
   Object.entries(votes).forEach(([vid,v])=>{
     if(!v||!v.createdAt||v.deleted)return;
     if(v.createdAt<=seenTs)return;
     if(v.createdBy===CU.name)return;
-    if(notified[vid])return;            // 이미 이 투표는 알림함 → 건너뜀
+    if(notified[vid])return;
     notified[vid]=Date.now();
     pushNoti({icon:'📋',title:'새 투표',body:v.title||'새 투표가 등록됐습니다',tab:'home',ts:v.createdAt});
   });
-  // 기록은 최근 200개만 유지
   try{
     const ent=Object.entries(notified).sort((a,b)=>b[1]-a[1]).slice(0,200);
     localStorage.setItem('crew31NotifiedVotes',JSON.stringify(Object.fromEntries(ent)));
