@@ -4347,7 +4347,7 @@ async function loadStatusGroup(gid) {
     return;
   }
 
-  const resultColor = {'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1'};
+  const resultColor = {'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0'};
   const ADMIN_NAMES = ['고인물','에이스','경력직','불주먹','김월루','퇴사각'];
   let html = '';
 
@@ -4446,14 +4446,44 @@ async function recordAttendance(vid, optIdx, voterKey) {
     const optText = (v.options || [])[optIdx] || '';
     const result = mapVoteResult(optText);
 
-    // 시작 투표 → '시작', 완료 투표 → 선택지/사진 기준 완료
-    const myImages = v.images?.[myKey] || [];
+    // 특수 선택지(프패/봉사/노피드/투피드)는 그날 상태가 바로 확정됨
+    const isSpecial = ['프패','봉사','노피드','투피드'].includes(result);
+
     let finalResult;
-    if(isStartVote){
-      // 참여(출근)는 아직 '시작' 상태. 그 외(프패/봉사/노피드/투피드)는 확정 결과로 기록
-      finalResult = (result==='완료'||result==='') ? '시작' : result;
+    if(isSpecial){
+      // 시작이든 완료든 특수 선택지를 고르면 그대로 확정
+      finalResult = result;
     } else {
-      finalResult = myImages.length > 0 ? '완료' : result;
+      // 일반(참여/완료): 같은 날·같은 그룹의 시작+완료 투표를 둘 다 했는지 확인
+      const allVotes = await dbGet('votes') || {};
+      let didStart=false, didEnd=false, otherSpecial=null;
+      for(const sv of Object.values(allVotes)){
+        if(!sv || sv.deleted || sv.group!==gid) continue;
+        // 같은 날짜인지(제목 날짜 기준)
+        const sm = (sv.title||'').match(/(\d+)월\s*(\d+)일/);
+        let sdate = sv.date;
+        if(sm){ const n=new Date(); sdate=`${n.getFullYear()}-${sm[1].padStart(2,'0')}-${sm[2].padStart(2,'0')}`; }
+        if(sdate!==date) continue;
+        const idx = sv.responses?.[myKey];
+        if(idx===undefined||idx===null) continue;
+        const r = mapVoteResult((sv.options||[])[idx]||'');
+        // 특수 선택지를 한 곳이라도 골랐으면 그게 우선
+        if(['프패','봉사','노피드','투피드'].includes(r)){ otherSpecial=r; }
+        const sIsStart = (sv.title||'').includes('시작');
+        const sIsEnd = (sv.title||'').includes('완료') || sv.imageUpload;
+        // 사진 올린 완료투표도 완료로 인정
+        const sImgs = sv.images?.[myKey] || [];
+        if(sIsStart) didStart=true;
+        if(sIsEnd && (r==='완료'||sImgs.length>0)) didEnd=true;
+        else if(sIsEnd && r) didEnd=didEnd; // 완료투표에서 특수선택지면 위 otherSpecial로 처리
+      }
+      if(otherSpecial){
+        finalResult = otherSpecial;           // 연차/봉사 등은 그대로
+      } else if(didStart && didEnd){
+        finalResult = '완료';                  // 시작+완료 둘 다 → 출근 인정
+      } else {
+        finalResult = '시작';                  // 하나만 → 미완료
+      }
     }
 
     await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
