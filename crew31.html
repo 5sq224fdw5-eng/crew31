@@ -4349,15 +4349,37 @@ async function loadStatusGroup(gid) {
           const result = mapVoteResult(opts[optIdx] || '');
           const cur = weeks[mondayStr].members[mname][v.date];
           if(cur) return; // attendance 값 우선
-          // 프패/공게/확인증은 완료투표 불필요한 확정값
           if(['프패','공게','확인증'].includes(result)){
             weeks[mondayStr].members[mname][v.date] = result;
           } else {
-            // 참여/완료/봉사/노피드/투피드는 둘 다 해야 확정 → attendance 없으면 미완료(참여)
             weeks[mondayStr].members[mname][v.date] = '참여';
           }
         });
       });
+  }
+
+  // 취소 유령 제거: '참여'/'시작'(미완료)인데 그날 실제 투표 응답·이미지가 없으면 삭제
+  {
+    // (그룹·날짜·멤버이름) → 응답 존재 여부 인덱스
+    const hasResp = {}; // `${date}__${mname}` = true
+    if(votes){
+      Object.values(votes).forEach(v=>{
+        if(!v || v.deleted || v.group!==gid || !v.date) return;
+        const dd = getTitleDate(v) || v.date;
+        Object.keys(v.responses||{}).forEach(mkey=>{ hasResp[`${dd}__${keyToName[mkey]||mkey}`]=true; });
+        Object.keys(v.images||{}).forEach(mkey=>{ hasResp[`${dd}__${keyToName[mkey]||mkey}`]=true; });
+      });
+    }
+    Object.values(weeks).forEach(wk=>{
+      Object.entries(wk.members).forEach(([mname,dmap])=>{
+        Object.keys(dmap).forEach(date=>{
+          const val=dmap[date];
+          if((val==='참여'||val==='시작') && !hasResp[`${date}__${mname}`]){
+            delete dmap[date]; // 취소돼 응답 없는 유령 → 빈칸
+          }
+        });
+      });
+    });
   }
 
   if(Object.keys(weeks).length === 0) {
@@ -4423,9 +4445,9 @@ async function loadStatusGroup(gid) {
       html += `<tr style="border-top:1px solid var(--border);${isAdminM?'background:#fff8f5':''}">`;
       html += `<td style="padding:6px 8px;font-weight:${isAdminM?'800':'600'};white-space:nowrap;color:${isAdminM?'var(--accent)':'inherit'}">${escH(mname)}</td>`;
       dates.forEach(d => {
-        const r = mdates[d] || '';
+        let r = mdates[d] || '';
+        if(r==='시작') r='참여'; // 옛 데이터 호환
         const bg = resultColor[r] || '#f1f5f9';
-        // '참여'(미완료)는 연한 배경+연한 글자, 그 외 확정건은 진하게
         const isDim = (r==='참여'||r==='');
         const cellBg = !r ? '#f1f5f9' : (isDim ? bg+'18' : bg+'33');
         const cellFg = !r ? '#ccc' : (isDim ? bg+'99' : bg);
