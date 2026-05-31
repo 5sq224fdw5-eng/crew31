@@ -3754,8 +3754,44 @@ async function cancelVote(vid){
   // 투피드: 응답 삭제 후 그날 정합 (같은 날 다른 투표에 투피드 남아있으면 경품 유지, 없으면 복구)
   if(wasTupide && v){ await reconcileTupide(v.group, usedDate, myKey); }
 
+  // 현황 재계산 (취소 반영) — 남은 응답 기준으로 출석 상태 다시 기록
+  if(v){ await recomputeAttendance(v.group, getTitleDate(v), myKey); }
+
   if(!wasLeave && !wasTupide) showToast('투표 취소됨');
   if(_currentTab==='home'||_currentTab==='dept') loadDeptPage(_currentDept);
+}
+
+// 특정 날짜의 출석 상태를 그날 투표 응답 기준으로 다시 계산해서 기록/삭제
+async function recomputeAttendance(gid, date, myKey){
+  try{
+    if(!gid||!date) return;
+    const mondayStr = getWeekKey(date);
+    const allVotes = await dbGet('votes') || {};
+    let startResult=null, endResult=null;
+    for(const sv of Object.values(allVotes)){
+      if(!sv || sv.deleted || sv.group!==gid) continue;
+      let sdate = getTitleDate(sv) || sv.date;
+      if(sdate!==date) continue;
+      const idx = sv.responses?.[myKey];
+      const sImgs = sv.images?.[myKey] || [];
+      const title=sv.title||'';
+      const sIsStart=title.includes('시작');
+      const sIsEnd=!sIsStart && title.includes('완료');
+      let r=(idx!==undefined&&idx!==null)?mapVoteResult((sv.options||[])[idx]||''):null;
+      if(sIsEnd && sImgs.length>0 && !r) r='완료';
+      if(sIsStart && r!==null) startResult=r;
+      if(sIsEnd && r!==null) endResult=r;
+    }
+    let finalResult;
+    if(startResult==='프패'||endResult==='프패') finalResult='프패';
+    else if(startResult && endResult){
+      const special=['봉사','노피드','투피드'].find(s=>s===endResult||s===startResult);
+      finalResult=special||'완료';
+    } else if(startResult||endResult) finalResult='참여';
+    else finalResult=null;
+    if(finalResult) await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
+    else await dbDelete(`attendance/${gid}/${mondayStr}/${myKey}/${date}`);
+  }catch(e){}
 }
 
 // 오락실 멤버 키 찾기 (그룹명+닉네임 매칭)
@@ -4312,13 +4348,13 @@ async function loadStatusGroup(gid) {
           if(!weeks[mondayStr].members[mname]) weeks[mondayStr].members[mname] = {};
           const result = mapVoteResult(opts[optIdx] || '');
           const cur = weeks[mondayStr].members[mname][v.date];
-          const isSpecial = ['프패','봉사','노피드','투피드','공게','확인증'].includes(result);
-          if(isSpecial){
-            // 특수선택지는 확정값 — 비어있으면 채움 (이미 attendance값 있으면 유지)
-            if(!cur) weeks[mondayStr].members[mname][v.date] = result;
+          if(cur) return; // attendance 값 우선
+          // 프패/공게/확인증은 완료투표 불필요한 확정값
+          if(['프패','공게','확인증'].includes(result)){
+            weeks[mondayStr].members[mname][v.date] = result;
           } else {
-            // 일반(참여/완료): attendance에 값이 전혀 없을 때만 '시작'(미완료)으로 표시
-            if(!cur) weeks[mondayStr].members[mname][v.date] = '시작';
+            // 참여/완료/봉사/노피드/투피드는 둘 다 해야 확정 → attendance 없으면 미완료(참여)
+            weeks[mondayStr].members[mname][v.date] = '참여';
           }
         });
       });
@@ -4329,7 +4365,7 @@ async function loadStatusGroup(gid) {
     return;
   }
 
-  const resultColor = {'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0'};
+  const resultColor = {'완료':'#5DB88A','참여':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0'};
   const ADMIN_NAMES = ['고인물','에이스','경력직','불주먹','김월루','퇴사각'];
   let html = '';
 
@@ -4389,7 +4425,12 @@ async function loadStatusGroup(gid) {
       dates.forEach(d => {
         const r = mdates[d] || '';
         const bg = resultColor[r] || '#f1f5f9';
-        html += `<td style="padding:4px;text-align:center"><span style="display:inline-block;padding:3px 6px;border-radius:6px;background:${r?bg+'22':'#f1f5f9'};color:${r?bg:'#ccc'};font-weight:700;font-size:10px;white-space:nowrap">${r||'-'}</span></td>`;
+        // '참여'(미완료)는 연한 배경+연한 글자, 그 외 확정건은 진하게
+        const isDim = (r==='참여'||r==='');
+        const cellBg = !r ? '#f1f5f9' : (isDim ? bg+'18' : bg+'33');
+        const cellFg = !r ? '#ccc' : (isDim ? bg+'99' : bg);
+        const cellWeight = isDim ? '600' : '800';
+        html += `<td style="padding:4px;text-align:center"><span style="display:inline-block;padding:3px 6px;border-radius:6px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:10px;white-space:nowrap">${r||'-'}</span></td>`;
       });
       html += `<td style="padding:6px 8px;text-align:center;font-weight:800;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':(fullCount+'/7')}</td>`;
       html += `</tr>`;
@@ -4425,51 +4466,39 @@ async function recordAttendance(vid, optIdx, voterKey) {
     }
     const mondayStr = getWeekKey(date);
     const myKey = voterKey || CU?.name || CU?.key || 'guest';
-    const optText = (v.options || [])[optIdx] || '';
-    const result = mapVoteResult(optText);
 
-    // 특수 선택지(프패/봉사/노피드/투피드)는 그날 상태가 바로 확정됨
-    const isSpecial = ['프패','봉사','노피드','투피드'].includes(result);
-
-    let finalResult;
-    if(isSpecial){
-      // 시작이든 완료든 특수 선택지를 고르면 그대로 확정
-      finalResult = result;
-    } else {
-      // 일반(참여/완료): 같은 날·같은 그룹의 시작+완료 투표를 둘 다 했는지 확인
-      const allVotes = await dbGet('votes') || {};
-      let didStart=false, didEnd=false, otherSpecial=null;
-      for(const sv of Object.values(allVotes)){
-        if(!sv || sv.deleted || sv.group!==gid) continue;
-        // 같은 날짜인지(제목 날짜 기준)
-        const sm = (sv.title||'').match(/(\d+)월\s*(\d+)일/);
-        let sdate = sv.date;
-        if(sm){ const n=new Date(); sdate=`${n.getFullYear()}-${sm[1].padStart(2,'0')}-${sm[2].padStart(2,'0')}`; }
-        if(sdate!==date) continue;
-        const idx = sv.responses?.[myKey];
-        if(idx===undefined||idx===null) continue;
-        const r = mapVoteResult((sv.options||[])[idx]||'');
-        // 특수 선택지를 한 곳이라도 골랐으면 그게 우선
-        if(['프패','봉사','노피드','투피드'].includes(r)){ otherSpecial=r; }
-        // 시작/완료는 제목으로만 구분 (imageUpload로 완료 판정하면 시작투표가 오인됨)
-        const title = sv.title||'';
-        const sIsStart = title.includes('시작');
-        const sIsEnd = !sIsStart && title.includes('완료');
-        const sImgs = sv.images?.[myKey] || [];
-        if(sIsStart) didStart=true;
-        // 완료투표: '완료(퇴근)' 선택 또는 이미지 제출 시 완료 인정
-        if(sIsEnd && (r==='완료'||sImgs.length>0)) didEnd=true;
-      }
-      if(otherSpecial){
-        finalResult = otherSpecial;           // 연차/봉사 등은 그대로
-      } else if(didStart && didEnd){
-        finalResult = '완료';                  // 시작+완료 둘 다 → 출근 인정
-      } else {
-        finalResult = '시작';                  // 하나만 → 미완료
-      }
+    // 그날·그룹의 시작/완료 투표 결과 수집
+    const allVotes = await dbGet('votes') || {};
+    let startResult=null, endResult=null;
+    for(const sv of Object.values(allVotes)){
+      if(!sv || sv.deleted || sv.group!==gid) continue;
+      const sm = (sv.title||'').match(/(\d+)월\s*(\d+)일/);
+      let sdate = sv.date;
+      if(sm){ const n=new Date(); sdate=`${n.getFullYear()}-${sm[1].padStart(2,'0')}-${sm[2].padStart(2,'0')}`; }
+      if(sdate!==date) continue;
+      const idx = sv.responses?.[myKey];
+      const sImgs = sv.images?.[myKey] || [];
+      const title = sv.title||'';
+      const sIsStart = title.includes('시작');
+      const sIsEnd = !sIsStart && title.includes('완료');
+      let r = (idx!==undefined&&idx!==null) ? mapVoteResult((sv.options||[])[idx]||'') : null;
+      if(sIsEnd && sImgs.length>0 && !r) r='완료';
+      if(sIsStart && r!==null) startResult=r;
+      if(sIsEnd && r!==null) endResult=r;
     }
 
-    await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
+    let finalResult;
+    if(startResult==='프패' || endResult==='프패'){
+      finalResult='프패';                       // 연차는 완료투표 불필요, 즉시 확정
+    } else if(startResult && endResult){
+      const special=['봉사','노피드','투피드'].find(s=>s===endResult||s===startResult);
+      finalResult = special || '완료';          // 둘 다 함 → 완료(또는 특수) = 진하게
+    } else if(startResult || endResult){
+      finalResult = '참여';                      // 하나만 함 → 미완료(연하게)
+    } else {
+      finalResult = null;
+    }
+    if(finalResult) await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
 
     // ※ 연차/투피드 경품 차감은 castVote()에서 단일 처리함.
     //   (예전엔 여기서도 차감해 '중복 차감'·오작동이 있었으므로 제거)
