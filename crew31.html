@@ -4450,7 +4450,8 @@ async function recordAttendance(vid, optIdx, voterKey) {
     const myImages = v.images?.[myKey] || [];
     let finalResult;
     if(isStartVote){
-      finalResult = result === '프패' ? '프패' : result === '봉사' ? '봉사' : '시작';
+      // 참여(출근)는 아직 '시작' 상태. 그 외(프패/봉사/노피드/투피드)는 확정 결과로 기록
+      finalResult = (result==='완료'||result==='') ? '시작' : result;
     } else {
       finalResult = myImages.length > 0 ? '완료' : result;
     }
