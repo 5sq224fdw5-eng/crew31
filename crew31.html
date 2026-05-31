@@ -3679,39 +3679,12 @@ async function uploadImages(vid, input){
     return;
   }
 
-  // 출석 자동 기록 (완료 처리)
+  // 출석 자동 기록 — recordAttendance 규칙으로 통일 (시작+완료 둘 다 해야 완료)
   const v = await dbGet(`votes/${vid}`);
   if(v && v.group && v.date){
-    const attDate = getTitleDate(v); // 제목 날짜 기준
-    const mondayStr = getWeekKey(attDate);
-    const isStartV = (v.title||'').includes('시작');
-    if(isStartV){
-      await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${attDate}`, '완료');
-    } else {
-      // 완료 투표 사진 → 시작 투표 선택지 결과로 확정
-      const allVotes = await dbGet('votes');
-      if(allVotes){
-        // 완료 투표 date 기준 전날
-        const prevDate = new Date(v.date+'T00:00:00');
-        prevDate.setDate(prevDate.getDate()-1);
-        const prevDateStr = prevDate.toISOString().slice(0,10);
-        const startVote = Object.values(allVotes).find(sv=>{
-          if(sv.deleted||sv.group!==v.group) return false;
-          if(!(sv.title||'').includes('시작')&&!(sv.title||'').includes('참여')) return false;
-          const t1=(sv.title||'').match(/(\d+)월\s*(\d+)일/);
-          const t2=(v.title||'').match(/(\d+)월\s*(\d+)일/);
-          if(t1&&t2) return t1[1]===t2[1]&&t1[2]===t2[2];
-          return sv.responses?.[myKey]!==undefined;
-        });
-        if(startVote){
-          const optText = (startVote.options||[])[startVote.responses[myKey]]||'';
-          const result = mapVoteResult(optText);
-          await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${attDate}`, result);
-        } else {
-          await dbSet(`attendance/${v.group}/${mondayStr}/${myKey}/${attDate}`, '완료');
-        }
-      }
-    }
+    // 이미지 제출도 하나의 응답으로 보고, 그 투표의 내 선택지(없으면 완료로 간주)로 기록 처리
+    const myIdx = v.responses?.[myKey];
+    await recordAttendance(vid, (myIdx!==undefined?myIdx:0), myKey);
   }
 
   showToast(`✅ ${uploaded.length}장 업로드 완료!`);
@@ -4322,7 +4295,10 @@ async function loadStatusGroup(gid) {
     });
   });
 
-  // 2. 투표 데이터에서 추가 (그룹 전용 투표)
+  // 2. 투표 데이터에서 보강 — attendance에 없는 칸만 채움.
+  //    참여/완료(일반)는 recordAttendance가 '시작+완료 둘 다' 판정해 attendance에 기록하므로
+  //    여기서 투표 응답을 '완료'로 임의 변환하지 않는다(미완료가 완료로 보이는 버그 방지).
+  //    단, 특수선택지(프패/봉사/노피드/투피드)는 그날 확정값이라 보강 표시.
   if(votes) {
     Object.entries(votes)
       .filter(([,v]) => !v.deleted && v.group === gid && v.date)
@@ -4335,8 +4311,14 @@ async function loadStatusGroup(gid) {
           const mname = keyToName[mkey] || mkey;
           if(!weeks[mondayStr].members[mname]) weeks[mondayStr].members[mname] = {};
           const result = mapVoteResult(opts[optIdx] || '');
-          if(!weeks[mondayStr].members[mname][v.date] || result === '완료') {
-            weeks[mondayStr].members[mname][v.date] = result;
+          const cur = weeks[mondayStr].members[mname][v.date];
+          const isSpecial = ['프패','봉사','노피드','투피드','공게','확인증'].includes(result);
+          if(isSpecial){
+            // 특수선택지는 확정값 — 비어있으면 채움 (이미 attendance값 있으면 유지)
+            if(!cur) weeks[mondayStr].members[mname][v.date] = result;
+          } else {
+            // 일반(참여/완료): attendance에 값이 전혀 없을 때만 '시작'(미완료)으로 표시
+            if(!cur) weeks[mondayStr].members[mname][v.date] = '시작';
           }
         });
       });
@@ -4469,13 +4451,14 @@ async function recordAttendance(vid, optIdx, voterKey) {
         const r = mapVoteResult((sv.options||[])[idx]||'');
         // 특수 선택지를 한 곳이라도 골랐으면 그게 우선
         if(['프패','봉사','노피드','투피드'].includes(r)){ otherSpecial=r; }
-        const sIsStart = (sv.title||'').includes('시작');
-        const sIsEnd = (sv.title||'').includes('완료') || sv.imageUpload;
-        // 사진 올린 완료투표도 완료로 인정
+        // 시작/완료는 제목으로만 구분 (imageUpload로 완료 판정하면 시작투표가 오인됨)
+        const title = sv.title||'';
+        const sIsStart = title.includes('시작');
+        const sIsEnd = !sIsStart && title.includes('완료');
         const sImgs = sv.images?.[myKey] || [];
         if(sIsStart) didStart=true;
+        // 완료투표: '완료(퇴근)' 선택 또는 이미지 제출 시 완료 인정
         if(sIsEnd && (r==='완료'||sImgs.length>0)) didEnd=true;
-        else if(sIsEnd && r) didEnd=didEnd; // 완료투표에서 특수선택지면 위 otherSpecial로 처리
       }
       if(otherSpecial){
         finalResult = otherSpecial;           // 연차/봉사 등은 그대로
