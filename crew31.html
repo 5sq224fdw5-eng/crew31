@@ -4353,7 +4353,20 @@ async function loadStatusGroup(gid) {
 
   for(const [mondayStr, wdata] of Object.entries(weeks).sort((a,b)=>b[0].localeCompare(a[0]))) {
     const wLabel = getWeekLabel(mondayStr);
-    const dates = [...wdata.dates].sort();
+    // 월요일~일요일 7일 전체 생성 (투표 없는 요일도 빈칸으로 표시)
+    const dates = [];
+    {
+      const mk = parseYMDc(mondayStr) ?? (function(){ const m=String(mondayStr).match(/(\d{4})-(\d{2})-(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3]).getTime():null; })();
+      if(mk!=null){
+        for(let i=0;i<7;i++){
+          const d=new Date(mk + i*86400000);
+          dates.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+        }
+      } else {
+        // 안전장치: mondayStr 파싱 실패 시 기존 방식
+        [...wdata.dates].sort().forEach(x=>dates.push(x));
+      }
+    }
     const memberResults = wdata.members;
 
     html += `<div style="background:white;border-radius:16px;margin:8px 14px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
@@ -4517,11 +4530,35 @@ const _attResultColor = {'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5
 async function renderAttEditList(gid, mondayStr, dates, filter){
   const listEl = document.getElementById('attEditList');
   if(!listEl) return;
-  const crewMembers = await dbGet('members');
+  const [crewMembers, gameMembers] = await Promise.all([
+    dbGet('members'),
+    gameGet('members')
+  ]);
   const attData = await dbGet(`attendance/${gid}/${mondayStr}`) || {};
-  let members = crewMembers ? Object.values(crewMembers).filter(m=>m.name) : [];
+  const gName = groups[gid]?.name || '';
+
+  // 이 그룹 소속 이름 집합 만들기
+  const groupNames = new Set();
+  // 1) 오락실 멤버 중 "그룹명+" 접두어를 가진 사람 → 접두어 뗀 이름
+  if(gameMembers){
+    Object.values(gameMembers).forEach(m=>{
+      if(!m.name) return;
+      const clean = m.name.replace(/^\*/,'');
+      if(gName && clean.startsWith(gName)){
+        groupNames.add(clean.slice(gName.length));
+      }
+    });
+  }
+  // 2) 이미 이 그룹 출석 기록이 있는 사람도 포함 (안전망)
+  Object.keys(attData).forEach(n=>groupNames.add(n));
+
+  // crew 멤버 중 이 그룹에 속한 사람만
+  let members = crewMembers ? Object.values(crewMembers).filter(m=>m.name && groupNames.has(m.name)) : [];
+  // 그룹 매칭이 하나도 안 되면(데이터 미비) 전체로 폴백하지 않고, 출석기록 가진 사람만이라도 보여줌
+  if(members.length===0 && crewMembers){
+    members = Object.values(crewMembers).filter(m=>m.name && attData[m.name]);
+  }
   if(filter) members = members.filter(m=>m.name.includes(filter));
-  // ㄱㄴㄷ 정렬
   members.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   const opts = ['','완료','프패','공게','봉사','노피드','투피드','확인증'];
   const searchInput = document.querySelector('#attEditModal input');
