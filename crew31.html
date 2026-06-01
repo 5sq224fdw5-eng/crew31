@@ -3762,6 +3762,28 @@ async function cancelVote(vid){
 }
 
 // 특정 날짜의 출석 상태를 그날 투표 응답 기준으로 다시 계산해서 기록/삭제
+async function diagAtt(gid, mname){
+  const votes = await dbGet('votes')||{};
+  const crew = await dbGet('members')||{};
+  // 이름 → key 후보
+  const keys = Object.entries(crew).filter(([,m])=>m.name===mname).map(([k])=>k);
+  keys.push(mname); // 이름 자체가 키일 수도
+  let out = `[${mname}] 시크릿 5/31 진단\n\n`;
+  Object.entries(votes).forEach(([vid,v])=>{
+    if(!v||v.deleted||v.group!==gid) return;
+    const dd = getTitleDate(v)||v.date;
+    if(dd!=='2026-05-31') return;
+    const respKeys = Object.keys(v.responses||{});
+    const myResp = keys.find(k=>v.responses?.[k]!==undefined);
+    out += `• ${v.title}\n  응답키들: ${respKeys.join(', ')||'없음'}\n  내응답: ${myResp?('idx '+v.responses[myResp]+' ('+(v.options||[])[v.responses[myResp]]+')'):'없음'}\n\n`;
+  });
+  const att = await dbGet(`attendance/${gid}`)||{};
+  Object.entries(att).forEach(([wk,mem])=>{
+    if(mem[mname]?.['2026-05-31']!==undefined) out += `attendance[${wk}][${mname}][5/31] = ${mem[mname]['2026-05-31']}\n`;
+  });
+  alert(out);
+}
+
 async function recomputeAttendance(gid, date, myKey){
   try{
     if(!gid||!date) return;
@@ -4358,24 +4380,37 @@ async function loadStatusGroup(gid) {
       });
   }
 
-  // 취소 유령 제거: '참여'/'시작'(미완료)인데 그날 실제 투표 응답·이미지가 없으면 삭제
+  // 취소 유령 제거 + 미완료(완료투표 미참여) 봉사/투피드/노피드 연하게 처리
   {
-    // (그룹·날짜·멤버이름) → 응답 존재 여부 인덱스
-    const hasResp = {}; // `${date}__${mname}` = true
+    const hasResp = {};   // 시작·완료 어디든 응답 있음
+    const didEndV = {};   // 완료투표(또는 이미지)에 참여함
     if(votes){
       Object.values(votes).forEach(v=>{
         if(!v || v.deleted || v.group!==gid || !v.date) return;
         const dd = getTitleDate(v) || v.date;
-        Object.keys(v.responses||{}).forEach(mkey=>{ hasResp[`${dd}__${keyToName[mkey]||mkey}`]=true; });
-        Object.keys(v.images||{}).forEach(mkey=>{ hasResp[`${dd}__${keyToName[mkey]||mkey}`]=true; });
+        const isEnd = !(v.title||'').includes('시작') && ((v.title||'').includes('완료')||v.imageUpload);
+        Object.keys(v.responses||{}).forEach(mkey=>{
+          const nm=keyToName[mkey]||mkey;
+          hasResp[`${dd}__${nm}`]=true;
+          if(isEnd) didEndV[`${dd}__${nm}`]=true;
+        });
+        Object.keys(v.images||{}).forEach(mkey=>{
+          const nm=keyToName[mkey]||mkey;
+          hasResp[`${dd}__${nm}`]=true;
+          if(isEnd) didEndV[`${dd}__${nm}`]=true;
+        });
       });
     }
     Object.values(weeks).forEach(wk=>{
       Object.entries(wk.members).forEach(([mname,dmap])=>{
         Object.keys(dmap).forEach(date=>{
           const val=dmap[date];
-          if((val==='참여'||val==='시작') && !hasResp[`${date}__${mname}`]){
-            delete dmap[date]; // 취소돼 응답 없는 유령 → 빈칸
+          const k=`${date}__${mname}`;
+          if((val==='참여'||val==='시작') && !hasResp[k]){
+            delete dmap[date]; // 취소된 유령 → 빈칸
+          } else if(['봉사','투피드','노피드','완료'].includes(val) && !didEndV[k]){
+            // 완료투표 미참여인데 확정값으로 저장된 옛 데이터 → 미완료 표시(연하게)
+            dmap[date] = (val==='완료') ? '참여' : val+'·미완료';
           }
         });
       });
@@ -4387,7 +4422,7 @@ async function loadStatusGroup(gid) {
     return;
   }
 
-  const resultColor = {'완료':'#5DB88A','참여':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0'};
+  const resultColor = {'완료':'#5DB88A','참여':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0','봉사·미완료':'#A78BFA','투피드·미완료':'#f59e0b','노피드·미완료':'#94a3b8'};
   const ADMIN_NAMES = ['고인물','에이스','경력직','불주먹','김월루','퇴사각'];
   let html = '';
 
@@ -4422,23 +4457,28 @@ async function loadStatusGroup(gid) {
     dates.forEach(d => {
       const dd = new Date(d);
       const days = ['일','월','화','수','목','금','토'];
-      html += `<th style="padding:6px 8px;text-align:center;font-weight:700;white-space:nowrap">${dd.getMonth()+1}/${dd.getDate()}<br><span style="font-weight:400;color:var(--text3)">${days[dd.getDay()]}</span></th>`;
+      // 그날 참여 인원수 (관리자 계정 제외, 값이 있는 사람)
+      const cnt = Object.entries(memberResults).filter(([n,md])=> n!=='관리자' && md[d] && md[d]!=='').length;
+      html += `<th style="padding:6px 8px;text-align:center;font-weight:700;white-space:nowrap">${dd.getMonth()+1}/${dd.getDate()}<br><span style="font-weight:400;color:var(--text3)">${days[dd.getDay()]}</span><br><span style="font-weight:700;color:var(--accent);font-size:10px">${cnt}명</span></th>`;
     });
     html += `<th style="padding:6px 8px;text-align:center;font-weight:700">풀참</th></tr>`;
 
-    // 정렬: 인사팀 먼저, 그다음 가나다
-    const sortedMembers = Object.entries(memberResults).sort(([a],[b]) => {
-      const aA = ADMIN_NAMES.includes(a), bA = ADMIN_NAMES.includes(b);
-      if(aA && !bA) return -1; if(!aA && bA) return 1;
-      if(aA && bA) return ADMIN_NAMES.indexOf(a) - ADMIN_NAMES.indexOf(b);
-      return a.localeCompare(b, 'ko');
-    });
+    // 정렬: 인사팀 먼저, 그다음 가나다 ('관리자' 계정은 현황에서 제외 — 관리만 함)
+    const sortedMembers = Object.entries(memberResults)
+      .filter(([n]) => n!=='관리자')
+      .sort(([a],[b]) => {
+        const aA = ADMIN_NAMES.includes(a), bA = ADMIN_NAMES.includes(b);
+        if(aA && !bA) return -1; if(!aA && bA) return 1;
+        if(aA && bA) return ADMIN_NAMES.indexOf(a) - ADMIN_NAMES.indexOf(b);
+        return a.localeCompare(b, 'ko');
+      });
+
 
     sortedMembers.forEach(([mname, mdates]) => {
       const fullCount = dates.filter(d => {
         const r = mdates[d];
-        // 봉사(열정페이)는 풀참 합산에서 제외
-        return ['완료','공게','투피드','노피드','프패'].includes(r);
+        // 완료 인정건 (출근확인증=출근 인정 대체). 미완료·참여·봉사는 제외
+        return ['완료','공게','투피드','노피드','프패','확인증'].includes(r);
       }).length;
       const isFull = fullCount >= 7;
       const isAdminM = ADMIN_NAMES.includes(mname);
@@ -4447,12 +4487,14 @@ async function loadStatusGroup(gid) {
       dates.forEach(d => {
         let r = mdates[d] || '';
         if(r==='시작') r='참여'; // 옛 데이터 호환
+        const isMiwan = r.endsWith('·미완료');
+        const label = isMiwan ? r.replace('·미완료','') : r; // 표시 글자는 봉사/투피드 그대로
         const bg = resultColor[r] || '#f1f5f9';
-        const isDim = (r==='참여'||r==='');
+        const isDim = (r==='참여'||r===''||isMiwan); // 참여/미완료는 연하게
         const cellBg = !r ? '#f1f5f9' : (isDim ? bg+'18' : bg+'33');
         const cellFg = !r ? '#ccc' : (isDim ? bg+'99' : bg);
         const cellWeight = isDim ? '600' : '800';
-        html += `<td style="padding:4px;text-align:center"><span style="display:inline-block;padding:3px 6px;border-radius:6px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:10px;white-space:nowrap">${r||'-'}</span></td>`;
+        html += `<td style="padding:4px;text-align:center"><span style="display:inline-block;padding:3px 6px;border-radius:6px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:10px;white-space:nowrap">${label||'-'}</span></td>`;
       });
       html += `<td style="padding:6px 8px;text-align:center;font-weight:800;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':(fullCount+'/7')}</td>`;
       html += `</tr>`;
@@ -4803,7 +4845,7 @@ async function downloadWeekExcel(gid, mondayStr) {
     allMembers.forEach((m, idx) => {
       const row = [null, idx+1, m.name, ''];
       // 봉사(열정페이)는 풀참 합산에서 제외
-      const valid = ['완료','공게','투피드','노피드','프패'];
+      const valid = ['완료','공게','투피드','노피드','프패','확인증'];
       let ppCount = 0;
       dates.forEach(d => {
         const r = memberResults[m.name]?.[d] || '';
