@@ -1086,8 +1086,7 @@ async function enterApp(){
   if(savedGroup && groups[savedGroup]){
     _currentDept = savedGroup;
     renderGroupSelectBar();
-    selectGroup(savedGroup);
-    setTimeout(()=>goTab(savedTab), 200);
+    selectGroup(savedGroup); // 그룹 진입 = 투표(home) 첫 화면 (savedTab으로 덮지 않음)
   } else {
     try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
     renderGroupSelectBar();
