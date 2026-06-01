@@ -865,6 +865,11 @@ async function announceNewVersion(){
 
 async function doLogin(role){
   try{
+    // 이전 사용자(특히 관리자) 흔적 완전 제거 — 권한·탭 잔류 방지
+    CU=null;
+    try{ localStorage.removeItem('crew31User'); sessionStorage.removeItem('crew31User'); }catch{}
+    try{ localStorage.removeItem('lastTab'); sessionStorage.removeItem('lastTab'); localStorage.removeItem('lastGroup'); }catch{}
+    try{ const oldKey=getSessionKey(); await dbDelete(`sessions/${oldKey}`); }catch{}
     if(role==='admin'){
       if(document.getElementById('loginPw').value!=='admin1234'){showToast('비밀번호 오류');return;}
       CU={name:'관리자',role:'admin',key:null};
@@ -1027,13 +1032,14 @@ function startAutoVoteScheduler(){
   return;
 }
 
-function logout(){
+async function logout(){
   const key=getSessionKey();
   CU=null;
   try{ localStorage.removeItem('crew31User'); }catch{}
   try{ sessionStorage.removeItem('crew31User'); }catch{}
   try{ document.cookie='crew31User=;max-age=0;path=/'; }catch{}
-  try{ dbDelete(`sessions/${key}`); }catch{}
+  try{ localStorage.removeItem('lastTab'); sessionStorage.removeItem('lastTab'); localStorage.removeItem('lastGroup'); }catch{}
+  try{ await dbDelete(`sessions/${key}`); }catch{}
   document.getElementById('loginPage').style.display='flex';
   document.getElementById('app').style.display='none';
   clearInterval(window._chatPoll);
@@ -1069,9 +1075,14 @@ async function enterApp(){
 
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
-  const lastTab = sessionStorage.getItem('lastTab') || 'notice';
+  let lastTab = sessionStorage.getItem('lastTab') || 'notice';
   const savedGroup = localStorage.getItem('lastGroup');
-  const savedTab = localStorage.getItem('lastTab')||'notice';
+  let savedTab = localStorage.getItem('lastTab')||'notice';
+  // 사원은 관리자 전용 탭(설정/현황)으로 복원 금지
+  if(CU.role!=='admin'){
+    if(['settings','status'].includes(lastTab)) lastTab='notice';
+    if(['settings','status'].includes(savedTab)) savedTab='notice';
+  }
   if(savedGroup && groups[savedGroup]){
     _currentDept = savedGroup;
     renderGroupSelectBar();
@@ -1307,6 +1318,11 @@ function setMainHeader(title,sub='',actionsHtml=''){
 // ── TAB NAVIGATION ──
 // ══════════════════════════════════════════════
 function goTab(tab){
+  // 관리자 전용 탭 가드 (사원 차단)
+  if((tab==='settings'||tab==='status') && CU?.role!=='admin'){
+    showToast('관리자 전용 메뉴입니다');
+    return;
+  }
   _currentTab=tab;
   clearInterval(window._chatPoll);
   sessionStorage.setItem('lastTab', tab);
@@ -4706,6 +4722,7 @@ function getWeekLabel(mondayStr) {
 // ── 현황 탭 메인 ──
 async function loadStatus() {
   const mb = document.getElementById('mainBody');
+  if(CU?.role!=='admin'){ mb.innerHTML='<div class="empty" style="padding:60px 20px"><div class="empty-icon">🔒</div>관리자 전용 메뉴입니다</div>'; return; }
   mb.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   setMainHeader('📋 현황', '주차별 출근 현황',
     `<button class="btn-sm pri" onclick="showStatusView('week')">주차별</button>`
@@ -5354,6 +5371,7 @@ async function downloadWeekExcel(gid, mondayStr) {
 // ══════════════════════════════════════════════
 async function loadSettings(){
   const mb=document.getElementById('mainBody');
+  if(CU?.role!=='admin'){ mb.innerHTML='<div class="empty" style="padding:60px 20px"><div class="empty-icon">🔒</div>관리자 전용 메뉴입니다</div>'; return; }
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
 
   // 데이터 미리 로드
