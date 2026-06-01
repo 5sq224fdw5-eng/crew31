@@ -3705,6 +3705,60 @@ async function saveMemo(vid){
 }
 
 async function cancelVote(vid){
+  return cancelVoteFor(vid, CU?.name||CU?.key||'admin', CU?.key||'admin');
+}
+
+// 임의 멤버(targetKey) 대상 투표 취소 — 경품/연차 복구 + 현황 재계산까지 동일 처리
+async function cancelVoteFor(vid, myKey, linkKey){
+  const key = linkKey || myKey;
+  const v=await dbGet(`votes/${vid}`);
+  if(!v || v.responses?.[myKey]===undefined) {
+    // 응답이 없으면 링크만 정리하고 종료
+    if(v){ await dbDelete(`votes/${vid}/links/${key}`); await dbDelete(`votes/${vid}/links/${key}_1`); await dbDelete(`votes/${vid}/links/${key}_2`); }
+    return;
+  }
+  let wasLeave=false, wasTupide=false;
+  const usedDate = getTitleDate(v)||todayStr;
+  const prevOptText=(v.options?.[v.responses[myKey]]||'').toLowerCase();
+  wasLeave=prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
+  wasTupide=prevOptText.includes('투피드')||prevOptText.includes('두배');
+
+  if(wasLeave){
+    try{
+      const gmKey=await _gameKeyFor(myKey, v.group);
+      if(gmKey){
+        const usedType = v.leaveUsed?.[myKey];
+        if(usedType==='prize'){
+          const prizesRaw=await gameGet(`memberPrizes/${gmKey}`);
+          if(Array.isArray(prizesRaw)){
+            const idx=prizesRaw.findIndex(p=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
+            if(idx>=0){const arr=[...prizesRaw];arr[idx]={...arr[idx],deducted:false,usedDate:null};await gameSet(`memberPrizes/${gmKey}`,arr);}
+          }else if(prizesRaw){
+            const found=Object.entries(prizesRaw).find(([k,p])=>p&&p.deducted&&(p.name||'').includes('연차')&&p.usedDate===usedDate);
+            if(found){await gameSet(`memberPrizes/${gmKey}/${found[0]}/deducted`,false);await gameSet(`memberPrizes/${gmKey}/${found[0]}/usedDate`,null);}
+          }
+          showToast('↩️ 경품 연차 복구됨');
+        }else{
+          const cur=await gameGet(`memberLeave/${gmKey}`)||0;
+          await gameSet(`memberLeave/${gmKey}`,cur+1);
+          await gamePush(`leaveLog/${gmKey}`,{type:'give',amount:1,date:usedDate,memo:'출석 취소 연차 복구',time:Date.now()});
+          showToast('↩️ 연차 복구됨');
+        }
+        await dbDelete(`votes/${vid}/leaveUsed/${myKey}`);
+      }
+    }catch(e){}
+  }
+
+  await dbDelete(`votes/${vid}/responses/${myKey}`);
+  await dbDelete(`votes/${vid}/links/${key}`);
+  await dbDelete(`votes/${vid}/links/${key}_1`);
+  await dbDelete(`votes/${vid}/links/${key}_2`);
+
+  if(wasTupide){ await reconcileTupide(v.group, usedDate, myKey); }
+  await recomputeAttendance(v.group, getTitleDate(v), myKey);
+}
+
+async function _cancelVote_OLD(vid){
   const myKey=CU?.name||CU?.key||'admin';
   const key=CU?.key||'admin';
   const v=await dbGet(`votes/${vid}`);
@@ -4357,10 +4411,11 @@ async function loadStatusGroup(gid) {
   if(!el) return;
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-  const [votes, attendance, crewMembers] = await Promise.all([
+  const [votes, attendance, crewMembers, attManual] = await Promise.all([
     dbGet('votes'),
     dbGet(`attendance/${gid}`),
-    dbGet('members')
+    dbGet('members'),
+    dbGet(`attendanceManual/${gid}`)
   ]);
 
   const gName = groups[gid]?.name || gid;
@@ -4416,6 +4471,7 @@ async function loadStatusGroup(gid) {
     const hasResp = {};        // 시작·완료 어디든 응답
     const didEndV = {};        // 완료투표(또는 이미지) 참여
     const startExistsByDate = {}; // 그 날짜에 시작투표가 존재하는지
+    const endExistsByDate = {};   // 그 날짜에 완료투표가 존재하는지
     if(votes){
       Object.values(votes).forEach(v=>{
         if(!v || v.deleted || v.group!==gid || !v.date) return;
@@ -4424,6 +4480,7 @@ async function loadStatusGroup(gid) {
         const isStart = t.includes('시작');
         const isEnd = !isStart && (t.includes('완료')||t.includes('마감')||v.imageUpload);
         if(isStart) startExistsByDate[dd]=true;
+        if(isEnd) endExistsByDate[dd]=true;
         Object.keys(v.responses||{}).forEach(mkey=>{
           const nm=keyToName[mkey]||mkey;
           hasResp[`${dd}__${nm}`]=true;
@@ -4445,19 +4502,23 @@ async function loadStatusGroup(gid) {
         Object.keys(v.responses||{}).forEach(mkey=>{ didStartV[`${dd}__${keyToName[mkey]||mkey}`]=true; });
       });
     }
-    Object.values(weeks).forEach(wk=>{
+    Object.entries(weeks).forEach(([mondayStr, wk])=>{
       Object.entries(wk.members).forEach(([mname,dmap])=>{
         Object.keys(dmap).forEach(date=>{
+          // 수동으로 직접 지정한 칸은 절대 건드리지 않음 (카톡 사진인증 등 수동 출근 인정)
+          if(attManual?.[mondayStr]?.[mname]?.[date]) return;
           const val=dmap[date];
           const k=`${date}__${mname}`;
+          const noEndVote = !endExistsByDate[date]; // 그날 완료투표가 아예 없음
           if((val==='참여'||val==='시작')){
             if(!hasResp[k]){ delete dmap[date]; return; } // 취소 유령 → 빈칸
             // 시작투표 없는 날(옛 방식) 완료투표 응답자 → 완료
             if(!startExistsByDate[date] && didEndV[k]) dmap[date]='완료';
-            // 시작+완료 둘 다 응답 → 완료로 승격 (attendance 공란인 옛 데이터 보정)
+            // 시작+완료 둘 다 응답 → 완료 승격
             else if(didStartV[k] && didEndV[k]) dmap[date]='완료';
-          } else if(['봉사','투피드','노피드'].includes(val) && !didEndV[k]){
-            dmap[date] = val+'·미완료';
+          } else if(['봉사','투피드','노피드'].includes(val)){
+            // 완료투표 있는 날인데 완료투표 미참여 → 미완료(연하게)
+            if(!noEndVote && !didEndV[k]) dmap[date] = val+'·미완료';
           }
         });
       });
@@ -4580,7 +4641,7 @@ async function recordAttendance(vid, optIdx, voterKey) {
 
     // 그날·그룹의 시작/완료 투표 결과 수집
     const allVotes = await dbGet('votes') || {};
-    let startResult=null, endResult=null;
+    let startResult=null, endResult=null, endVoteExists=false, startVoteExists=false;
     for(const sv of Object.values(allVotes)){
       if(!sv || sv.deleted || sv.group!==gid) continue;
       const sm = (sv.title||'').match(/(\d+)월\s*(\d+)일/);
@@ -4591,7 +4652,9 @@ async function recordAttendance(vid, optIdx, voterKey) {
       const sImgs = sv.images?.[myKey] || [];
       const title = sv.title||'';
       const sIsStart = title.includes('시작');
-      const sIsEnd = !sIsStart && title.includes('완료');
+      const sIsEnd = !sIsStart && (title.includes('완료')||title.includes('마감'));
+      if(sIsStart) startVoteExists=true;
+      if(sIsEnd) endVoteExists=true;
       let r = (idx!==undefined&&idx!==null) ? mapVoteResult((sv.options||[])[idx]||'') : null;
       if(sIsEnd && sImgs.length>0 && !r) r='완료';
       if(sIsStart && r!==null) startResult=r;
@@ -4600,12 +4663,16 @@ async function recordAttendance(vid, optIdx, voterKey) {
 
     let finalResult;
     if(startResult==='프패' || endResult==='프패'){
-      finalResult='프패';                       // 연차는 완료투표 불필요, 즉시 확정
+      finalResult='프패';                       // 연차는 즉시 확정
     } else if(startResult && endResult){
       const special=['봉사','노피드','투피드'].find(s=>s===endResult||s===startResult);
-      finalResult = special || '완료';          // 둘 다 함 → 완료(또는 특수) = 진하게
+      finalResult = special || '완료';          // 둘 다 함 → 완료(또는 특수)
+    } else if(!startVoteExists && endResult){
+      // 시작투표 없는 날(옛 방식) → 완료투표만으로 확정
+      const special=['봉사','노피드','투피드'].find(s=>s===endResult);
+      finalResult = special || '완료';
     } else if(startResult || endResult){
-      finalResult = '참여';                      // 하나만 함 → 미완료(연하게)
+      finalResult = '참여';                      // 둘 다 있는 날인데 하나만 → 미완료
     } else {
       finalResult = null;
     }
@@ -4743,14 +4810,39 @@ async function renderAttEditList(gid, mondayStr, dates, filter){
 
 async function selectAttResult(gid, mondayStr, memberName, date, sel){
   const val = sel.value;
-  if(val){ await dbSet(`attendance/${gid}/${mondayStr}/${memberName}/${date}`, val); }
-  else { await dbDelete(`attendance/${gid}/${mondayStr}/${memberName}/${date}`); }
-  // 색상 업데이트
+  if(val){
+    await dbSet(`attendance/${gid}/${mondayStr}/${memberName}/${date}`, val);
+    await dbSet(`attendanceManual/${gid}/${mondayStr}/${memberName}/${date}`, true);
+  } else {
+    // (-) 처리 = 그날 출근 안 함. 그날 그 사람의 시작·완료 투표를 취소해 경품/연차도 복구.
+    await _cancelDayVotesFor(gid, date, memberName);
+    await dbDelete(`attendance/${gid}/${mondayStr}/${memberName}/${date}`);
+    await dbDelete(`attendanceManual/${gid}/${mondayStr}/${memberName}/${date}`);
+  }
   const col = _attResultColor[val]||'#ddd';
   sel.style.borderColor = col;
   sel.style.background = col;
   sel.style.color = val?'white':'#888';
   showToast(`${memberName} ${date.slice(5)} → ${val||'삭제'}`);
+}
+
+// 특정 날짜·그룹에서 한 멤버의 시작/완료 투표 응답을 모두 취소 (경품/연차 복구 포함)
+async function _cancelDayVotesFor(gid, date, memberName){
+  try{
+    const crew = await dbGet('members')||{};
+    // memberName에 해당하는 응답 키 후보: 이름 자체 + members에서 name이 일치하는 key
+    const keyCands = [memberName];
+    Object.entries(crew).forEach(([k,m])=>{ if(m&&m.name===memberName) keyCands.push(k); });
+    const votes = await dbGet('votes')||{};
+    for(const [vid,v] of Object.entries(votes)){
+      if(!v||v.deleted||v.group!==gid) continue;
+      const dd = getTitleDate(v)||v.date;
+      if(dd!==date) continue;
+      // 이 투표에 이 멤버 응답이 있으면 취소
+      const hitKey = keyCands.find(k=>v.responses?.[k]!==undefined);
+      if(hitKey) await cancelVoteFor(vid, hitKey, hitKey);
+    }
+  }catch(e){}
 }
 
 async function cycleAttResult(gid, mondayStr, memberName, date, el){
@@ -4759,8 +4851,14 @@ async function cycleAttResult(gid, mondayStr, memberName, date, el){
   const cur = curEl.textContent.trim()==='-' ? '' : curEl.textContent.trim();
   const idx = _attResultCycle.indexOf(cur);
   const next = _attResultCycle[(idx+1) % _attResultCycle.length];
-  if(next){ await dbSet(`attendance/${gid}/${mondayStr}/${memberName}/${date}`, next); }
-  else { await dbDelete(`attendance/${gid}/${mondayStr}/${memberName}/${date}`); }
+  if(next){
+    await dbSet(`attendance/${gid}/${mondayStr}/${memberName}/${date}`, next);
+    await dbSet(`attendanceManual/${gid}/${mondayStr}/${memberName}/${date}`, true);
+  } else {
+    await _cancelDayVotesFor(gid, date, memberName);
+    await dbDelete(`attendance/${gid}/${mondayStr}/${memberName}/${date}`);
+    await dbDelete(`attendanceManual/${gid}/${mondayStr}/${memberName}/${date}`);
+  }
   curEl.style.background = _attResultColor[next]||'#ddd';
   curEl.style.color = next?'white':'#bbb';
   curEl.textContent = next||'-';
