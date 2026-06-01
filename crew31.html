@@ -2646,18 +2646,20 @@ async function confirmGroupLock(){
     localStorage.setItem('unlockedGroup_'+gid,'1');
     closeGroupLockModal();
     if(_pendingDept){const d=_pendingDept;_pendingDept=null;goDept(d);}
-  }else if(action.action==='lock'){
+  }else if(action.action==='lock' && !action.type){
     if(pw.length<4){showToast('4자리 이상 입력하세요');return;}
     await dbSet(`groups/${gid}/lock`,pw);
     groups[gid].lock=pw;
     showToast('🔒 잠금 설정됨');
-    closeGroupLockModal();renderDeptSubMenu();loadChatTab();
-  }else if(action.action==='unlock'){
+    closeGroupLockModal();
+    if(_currentTab==='settings'){loadSettings();}else{renderDeptSubMenu();loadChatTab();}
+  }else if(action.action==='unlock' && !action.type){
     if(groups[gid]?.lock!==pw){showToast('비밀번호가 틀렸습니다');return;}
     await dbSet(`groups/${gid}/lock`,null);
     groups[gid].lock=null;
     showToast('🔓 잠금 해제됨');
-    closeGroupLockModal();renderDeptSubMenu();loadChatTab();
+    closeGroupLockModal();
+    if(_currentTab==='settings'){loadSettings();}else{renderDeptSubMenu();loadChatTab();}
   }else if(action.action==='change'){
     if(pw.length<4){showToast('4자리 이상 입력하세요');return;}
     if(action.type==='member'){
