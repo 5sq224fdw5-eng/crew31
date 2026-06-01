@@ -4436,6 +4436,15 @@ async function loadStatusGroup(gid) {
         });
       });
     }
+    const didStartV = {};      // 시작투표 참여
+    if(votes){
+      Object.values(votes).forEach(v=>{
+        if(!v || v.deleted || v.group!==gid || !v.date) return;
+        const dd = getTitleDate(v) || v.date;
+        if(!(v.title||'').includes('시작')) return;
+        Object.keys(v.responses||{}).forEach(mkey=>{ didStartV[`${dd}__${keyToName[mkey]||mkey}`]=true; });
+      });
+    }
     Object.values(weeks).forEach(wk=>{
       Object.entries(wk.members).forEach(([mname,dmap])=>{
         Object.keys(dmap).forEach(date=>{
@@ -4443,10 +4452,11 @@ async function loadStatusGroup(gid) {
           const k=`${date}__${mname}`;
           if((val==='참여'||val==='시작')){
             if(!hasResp[k]){ delete dmap[date]; return; } // 취소 유령 → 빈칸
-            // 시작투표 없는 날(옛 방식) 완료투표 응답자 → 완료로 승격
+            // 시작투표 없는 날(옛 방식) 완료투표 응답자 → 완료
             if(!startExistsByDate[date] && didEndV[k]) dmap[date]='완료';
+            // 시작+완료 둘 다 응답 → 완료로 승격 (attendance 공란인 옛 데이터 보정)
+            else if(didStartV[k] && didEndV[k]) dmap[date]='완료';
           } else if(['봉사','투피드','노피드'].includes(val) && !didEndV[k]){
-            // 완료투표 안 한 봉사/투피드/노피드 → 미완료(연하게)
             dmap[date] = val+'·미완료';
           }
         });
@@ -4520,7 +4530,7 @@ async function loadStatusGroup(gid) {
       const isFull = fullCount >= 7;
       const isAdminM = ADMIN_NAMES.includes(mname);
       html += `<tr style="border-top:1px solid var(--border);${isAdminM?'background:#fff8f5':''}">`;
-      html += `<td onclick="diagAtt('${gid}','${escH(mname)}')" style="padding:6px 8px;font-weight:${isAdminM?'800':'600'};white-space:nowrap;color:${isAdminM?'var(--accent)':'inherit'};cursor:pointer">${escH(mname)}</td>`;
+      html += `<td style="padding:6px 8px;font-weight:${isAdminM?'800':'600'};white-space:nowrap;color:${isAdminM?'var(--accent)':'inherit'}">${escH(mname)}</td>`;
       dates.forEach(d => {
         let r = mdates[d] || '';
         if(r==='시작') r='참여'; // 옛 데이터 호환
