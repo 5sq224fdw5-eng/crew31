@@ -3079,10 +3079,11 @@ async function renderVoteCard(vid,v){
       const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
       const isMe=myVote===i;
       const canVote=!isClosed;
-      const onclickAttr=canVote?`onclick="castVote('${vid}',${i})"`:'';
-      html+=`<div class="vopt${isMe?' selected':''}${isClosed?' closed':''}" ${onclickAttr}>`;
+      const onclickAttr=canVote?`onclick="pickVoteOption('${vid}',${i})"`:'';
+      const isPending = (window._pendingVote && window._pendingVote[vid]===i);
+      html+=`<div class="vopt${isMe||isPending?' selected':''}${isClosed?' closed':''}" ${onclickAttr}>`;
       html+=`<div class="vbar" style="width:${pct}%"></div>`;
-      html+=`<div class="vopt-chk">${isMe?'✓':''}</div>`;
+      html+=`<div class="vopt-chk">${isMe||isPending?'✓':''}</div>`;
       html+=`<div class="vopt-label">${escH(opt)}</div>`;
       html+=`<div class="vopt-cnt">${cnt}명 ${pct}%</div>`;
       html+=`</div>`;
@@ -3279,7 +3280,7 @@ async function renderVoteCard(vid,v){
     html+=`<input id="linkNote_${vid}_2" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     html+=`</div>`;
     html+=`</div>`;
-    html+=`<button onclick="submitVoteLinkNew('${vid}')" style="width:100%;padding:10px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔗 링크 제출</button>`;
+    html+=`<button onclick="submitVote('${vid}')" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">✅ 투표 제출</button>`;
     html+=`</div>`;
   }
   // 관리자 일괄복사 + 댓글
@@ -3378,7 +3379,7 @@ function onLinkTypeChange(vid){
   }
 }
 
-async function submitVoteLinkNew(vid){
+async function submitVoteLinkNew(vid, silent){
   const nick=CU?.name||'익명';
   const key=CU?.key||'admin';
   const type=document.getElementById(`linkType_${vid}`)?.value||'normal';
@@ -3392,7 +3393,7 @@ async function submitVoteLinkNew(vid){
     const note1=document.getElementById(`linkNote_${vid}_1`)?.value.trim()||'';
     const url2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
     const note2=document.getElementById(`linkNote_${vid}_2`)?.value.trim()||'';
-    if(!url1&&!url2){showToast('링크를 입력하세요');return;}
+    if(!url1&&!url2){ if(!silent) showToast('링크를 입력하세요'); return;}
     if(url1){
       const ex1=await dbGet(`votes/${vid}/links/${key}_1`);
       await dbSet(`votes/${vid}/links/${key}_1`,{nick:displayNick,id:displayId,url:cleanUrl(url1),note:note1,type,time:ex1?.time||Date.now()});
@@ -3404,13 +3405,15 @@ async function submitVoteLinkNew(vid){
   } else {
     const url=document.getElementById(`linkUrl_${vid}`)?.value.trim();
     const note=document.getElementById(`linkNote_${vid}`)?.value.trim()||'';
-    if(!url){showToast('URL을 입력하세요');return;}
+    if(!url){ if(!silent) showToast('URL을 입력하세요'); return;}
     const ex=await dbGet(`votes/${vid}/links/${key}`);
     await dbSet(`votes/${vid}/links/${key}`,{nick:displayNick,id:displayId,url:cleanUrl(url),note,type,time:ex?.time||Date.now()});
   }
-  showToast('✅ 링크 제출됨!');
-  if(_currentTab==='home')loadHome();
-  else if(_currentTab==='dept')loadDeptPage(_currentDept);
+  if(!silent){
+    showToast('✅ 링크 제출됨!');
+    if(_currentTab==='home')loadHome();
+    else if(_currentTab==='dept')loadDeptPage(_currentDept);
+  }
 }
 
 async function submitVoteLink(vid, isTupide=false){
@@ -3761,6 +3764,10 @@ async function cancelVoteFor(vid, myKey, linkKey){
 
   if(wasTupide){ await reconcileTupide(v.group, usedDate, myKey); }
   await recomputeAttendance(v.group, getTitleDate(v), myKey);
+
+  if(!wasLeave && !wasTupide) showToast('투표 취소됨');
+  if(_currentTab==='home') loadHome();
+  else if(_currentTab==='dept') loadDeptPage(_currentDept);
 }
 
 async function _cancelVote_OLD(vid){
@@ -4002,9 +4009,78 @@ async function reconcileTupide(group, dayKey, myKey){
   }catch(e){}
 }
 
+// 선택지 클릭: 봉사/노피드는 즉시 저장, 그 외(참여/완료/연차/투피드)는 임시선택만
+async function pickVoteOption(vid, optIdx){
+  const v = await dbGet(`votes/${vid}`);
+  if(!v){ showToast('투표를 찾을 수 없습니다'); return; }
+  const optText = (v.options?.[optIdx]||'').toLowerCase();
+  const isBonusOnly = optText.includes('봉사')||optText.includes('열정페이')||optText.includes('노피드')||optText.includes('재능기부');
+  if(isBonusOnly){
+    // 링크 불필요 → 바로 저장
+    await castVote(vid, optIdx);
+    if(window._pendingVote) delete window._pendingVote[vid];
+    return;
+  }
+  // 임시 선택만 (화면 표시). [투표 제출] 눌러야 실제 저장
+  window._pendingVote = window._pendingVote || {};
+  window._pendingVote[vid] = optIdx;
+  try{
+    const el=document.getElementById(`voteDetail_${vid}`);
+    if(el){ el.innerHTML = await renderVoteCard(vid, v); }
+  }catch(e){}
+  showToast('선택됨 · 링크 입력 후 [투표 제출]을 눌러주세요');
+}
+
+// 최종 제출: 임시선택(선택지) + 링크를 한 번에 저장
+async function submitVote(vid){
+  const pending = window._pendingVote ? window._pendingVote[vid] : undefined;
+  const v = await dbGet(`votes/${vid}`);
+  if(!v){ showToast('투표를 찾을 수 없습니다'); return; }
+  const myKey = CU?.name||CU?.key||'admin';
+  // 이미 저장된 선택이 있고 새 임시선택이 없으면 → 링크만 제출
+  const already = v.responses?.[myKey];
+  const optIdx = (pending!==undefined) ? pending : already;
+  if(optIdx===undefined || optIdx===null){
+    showToast('⚠️ 먼저 선택지를 골라주세요'); return;
+  }
+  const optText = (v.options?.[optIdx]||'').toLowerCase();
+  const isBonusOnly = optText.includes('봉사')||optText.includes('열정페이')||optText.includes('노피드')||optText.includes('재능기부');
+
+  // 링크 필요한 선택지(참여/완료/연차/투피드)는 링크 입력 확인
+  if(!isBonusOnly){
+    const type=document.getElementById(`linkType_${vid}`)?.value||'';
+    const isTup = type==='tupide' || optText.includes('투피드')||optText.includes('두배');
+    let hasUrl=false;
+    if(isTup){
+      const u1=document.getElementById(`linkUrl_${vid}_1`)?.value.trim();
+      const u2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
+      hasUrl = !!(u1||u2);
+    } else {
+      const u=document.getElementById(`linkUrl_${vid}`)?.value.trim();
+      hasUrl = !!u;
+    }
+    if(!hasUrl){ showToast('⚠️ 링크를 입력해주세요 (선택지+링크 둘 다 필요해요)'); return; }
+  }
+
+  // 1) 선택지 저장 (임시선택이 있을 때만 castVote 실행)
+  if(pending!==undefined){
+    await castVote(vid, optIdx);
+    if(window._pendingVote) delete window._pendingVote[vid];
+  }
+  // 2) 링크 저장 (링크 입력이 있으면)
+  if(!isBonusOnly){
+    await submitVoteLinkNew(vid, true); // silent=true (토스트 중복 방지)
+  }
+  showToast('✅ 투표 제출 완료!');
+  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
 async function castVote(vid,optIdx){
-  if(window._castVoting) return;
+  // 이전 호출이 에러로 안 풀렸어도 3초 지나면 무시 (영구 잠김 방지)
+  const nowTs = Date.now();
+  if(window._castVoting && (nowTs - (window._castVotingAt||0)) < 3000) return;
   window._castVoting = true;
+  window._castVotingAt = nowTs;
   const myKey=CU?.name||CU?.key||'admin';
   const _voteStartUser=CU?.name||CU?.key||'admin'; // 시작 시점 사용자 고정
   const v=await dbGet(`votes/${vid}`);
@@ -4019,7 +4095,18 @@ async function castVote(vid,optIdx){
   const prevOptText = (prevOptIdx!==undefined) ? (v.options?.[prevOptIdx]||'').toLowerCase() : '';
   const wasLeave = prevOptText.includes('프패')||prevOptText.includes('연차')||prevOptText.includes('프리패스');
   const wasTupide = prevOptText.includes('투피드')||prevOptText.includes('두배');
+  const wasBonus = prevOptText.includes('봉사')||prevOptText.includes('열정페이');
   const usedDate = getTitleDate(v) || todayStr;
+
+  // 재선택 제한: 이미 투표한 사람이 다른 선택지로 바꾸려 하면 → 노피드(재능기부)로만 가능.
+  // 단, 이전 선택이 연차(프패)나 열정페이(봉사)였으면 제한 없음. 같은 선택지 다시 누르는 건 허용.
+  if(prevOptIdx!==undefined && prevOptIdx!==optIdx && !wasLeave && !wasBonus){
+    const newIsNopid = newOptText.includes('노피드')||newOptText.includes('재능기부');
+    if(!newIsNopid){
+      showToast('⚠️ 한번 투표하면 재능기부(노피드)로만 변경할 수 있어요');
+      window._castVoting=false; return;
+    }
+  }
 
   // 오락실 멤버 키 찾기 — 그 투표 그룹의 그 닉네임만 (동명이인 오차감 방지)
   async function _findGameKey(){
@@ -4168,19 +4255,6 @@ async function castVote(vid,optIdx){
   }
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   dbSet(`votes/${vid}/responseTimes/${myKey}`,Date.now());
-
-  // 봉사(열정페이)/노피드(재능기부)는 선택지만, 그 외(참여/완료/투피드/연차)는 링크도 필수
-  const isBonusOnly = newOptText.includes('봉사')||newOptText.includes('열정페이')||newOptText.includes('노피드')||newOptText.includes('재능기부');
-  let hasMyLink = false;
-  if(!isBonusOnly){
-    const curLinks = await dbGet(`votes/${vid}/links`) || {};
-    hasMyLink = Object.values(curLinks).some(l=>l && (l.nick===myKey || l.voterKey===myKey || l.key===myKey));
-  }
-  if(!isBonusOnly && !hasMyLink){
-    showToast('✅ 선택 완료! 🔗 링크도 올려야 투표가 완성돼요');
-  } else {
-    showToast(`✅ 투표 완료! [debug bonus=${isBonusOnly} link=${hasMyLink}]`);
-  }
   await reconcileTupide(v.group, usedDate, myKey);
   await recordAttendance(vid, optIdx, myKey);
 
