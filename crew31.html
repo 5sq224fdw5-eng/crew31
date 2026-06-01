@@ -4179,7 +4179,7 @@ async function castVote(vid,optIdx){
   if(!isBonusOnly && !hasMyLink){
     showToast('✅ 선택 완료! 🔗 링크도 올려야 투표가 완성돼요');
   } else {
-    showToast('✅ 투표 완료!');
+    showToast(`✅ 투표 완료! [debug bonus=${isBonusOnly} link=${hasMyLink}]`);
   }
   await reconcileTupide(v.group, usedDate, myKey);
   await recordAttendance(vid, optIdx, myKey);
