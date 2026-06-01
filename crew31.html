@@ -485,6 +485,9 @@ const GAME_DB='https://gacha-31-default-rtdb.firebaseio.com';
 // ══════════════════════════════════════════════
 const PUSH_VAPID_PUBLIC='BG78RcN8A7JqKrxERb0Cit0ukOL1NpsI1VPSMD6GJ-d_Vu8gTIWb93GsX_xMvU7jlYeTlkjLM1IJs98czLJ2iwQ';
 const PUSH_SERVER='https://crew31-push.ys1004dm.workers.dev';
+// 그룹별 하루 연차(프패) 사용 가능 정원. 그룹명 기준. 목록에 없으면 기본 3명.
+const LEAVE_QUOTA = {'시크릿':1,'좋아요':3,'댓글':3};
+function getLeaveQuota(groupName){ return LEAVE_QUOTA[groupName] !== undefined ? LEAVE_QUOTA[groupName] : 3; }
 
 let _pushReady=false;
 
@@ -4035,6 +4038,29 @@ async function castVote(vid,optIdx){
 
   // 보유 확인 (신규 선택일 때만 막기) — 수동+경품 연차 합산
   if(isLeaveOpt && !wasLeave){
+    // ① 그룹 하루 연차 정원 체크
+    try{
+      const gName = groups[v.group]?.name || '';
+      const quotaData = await dbGet(`leaveQuota/${gName}`);
+      const quota = (quotaData!==null && quotaData!==undefined) ? quotaData : getLeaveQuota(gName);
+      const allVotes = await dbGet('votes') || {};
+      const cnt = new Set();
+      for(const sv of Object.values(allVotes)){
+        if(!sv || sv.deleted || sv.group!==v.group) continue;
+        if(!(sv.title||'').includes('시작')) continue;        // 시작투표만
+        if((getTitleDate(sv)||sv.date)!==usedDate) continue;   // 같은 날
+        Object.entries(sv.responses||{}).forEach(([rk,ri])=>{
+          const ot=(sv.options?.[ri]||'').toLowerCase();
+          if(ot.includes('프패')||ot.includes('연차')||ot.includes('프리패스')) cnt.add(rk);
+        });
+      }
+      cnt.delete(myKey); // 본인은 제외하고 카운트
+      if(cnt.size >= quota){
+        showToast(`⚠️ ${gName} 그룹은 하루 ${quota}명까지만 연차 가능해요 (이미 ${cnt.size}명)`);
+        window._castVoting=false; return;
+      }
+    }catch(e){}
+    // ② 본인 보유 연차 확인
     try{
       const gmKey=await _findGameKey();
       if(gmKey){
@@ -5025,12 +5051,14 @@ async function loadSettings(){
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
 
   // 데이터 미리 로드
-  const [groupMembersData, autoSch, templates, gameMembers2] = await Promise.all([
+  const [groupMembersData, autoSch, templates, gameMembers2, leaveQuotaData] = await Promise.all([
     dbGet('groupMembers'),
     dbGet('autoVoteSchedule'),
     dbGet('voteTemplates'),
-    gameGet('members')
+    gameGet('members'),
+    dbGet('leaveQuota')
   ]);
+  const lq = leaveQuotaData||{};
   const gmd = groupMembersData||{};
   const sch = autoSch||{};
   const tpls = templates||{};
@@ -5177,6 +5205,19 @@ async function loadSettings(){
   tplHtml += `</div>`;
   tplHtml += `<textarea id="newTplMembers" class="fi" placeholder="멤버 (쉼표로 구분)" style="width:100%;margin-top:6px;height:60px;font-size:12px;resize:none"></textarea>`;
 
+  // ── 연차 정원 설정 ──
+  let quotaHtml = '';
+  quotaHtml += `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">그룹별로 하루에 연차(프패) 쓸 수 있는 인원수예요. 비워두면 기본 3명.</div>`;
+  Object.entries(groups).forEach(([gid,g])=>{
+    const cur = lq[g.name] !== undefined ? lq[g.name] : '';
+    quotaHtml += `<div class="setting-row">`;
+    quotaHtml += `<span style="font-size:14px;font-weight:600">${g.name}</span>`;
+    quotaHtml += `<div style="display:flex;align-items:center;gap:6px">`;
+    quotaHtml += `<input type="number" min="0" value="${cur}" placeholder="3" onchange="setLeaveQuota('${escH(g.name)}',this.value)" style="width:60px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);font-size:13px;text-align:center">`;
+    quotaHtml += `<span style="font-size:12px;color:var(--text3)">명</span>`;
+    quotaHtml += `</div></div>`;
+  });
+
   mb.innerHTML = `<div style="padding-bottom:60px">
     <div style="margin-bottom:10px;background:white;border-radius:14px;padding:12px 14px">
       <div style="font-size:13px;font-weight:800;color:var(--text2);margin-bottom:6px">📲 앱 업데이트</div>
@@ -5184,10 +5225,17 @@ async function loadSettings(){
       <button onclick="hardUpdate()" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🔄 최신 버전으로 강제 업데이트</button>
     </div>
     ${settingAccordion('grp','🏢 그룹 관리',grpHtml)}
+    ${settingAccordion('quota','🏖️ 연차 정원',quotaHtml)}
     ${settingAccordion('lock','🔐 잠금 설정',lockHtml)}
     ${settingAccordion('member','👥 멤버 관리',memberHtml)}
     ${settingAccordion('auto','🤖 자동화',autoHtml)}
   </div>`;
+}
+
+async function setLeaveQuota(groupName, val){
+  const n = parseInt(val,10);
+  if(val===''||isNaN(n)){ await dbDelete(`leaveQuota/${groupName}`); showToast(`${groupName} 정원 → 기본(3명)`); }
+  else { await dbSet(`leaveQuota/${groupName}`, Math.max(0,n)); showToast(`${groupName} 연차 정원 → ${Math.max(0,n)}명`); }
 }
 
 function toggleSettingSection(id){
