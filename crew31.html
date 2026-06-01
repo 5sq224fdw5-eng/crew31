@@ -3209,8 +3209,10 @@ async function renderVoteCard(vid,v){
       grouped[nick].links.push(l);
     });
     // 연차/열정페이/노피드 + 링크 전체 목록 (선택/제출 시각 순)
+    // 같은 닉네임이 bonus(선택지)에도 있고 링크에도 있으면 → 링크 하나로 합침(중복 방지)
+    const linkNicks = new Set(Object.values(grouped).map(g=>g.nick));
     const allEntries = [
-      ...bonusVoters.map(b=>({type:'bonus', nick:b.nick, label:b.type, time:b.time||0})),
+      ...bonusVoters.filter(b=>!linkNicks.has(b.nick)).map(b=>({type:'bonus', nick:b.nick, label:b.type, time:b.time||0})),
       ...Object.values(grouped).map(g=>({type:'link', nick:g.nick, links:g.links, time:g.firstTime}))
     ].sort((a,b)=>a.time-b.time);
     let num=1;
@@ -4166,7 +4168,19 @@ async function castVote(vid,optIdx){
   }
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   dbSet(`votes/${vid}/responseTimes/${myKey}`,Date.now());
-  showToast('✅ 투표 완료!');
+
+  // 봉사(열정페이)/노피드(재능기부)는 선택지만, 그 외(참여/완료/투피드/연차)는 링크도 필수
+  const isBonusOnly = newOptText.includes('봉사')||newOptText.includes('열정페이')||newOptText.includes('노피드')||newOptText.includes('재능기부');
+  let hasMyLink = false;
+  if(!isBonusOnly){
+    const curLinks = await dbGet(`votes/${vid}/links`) || {};
+    hasMyLink = Object.values(curLinks).some(l=>l && (l.nick===myKey || l.voterKey===myKey || l.key===myKey));
+  }
+  if(!isBonusOnly && !hasMyLink){
+    showToast('✅ 선택 완료! 🔗 링크도 올려야 투표가 완성돼요');
+  } else {
+    showToast('✅ 투표 완료!');
+  }
   await reconcileTupide(v.group, usedDate, myKey);
   await recordAttendance(vid, optIdx, myKey);
 
@@ -5094,8 +5108,11 @@ async function loadSettings(){
   grpHtml += `</div>`;
   Object.entries(groups).forEach(([gid,g])=>{
     grpHtml += `<div class="setting-row">`;
-    grpHtml += `<div><span style="font-size:14px;font-weight:600">${g.name}</span>`;
-    grpHtml += `<div style="font-size:11px;color:var(--text3);margin-top:2px">🌅 ${g.startTime||'22:00'} · 🌙 ${g.endTime||'13:00'}</div></div>`;
+    grpHtml += `<div style="flex:1"><span style="font-size:14px;font-weight:600">${g.name}</span>`;
+    grpHtml += `<div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">`;
+    grpHtml += `<span style="font-size:11px;color:var(--text3)">🌅</span><input type="time" value="${g.startTime||'22:00'}" onchange="setGroupTime('${gid}','start',this.value)" style="padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px">`;
+    grpHtml += `<span style="font-size:11px;color:var(--text3)">🌙</span><input type="time" value="${g.endTime||'13:00'}" onchange="setGroupTime('${gid}','end',this.value)" style="padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px">`;
+    grpHtml += `</div></div>`;
     grpHtml += `<div style="display:flex;align-items:center;gap:6px">`;
     grpHtml += `<input type="number" value="${g.order??''}" placeholder="순서" onchange="setGroupOrder('${gid}',this.value)" style="width:50px;padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px;text-align:center">`;
     grpHtml += `<button onclick="deleteGroup('${gid}')" style="font-size:11px;padding:4px 12px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;cursor:pointer;font-weight:700">🗑</button>`;
@@ -5332,6 +5349,22 @@ async function updateAutoVoteTime(gid, field, val){
   await dbSet(`autoVoteSchedule/groups/${gid}/${field}`, val);
   await dbSet(`autoVoteSchedule/groups/${gid}/enabled`, true);
   showToast('✅ 저장됨');
+}
+
+// 설정-그룹의 마감시각 수정 → groups + 자동생성 투표 마감(closeTime)을 함께 저장해 항상 일치시킴
+async function setGroupTime(gid, which, val){
+  if(!val) return;
+  if(which==='start'){
+    await dbSet(`groups/${gid}/startTime`, val);
+    await dbSet(`autoVoteSchedule/groups/${gid}/startCloseTime`, val); // 자동생성 시작투표 마감
+    groups[gid].startTime = val;
+    showToast(`🌅 ${groups[gid].name} 시작투표 마감 → ${val}`);
+  } else {
+    await dbSet(`groups/${gid}/endTime`, val);
+    await dbSet(`autoVoteSchedule/groups/${gid}/endCloseTime`, val);   // 자동생성 완료투표 마감
+    groups[gid].endTime = val;
+    showToast(`🌙 ${groups[gid].name} 완료투표 마감 → ${val}`);
+  }
 }
 
 async function setGroupOrder(gid, val){
