@@ -1088,8 +1088,16 @@ async function enterApp(){
     renderGroupSelectBar();
     selectGroup(savedGroup); // 그룹 진입 = 투표(home) 첫 화면 (savedTab으로 덮지 않음)
   } else {
-    try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
-    renderGroupSelectBar();
+    // 저장된 그룹 없으면 첫 번째 그룹(좋아요) 자동 선택 → 투표 첫 화면
+    const firstGid = Object.keys(groups)[0];
+    if(firstGid){
+      _currentDept = firstGid;
+      renderGroupSelectBar();
+      selectGroup(firstGid);
+    } else {
+      try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
+      renderGroupSelectBar();
+    }
   }
   setTimeout(()=>startNotiPolling(),2000);
   setTimeout(()=>startAutoVoteScheduler(),3000);
