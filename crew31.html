@@ -5009,7 +5009,9 @@ async function recordAttendance(vid, optIdx, voterKey) {
     // ※ 연차/투피드 경품 차감은 castVote()에서 단일 처리함.
     //   (예전엔 여기서도 차감해 '중복 차감'·오작동이 있었으므로 제거)
 
-    checkFullAttendance(gid, mondayStr, myKey);
+    // [풀참 연차 자동지급 OFF] 운영자 의도와 무관한 '출처 불명 연차' 방지.
+    //   풀참 보상은 주식으로 별도 지급함. (필요 시 아래 주석 해제)
+    // checkFullAttendance(gid, mondayStr, myKey);
   } catch(e) { console.warn('recordAttendance error', e); }
 }
 
