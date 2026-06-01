@@ -798,35 +798,19 @@ async function hardUpdate(){
   else document.addEventListener('DOMContentLoaded',bindLongPress);
 })();
 
-// 새 서비스워커(=새 버전)가 설치되면 즉시 적용하고 한 번만 자동 새로고침
+// (자동 강제 업데이트 제거됨) — 각 사용자가 🔄 길게 눌렀을 때만 갱신됩니다.
+// 새 서비스워커는 백그라운드에서 받되, 화면을 강제로 새로고침하지 않음.
 (function(){
   if(!('serviceWorker' in navigator)) return;
-  let _swReloaded=false;
-  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
-    if(_swReloaded) return; _swReloaded=true;
-    try{ location.reload(); }catch(e){}
-  });
   async function watch(){
     try{
       const reg=await navigator.serviceWorker.getRegistration();
       if(!reg) return;
-      reg.update().catch(()=>{});
-      if(reg.waiting){ reg.waiting.postMessage('skipWaiting'); }
-      reg.addEventListener('updatefound', ()=>{
-        const nw=reg.installing; if(!nw) return;
-        nw.addEventListener('statechange', ()=>{
-          if(nw.state==='installed' && navigator.serviceWorker.controller){
-            nw.postMessage('skipWaiting');
-            if(reg.waiting) reg.waiting.postMessage('skipWaiting');
-          }
-        });
-      });
+      reg.update().catch(()=>{}); // 새 SW 다운로드만 (강제 적용·새로고침 안 함)
     }catch(e){}
   }
   watch();
-  // 앱 다시 보일 때 + 5분마다 업데이트 체크
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') watch(); });
-  setInterval(watch, 5*60*1000);
 })();
 
 async function doLogin(role){
@@ -1339,7 +1323,7 @@ async function loadNoticePage(){
 function renderNoticeCard(nid,n,allComments){
   const isAdmin=CU?.role==='admin';
   const comments=allComments?.[nid];
-  const commentList=comments?Object.values(comments).sort((a,b)=>(a.time||0)-(b.time||0)):[];
+  const commentList=comments?Object.entries(comments).sort((a,b)=>(a[1].time||0)-(b[1].time||0)):[];
   const isExpanded=_expandedNotice===nid;
   const body=n.body||'';
   const preview=body.length>80?body.slice(0,80)+'...':body;
@@ -1368,11 +1352,19 @@ function renderNoticeCard(nid,n,allComments){
   // 댓글
   if(commentList.length>0){
     html+=`<div style="padding:8px 14px;border-top:1px solid var(--border)">`;
-    commentList.forEach(cm=>{
+    commentList.forEach(([cid,cm])=>{
+      const canEdit = isAdmin || cm.name===CU?.name;
       html+=`<div style="padding:5px 0;display:flex;gap:6px;align-items:flex-start">`;
       html+=`<div style="width:22px;height:22px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:white;flex-shrink:0">${(cm.name||'?')[0]}</div>`;
-      html+=`<div><span style="font-size:12px;font-weight:700;color:var(--accent)">${escH(cm.name||'')}</span> <span style="font-size:13px">${escH(cm.body||'')}</span>`;
-      html+=`<div style="font-size:10px;color:var(--text3)">${fmtDate(cm.time)}</div></div></div>`;
+      html+=`<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:var(--accent)">${escH(cm.name||'')}</span> <span style="font-size:13px">${escH(cm.body||'')}</span>`;
+      html+=`<div style="font-size:10px;color:var(--text3)">${fmtDate(cm.time)}</div></div>`;
+      if(canEdit){
+        html+=`<div style="display:flex;gap:4px;flex-shrink:0">`;
+        html+=`<button onclick="editComment('${nid}','${cid}')" style="font-size:11px;padding:2px 6px;background:rgba(91,155,213,0.1);color:var(--blue);border:none;border-radius:6px;cursor:pointer">수정</button>`;
+        html+=`<button onclick="delComment('${nid}','${cid}')" style="font-size:11px;padding:2px 6px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:6px;cursor:pointer">삭제</button>`;
+        html+=`</div>`;
+      }
+      html+=`</div>`;
     });
     html+=`</div>`;
   }
@@ -1400,6 +1392,29 @@ async function submitComment(nid){
   if(!body){showToast('댓글을 입력하세요');return;}
   await dbPush(`noticeComments/${nid}`,{name:CU.name,body,time:Date.now()});
   showToast('💬 댓글 등록됨');
+  loadNoticePage();
+}
+
+async function editComment(nid, cid){
+  const cm = await dbGet(`noticeComments/${nid}/${cid}`);
+  if(!cm){showToast('댓글을 찾을 수 없습니다');return;}
+  // 본인 또는 관리자만
+  if(CU?.role!=='admin' && cm.name!==CU?.name){showToast('본인 댓글만 수정할 수 있어요');return;}
+  const newBody = prompt('댓글 수정', cm.body||'');
+  if(newBody===null) return;
+  if(!newBody.trim()){showToast('내용을 입력하세요');return;}
+  await dbSet(`noticeComments/${nid}/${cid}/body`, newBody.trim());
+  showToast('✅ 댓글 수정됨');
+  loadNoticePage();
+}
+
+async function delComment(nid, cid){
+  const cm = await dbGet(`noticeComments/${nid}/${cid}`);
+  if(!cm){showToast('댓글을 찾을 수 없습니다');return;}
+  if(CU?.role!=='admin' && cm.name!==CU?.name){showToast('본인 댓글만 삭제할 수 있어요');return;}
+  if(!confirm('댓글을 삭제할까요?')) return;
+  await dbDelete(`noticeComments/${nid}/${cid}`);
+  showToast('🗑️ 댓글 삭제됨');
   loadNoticePage();
 }
 
@@ -2977,7 +2992,7 @@ async function renderVoteCard(vid,v){
   html+=`<div style="padding:14px 14px 10px;border-bottom:1px solid var(--border)">`;
   html+=`<div style="display:flex;align-items:flex-start;gap:8px">`;
   html+=`<div style="flex:1">`;
-  html+=`<div style="font-size:15px;font-weight:800">${escH(v.title||'')}</div>`;
+  html+=`<div style="font-size:15px;font-weight:800">${escH(v.title||'')} <span style="font-size:10px;color:#f00">[응답${Object.keys(responses).length}·링크${Object.keys(v.links||{}).length}]</span></div>`;
   // 시작/완료 배지
   const titleLow = (v.title||'').toLowerCase();
   if(titleLow.includes('시작')||titleLow.includes('start')){
@@ -4064,7 +4079,9 @@ async function pickVoteOption(vid, optIdx){
   if(!v){ showToast('투표를 찾을 수 없습니다'); return; }
   const optText = (v.options?.[optIdx]||'').toLowerCase();
   const isBonusOnly = optText.includes('봉사')||optText.includes('열정페이')||optText.includes('노피드')||optText.includes('재능기부');
-  if(isBonusOnly){
+  // 완료(마감) 투표는 링크 없이 선택지만 → 누르면 바로 저장
+  const isEndVote = (v.title||'').includes('완료')||(v.title||'').includes('마감');
+  if(isBonusOnly || isEndVote){
     // 링크 불필요 → 바로 저장
     await castVote(vid, optIdx);
     if(window._pendingVote) delete window._pendingVote[vid];
@@ -4234,6 +4251,11 @@ async function castVote(vid,optIdx){
   // ── 차감 (신규로 연차 선택) ── 수동/경품 중 먼저 적립된 순으로 1일 차감
   if(isLeaveOpt && !wasLeave){
     try{
+      // 이미 이 투표에서 차감한 기록이 있으면 재차감 금지 (중복 차감 방지)
+      const alreadyUsed = await dbGet(`votes/${vid}/leaveUsed/${myKey}`);
+      if(alreadyUsed){
+        // 이미 차감됨 — 아무것도 안 함
+      } else {
       const gmKey=await _findGameKey();
       if(!gmKey){
         showToast('⚠️ 오락실에서 회원을 못 찾아 연차 차감이 안 됐어요 (이름 확인 필요)');
@@ -4262,6 +4284,7 @@ async function castVote(vid,optIdx){
         }else{
           showToast('⚠️ 보유 연차가 없어 차감하지 못했어요');
         }
+      }
       }
     }catch(e){ showToast('⚠️ 연차 차감 오류: '+(e.message||e)); }
   }
