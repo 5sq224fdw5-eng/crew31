@@ -3045,12 +3045,17 @@ async function renderVoteCard(vid,v){
             if(opt.includes('프패')||opt.includes('연차')||opt.includes('프리패스')) leaveSet.add(nick);
             else if(opt.includes('봉사')||opt.includes('열정페이')) bonusSet.add(nick);
           });
-          // 총 인증 수 = 열정페이/봉사 제외, 투피드는 2장
+          // 노피드(재능기부) 세트 — 피드 없음 → 분모 제외
+          const nopidSet = new Set(startVoters.filter(nick=>{
+            const opt=(svOpts[svResp[nick]]||'').toLowerCase();
+            return opt.includes('노피드')||opt.includes('재능기부');
+          }));
+          // 총 인증 수 = 봉사·노피드·연차 제외, 투피드는 2장
           const tupideSet = new Set(startVoters.filter(nick=>{
             const opt=(svOpts[svResp[nick]]||'').toLowerCase();
             return opt.includes('투피드')||opt.includes('두배');
           }));
-          totalCount = startVoters.filter(nick=>!bonusSet.has(nick)).reduce((sum,nick)=>{
+          totalCount = startVoters.filter(nick=>!bonusSet.has(nick)&&!nopidSet.has(nick)&&!leaveSet.has(nick)).reduce((sum,nick)=>{
             return sum + (tupideSet.has(nick) ? 2 : 1);
           }, 0);
         }
