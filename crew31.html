@@ -3860,16 +3860,18 @@ async function copyAllLinks(vid){
   const v = await dbGet(`votes/${vid}`);
   if(!v){showToast('링크 없음');return;}
   // 화면 목록과 동일한 순서/넘버링 재현 (열정페이·노피드·연차 + 링크 그룹핑)
+  const respTimes = v.responseTimes || {};
   const bonusVoters=[];
   if(v.responses && v.options){
     Object.entries(v.responses).forEach(([k,optIdx])=>{
       const optText=(v.options[optIdx]||'').toLowerCase();
+      const t = respTimes[k] || 0;
       if(optText.includes('봉사')||optText.includes('열정페이')){
-        bonusVoters.push({nick:k, type:'열정페이'});
+        bonusVoters.push({nick:k, type:'열정페이', time:t});
       }else if(optText.includes('노피드')||optText.includes('재능기부')){
-        bonusVoters.push({nick:k, type:'재능기부'});
+        bonusVoters.push({nick:k, type:'재능기부', time:t});
       }else if(optText.includes('프패')||optText.includes('연차')||optText.includes('프리패스')){
-        bonusVoters.push({nick:k, type:'연차'});
+        bonusVoters.push({nick:k, type:'연차', time:t});
       }
     });
   }
@@ -3902,7 +3904,7 @@ async function copyAllLinks(vid){
   }
 
   const allEntries=[
-    ...bonusFiltered.map(b=>({type:'bonus',nick:b.nick,label:b.type,time:0})),
+    ...bonusFiltered.map(b=>({type:'bonus',nick:b.nick,label:b.type,time:b.time||0})),
     ...Object.values(grouped).map(g=>({type:'link',nick:g.nick,links:g.links,time:g.firstTime}))
   ].sort((a,b)=>a.time-b.time);
   if(allEntries.length===0){showToast('복사할 내용 없음');return;}
