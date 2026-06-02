@@ -3073,7 +3073,17 @@ async function loadDeptPage(gid){
   });
   // 원래 정렬 유지
   list.sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
-  let html='<div style="padding:14px 0 80px">';
+  // 그룹 색 → 연한 배경 (어느 그룹인지 한눈에)
+  const _gColor = groups[gid]?.color || '#FF85C1';
+  const _hex = _gColor.replace('#','');
+  const _r = parseInt(_hex.slice(0,2),16), _gg = parseInt(_hex.slice(2,4),16), _b = parseInt(_hex.slice(4,6),16);
+  const _bgTint = `rgba(${_r},${_gg},${_b},0.10)`;
+  const _gName = groups[gid]?.name || '';
+  let html=`<div style="padding:0 0 80px;background:${_bgTint};min-height:100vh">`;
+  // 현재 그룹 표시 띠
+  html+=`<div style="background:${_gColor};padding:11px 16px;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:5">`;
+  html+=`<span style="font-size:16px">📍</span><span style="font-size:14px;font-weight:800;color:white">${escH(_gName)} 그룹</span></div>`;
+  html+=`<div style="padding:14px 0">`;
   // ── 공지 슬라이드 배너 (사원만 표시, 이 그룹 + 전체 공지) ──
   if(!isAdmin) try{
     const allNotices = await dbGet('notices');
@@ -3125,7 +3135,8 @@ async function loadDeptPage(gid){
     html+=`<div id="voteDetail_${vid2}" style="display:none;border-top:1px solid var(--border)"></div>`;
     html+=`</div>`;
   });
-  html+='</div>';
+  html+='</div>'; // padding:14px div
+  html+='</div>'; // 그룹 색 배경 div
   mb.innerHTML=html;
   }catch(e){console.error('loadDeptPage error',e);mb.innerHTML='<div style="padding:20px;color:red">오류: '+e.message+'</div>';}
 }
@@ -4365,7 +4376,8 @@ async function submitVote(vid){
   if(!isBonusOnly && preData){
     await submitVoteLinkNew(vid, true, preData);
   }
-  showToast('✅ 투표 제출 완료!');
+  const _gn = groups[v?.group]?.name || '';
+  showToast(_gn ? `✅ ${_gn} 그룹 투표 제출 완료!` : '✅ 투표 제출 완료!');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
