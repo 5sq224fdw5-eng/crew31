@@ -853,6 +853,42 @@ async function diagMissingVoter(){
   alert(out);
 }
 
+async function diagAttendance(){
+  const name = prompt('이름 (예: 불주먹)','');
+  if(!name) return;
+  const allAtt = await dbGet('attendance')||{};
+  let out = `[${name}] 출석 기록 진단\n\n`;
+  const hits = [];
+  for(const [gid, weeks] of Object.entries(allAtt)){
+    const gname = groups[gid]?.name || gid;
+    for(const [wk, mem] of Object.entries(weeks||{})){
+      const my = mem?.[name];
+      if(my && typeof my==='object'){
+        for(const [date, val] of Object.entries(my)){
+          if(val) { out += `■ ${gname}(${gid}) / 주:${wk}\n  ${date} = ${JSON.stringify(val)}\n`; hits.push({gid,wk,name,date}); }
+        }
+      }
+    }
+  }
+  if(hits.length===0){ alert(out+'기록 없음'); return; }
+  out += `\n총 ${hits.length}건. 특정 날짜를 지우려면 확인을 누르고 날짜 입력.`;
+  if(!confirm(out+'\n\n잘못된 기록을 지울까요?')) return;
+  const delDate = prompt('지울 날짜 (예: 2026-06-02). 그룹은 아래에서 선택','2026-06-02');
+  if(!delDate) return;
+  const target = hits.filter(h=>h.date===delDate);
+  if(target.length===0){ alert('그 날짜 기록 없음'); return; }
+  let msg = '지울 대상:\n';
+  target.forEach((t,i)=> msg += `${i+1}. ${groups[t.gid]?.name||t.gid} ${t.date}\n`);
+  const gidPick = prompt(msg+'\n그룹 gid 입력 (예: g1). 전부면 ALL', target[0].gid);
+  if(!gidPick) return;
+  const toDel = gidPick==='ALL' ? target : target.filter(t=>t.gid===gidPick);
+  for(const t of toDel){
+    await dbDelete(`attendance/${t.gid}/${t.wk}/${t.name}/${t.date}`);
+  }
+  showToast(`🗑️ ${toDel.length}건 삭제됨`);
+  loadHeaderWeeklyAtt();
+}
+
 // 헤더 새로고침 버튼 길게 누르면(0.6초) 강제 업데이트 (사원/관리자 공통)
 (function(){
   function bindLongPress(){
@@ -3839,6 +3875,10 @@ async function copyAllLinks(vid){
   const grouped={};
   sortedLinks.forEach(l=>{const nick=l.nick||'';if(!grouped[nick])grouped[nick]={nick,links:[],firstTime:l.time||0};grouped[nick].links.push(l);});
 
+  // 링크를 낸 사람은 bonus 줄에서 제외 (링크 줄에 [연차] 등으로 표시되므로 중복 방지)
+  const linkNicks = new Set(Object.keys(grouped));
+  const bonusFiltered = bonusVoters.filter(b=>!linkNicks.has(b.nick));
+
   // 닉네임별 선택지 → 유형 라벨 매핑 (투피드/연차 표시용)
   function _optTextOf(nick){
     if(!v.responses||!v.options) return '';
@@ -3856,7 +3896,7 @@ async function copyAllLinks(vid){
   }
 
   const allEntries=[
-    ...bonusVoters.map(b=>({type:'bonus',nick:b.nick,label:b.type,time:0})),
+    ...bonusFiltered.map(b=>({type:'bonus',nick:b.nick,label:b.type,time:0})),
     ...Object.values(grouped).map(g=>({type:'link',nick:g.nick,links:g.links,time:g.firstTime}))
   ].sort((a,b)=>a.time-b.time);
   if(allEntries.length===0){showToast('복사할 내용 없음');return;}
@@ -5636,6 +5676,7 @@ async function loadSettings(){
       <button onclick="hardUpdate()" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🔄 내 폰 강제 업데이트</button>
       <button onclick="announceNewVersion()" style="width:100%;padding:11px;background:#5DB88A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📢 새 버전 알리기</button>
       <button onclick="diagMissingVoter()" style="width:100%;margin-top:8px;padding:11px;background:#FFB347;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🔍 표 누락 진단</button>
+      <button onclick="diagAttendance()" style="width:100%;margin-top:8px;padding:11px;background:#C49BD8;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 출석기록 진단·정리</button>
     </div>
     ${settingAccordion('grp','🏢 그룹 관리',grpHtml)}
     ${settingAccordion('quota','🏖️ 연차 정원',quotaHtml)}
