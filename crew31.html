@@ -3009,11 +3009,43 @@ async function loadDeptPage(gid){
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   const isAdmin=CU?.role==='admin';
   const votes=await dbGet('votes');
-  const list=votes
+  let rawList=votes
     ?Object.entries(votes)
       .filter(([k,v])=>!v.deleted&&(v.group===gid||v.group==='all'))
       .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0))
     :[];
+  // ── 중복 투표 표 합치기 (같은 그룹+제목) ── 데이터는 그대로 두고, 화면 표시용으로만 응답/링크/이미지를 병합
+  // 같은 (group+title) 투표가 여러 개면 표가 갈라져 보이는 문제 방지. 대표 1개에 나머지 표를 합쳐서 보여줌.
+  const mergeMap={};
+  rawList.forEach(([vid,v])=>{
+    const mkey=`${v.group}__${v.title}`;
+    if(!mergeMap[mkey]) mergeMap[mkey]=[];
+    mergeMap[mkey].push([vid,v]);
+  });
+  const list=[];
+  Object.values(mergeMap).forEach(group=>{
+    if(group.length===1){ list.push(group[0]); return; }
+    // 대표 = 가장 최근(이미 정렬됨 → 첫 번째). 나머지 표를 대표에 병합한 사본 생성
+    const [repVid, repV]=group[0];
+    const merged={...repV,
+      responses:{...(repV.responses||{})},
+      responseTimes:{...(repV.responseTimes||{})},
+      links:{...(repV.links||{})},
+      images:{...(repV.images||{})},
+      leaveUsed:{...(repV.leaveUsed||{})}
+    };
+    for(let i=1;i<group.length;i++){
+      const ov=group[i][1];
+      Object.assign(merged.responses, ov.responses||{});
+      Object.assign(merged.responseTimes, ov.responseTimes||{});
+      Object.assign(merged.links, ov.links||{});
+      Object.assign(merged.images, ov.images||{});
+      Object.assign(merged.leaveUsed, ov.leaveUsed||{});
+    }
+    list.push([repVid, merged]);
+  });
+  // 원래 정렬 유지
+  list.sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0));
   let html='<div style="padding:14px 0 80px">';
   // ── 공지 슬라이드 배너 (사원만 표시, 이 그룹 + 전체 공지) ──
   if(!isAdmin) try{
