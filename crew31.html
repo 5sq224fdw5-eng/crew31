@@ -281,8 +281,8 @@ document.addEventListener('keydown',e=>{
       <button onclick="copyIntranetUrl()" style="width:100%;padding:11px;background:#FF7043;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer">🔗 주소 복사하기</button>
     </div>
     <!-- 오락실 바로가기 -->
-    <a href="https://5sq224fdw5-eng.github.io/game31/game.html" target="_blank"
-      style="margin-top:16px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.4);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;">
+    <a href="https://5sq224fdw5-eng.github.io/game31/game.html" onclick="event.preventDefault(); _openGame('https://5sq224fdw5-eng.github.io/game31/game.html');"
+      style="margin-top:16px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.4);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer">
       🎡 오락실 바로가기
     </a>
   </div>
@@ -959,20 +959,28 @@ async function doLogin(role){
   }
 }
 
+function _openGame(url){
+  // 카톡 등 인앱 브라우저는 새 창(_blank)이 막히거나 무한로딩 → 같은 창에서 이동
+  if(typeof isInAppBrowser==='function' && isInAppBrowser()){
+    location.href = url;
+  } else {
+    const w = window.open(url,'_blank');
+    if(!w){ location.href = url; } // 팝업 차단 시 같은 창 이동
+  }
+}
 async function goToGame(){
-  if(!CU?.name){ window.open('https://5sq224fdw5-eng.github.io/game31/game.html','_blank'); return; }
+  if(!CU?.name){ _openGame('https://5sq224fdw5-eng.github.io/game31/game.html'); return; }
 
   // 오락실 멤버에서 현재 닉네임이 포함된 그룹 찾기
   showToast('⏳ 그룹 확인 중...');
   const gameMembers = await gameGet('members');
-  if(!gameMembers){ window.open('https://5sq224fdw5-eng.github.io/game31/game.html','_blank'); return; }
+  if(!gameMembers){ _openGame('https://5sq224fdw5-eng.github.io/game31/game.html'); return; }
 
   // 내 닉네임이 포함된 그룹 찾기 (예: 좋아요불주먹, 댓글불주먹)
   const myGroups = [];
   Object.values(gameMembers).forEach(m=>{
     if(!m.name) return;
     const clean = m.name.replace(/^\*/,'');
-    // 그룹명+닉네임 형식에서 내 닉네임 포함 여부 확인
     if(clean.endsWith(CU.name)){
       const gName = clean.slice(0, clean.length - CU.name.length);
       if(gName) myGroups.push({gName, fullName: clean});
@@ -980,15 +988,13 @@ async function goToGame(){
   });
 
   if(myGroups.length === 0){
-    // 오락실에 없으면 그냥 이동
-    window.open('https://5sq224fdw5-eng.github.io/game31/game.html','_blank');
+    _openGame('https://5sq224fdw5-eng.github.io/game31/game.html');
     return;
   }
 
   if(myGroups.length === 1){
-    // 그룹 1개면 바로 이동
     const url = `https://5sq224fdw5-eng.github.io/game31/game.html?autoLogin=${encodeURIComponent(myGroups[0].fullName)}`;
-    window.open(url,'_blank');
+    _openGame(url);
     return;
   }
 
@@ -1017,7 +1023,7 @@ async function goToGame(){
 
 function enterGameAs(encodedName){
   const url = `https://5sq224fdw5-eng.github.io/game31/game.html?autoLogin=${encodedName}`;
-  window.open(url,'_blank');
+  _openGame(url);
   document.getElementById('gameGroupModal')?.remove();
 }
 
