@@ -3281,6 +3281,14 @@ async function renderVoteCard(vid,v){
   html+=`</div></div>`;
   html+=`<div style="padding:12px 14px">`;
 
+  // 완료 투표 → 그룹 대표 인스타 계정 미션 버튼
+  if(isEndVote){
+    const rep = groups[v.group]?.repAccount;
+    if(rep){
+      html+=`<a href="${escH(rep)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;box-sizing:border-box;padding:11px;margin-bottom:12px;background:linear-gradient(135deg,#FF85C1,#f87286);color:white;border-radius:12px;font-size:13px;font-weight:800;text-decoration:none">📷 ${escH(gName)} 대표계정 미션하러 가기</a>`;
+    }
+  }
+
   if(isImageVote){
     // 이미지 업로드 투표 - 시작 투표 참여자 버튼 목록
     const allImages = v.images||{};
@@ -5550,6 +5558,9 @@ async function loadSettings(){
     grpHtml += `<div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">`;
     grpHtml += `<span style="font-size:11px;color:var(--text3)">🌅</span><input type="time" value="${g.startTime||'22:00'}" onchange="setGroupTime('${gid}','start',this.value)" style="padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px">`;
     grpHtml += `<span style="font-size:11px;color:var(--text3)">🌙</span><input type="time" value="${g.endTime||'13:00'}" onchange="setGroupTime('${gid}','end',this.value)" style="padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px">`;
+    grpHtml += `</div>`;
+    grpHtml += `<div style="display:flex;gap:6px;margin-top:6px;align-items:center">`;
+    grpHtml += `<span style="font-size:11px;color:var(--text3)">📷 대표계정</span><input type="text" value="${escH(g.repAccount||'')}" placeholder="인스타 주소 또는 @아이디" onchange="setGroupRep('${gid}',this.value)" style="flex:1;padding:4px 8px;border-radius:8px;border:1px solid var(--border);font-size:12px">`;
     grpHtml += `</div></div>`;
     grpHtml += `<div style="display:flex;align-items:center;gap:6px">`;
     grpHtml += `<input type="number" value="${g.order??''}" placeholder="순서" onchange="setGroupOrder('${gid}',this.value)" style="width:50px;padding:4px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px;text-align:center">`;
@@ -5827,6 +5838,18 @@ async function setGroupOrder(gid, val){
   groups[gid].order = isNaN(order) ? undefined : order;
   renderGroupSelectBar();
   showToast('✅ 순서 저장됨');
+}
+
+async function setGroupRep(gid, val){
+  let v = (val||'').trim();
+  // @아이디만 입력하면 인스타 주소로 변환
+  if(v && !v.startsWith('http')){
+    const id = v.replace(/^@+/,'').trim();
+    v = id ? `https://www.instagram.com/${id}/` : '';
+  }
+  await dbSet(`groups/${gid}/repAccount`, v || null);
+  groups[gid].repAccount = v || '';
+  showToast(v ? `📷 ${groups[gid].name} 대표계정 저장됨` : '대표계정 삭제됨');
 }
 
 async function addGroup(){
