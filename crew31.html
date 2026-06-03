@@ -3989,8 +3989,14 @@ async function uploadImages(vid, input){
 
   const uploaded = [];
   const uploadOne = (file, retry=0) => new Promise(async resolve=>{
-    if(file.size > 10 * 1024 * 1024){ showToast(`${file.name} 10MB 초과`); return resolve(null); }
-    const compressed = await compressImg(file);
+    // 원본이 비정상적으로 클 때만 차단 (50MB), 보통 사진은 아래에서 압축
+    if(file.size > 50 * 1024 * 1024){ showToast(`${file.name} 너무 큽니다 (50MB 초과)`); return resolve(null); }
+    let compressed = await compressImg(file);
+    // 압축 후에도 10MB 넘으면 한 번 더 강하게 압축
+    if(compressed && compressed.size > 10 * 1024 * 1024){
+      compressed = await compressImg(compressed) || compressed;
+    }
+    if(compressed && compressed.size > 10 * 1024 * 1024){ showToast(`${file.name} 압축 후에도 큼`); return resolve(null); }
     const fd = new FormData();
     fd.append('file', compressed, 'photo.jpg');
     fd.append('upload_preset', CLOUDINARY_PRESET);
