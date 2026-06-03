@@ -5019,7 +5019,7 @@ async function loadStatusGroup(gid) {
     return;
   }
 
-  const resultColor = {'완료':'#5DB88A','참여':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0','봉사·미완료':'#A78BFA','투피드·미완료':'#f59e0b','노피드·미완료':'#94a3b8'};
+  const resultColor = {'완료':'#5DB88A','참여':'#5DB88A','지각':'#E8927C','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0','봉사·미완료':'#A78BFA','투피드·미완료':'#f59e0b','노피드·미완료':'#94a3b8'};
   const ADMIN_NAMES = ['고인물','에이스','경력직','불주먹','김월루','퇴사각'];
   let html = '';
 
@@ -5234,8 +5234,8 @@ function openAttendanceEdit(gid, mondayStr) {
   renderAttEditList(gid, mondayStr, dates, '');
 }
 
-const _attResultCycle = ['완료','프패','공게','봉사','노피드','투피드','확인증',''];
-const _attResultColor = {'완료':'#5DB88A','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','':'#ddd'};
+const _attResultCycle = ['완료','지각','프패','공게','봉사','노피드','투피드','확인증',''];
+const _attResultColor = {'완료':'#5DB88A','지각':'#E8927C','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','':'#ddd'};
 
 async function renderAttEditList(gid, mondayStr, dates, filter){
   const listEl = document.getElementById('attEditList');
@@ -5270,7 +5270,7 @@ async function renderAttEditList(gid, mondayStr, dates, filter){
   }
   if(filter) members = members.filter(m=>m.name.includes(filter));
   members.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-  const opts = ['','완료','프패','공게','봉사','노피드','투피드','확인증'];
+  const opts = ['','완료','지각','프패','공게','봉사','노피드','투피드','확인증'];
   const searchInput = document.querySelector('#attEditModal input');
   const scrollTop = listEl.scrollTop;
   listEl.innerHTML = members.map(m=>{
