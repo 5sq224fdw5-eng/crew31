@@ -3325,10 +3325,15 @@ async function renderVoteCard(vid,v){
     try{
       const _allV = await dbGet('votes');
       if(_allV){
-        const _sv = Object.values(_allV).find(sv=>
-          !sv.deleted && sv.group===v.group && sv.date===v.date &&
-          (sv.title||'').includes('시작') && sv.responses
-        );
+        const _dm = (v.title||'').match(/(\d+)월\s*(\d+)일/);
+        const _dl = _dm ? `${_dm[1]}월${_dm[2]}일` : null;
+        const _sv = Object.values(_allV).find(sv=>{
+          if(sv.deleted || sv.group!==v.group || !sv.responses) return false;
+          if(!(sv.title||'').includes('시작')) return false;
+          const _sm = (sv.title||'').match(/(\d+)월\s*(\d+)일/);
+          const _sl = _sm ? `${_sm[1]}월${_sm[2]}일` : null;
+          return _dl && _sl && _dl===_sl;
+        });
         if(_sv && _sv.responses){
           const _started = Object.keys(_sv.responses);
           const _done = new Set(Object.keys(v.responses||{}));
@@ -3518,14 +3523,16 @@ async function renderVoteCard(vid,v){
           if(isEndVote2){
             const allVotes = await dbGet('votes');
             if(allVotes){
-              // 같은 날짜, 같은 그룹의 시작 투표 찾기
-              const startVote = Object.values(allVotes).find(sv=>
-                !sv.deleted &&
-                sv.group===v.group &&
-                sv.date===v.date &&
-                (sv.title||'').includes('시작') &&
-                sv.responses
-              );
+              // 제목의 "N월 N일"로 매칭 (date는 하루 뒤라 쓰면 안 됨)
+              const _dm2 = (v.title||'').match(/(\d+)월\s*(\d+)일/);
+              const _dl2 = _dm2 ? `${_dm2[1]}월${_dm2[2]}일` : null;
+              const startVote = Object.values(allVotes).find(sv=>{
+                if(sv.deleted || sv.group!==v.group || !sv.responses) return false;
+                if(!(sv.title||'').includes('시작')) return false;
+                const _sm2 = (sv.title||'').match(/(\d+)월\s*(\d+)일/);
+                const _sl2 = _sm2 ? `${_sm2[1]}월${_sm2[2]}일` : null;
+                return _dl2 && _sl2 && _dl2===_sl2;
+              });
               if(startVote){
                 const startedNames = Object.keys(startVote.responses||{});
                 const mismatch = startedNames.filter(n=>!votedNames.includes(n));
