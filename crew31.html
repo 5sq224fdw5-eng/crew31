@@ -3605,20 +3605,23 @@ async function renderVoteCard(vid,v){
     html+=`<input id="linkId_${vid}" placeholder="@아이디" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     html+=`</div>`;
     if(isTupide){
-      // 투피드 → 링크 2칸 자동
+      // 투피드 → 링크 2칸 자동 (+ 붙여넣기 버튼)
       html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
       html+=`<input id="linkUrl_${vid}_1" placeholder="링크 1" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<input id="linkNote_${vid}_1" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<button onclick="pasteToLink('linkUrl_${vid}_1')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋</button>`;
+      html+=`<input id="linkNote_${vid}_1" placeholder="요청" style="width:64px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`</div>`;
       html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
       html+=`<input id="linkUrl_${vid}_2" placeholder="링크 2" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<input id="linkNote_${vid}_2" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<button onclick="pasteToLink('linkUrl_${vid}_2')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋</button>`;
+      html+=`<input id="linkNote_${vid}_2" placeholder="요청" style="width:64px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`</div>`;
     } else {
-      // 일반 → 링크 1칸
+      // 일반 → 링크 1칸 (+ 붙여넣기 버튼)
       html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
       html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<input id="linkNote_${vid}" placeholder="요청사항" style="width:80px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<button onclick="pasteToLink('linkUrl_${vid}')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋 붙여넣기</button>`;
+      html+=`<input id="linkNote_${vid}" placeholder="요청사항" style="width:70px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`</div>`;
     }
     html+=`<button onclick="submitVote('${vid}')" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">✅ 투표 제출</button>`;
@@ -3866,6 +3869,26 @@ function toggleImgCollapse(id){
   if(!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
+
+async function pasteToLink(inputId){
+  const el = document.getElementById(inputId);
+  if(!el) return;
+  try{
+    const text = await navigator.clipboard.readText();
+    if(text){
+      el.value = text.trim();
+      el.focus();
+      showToast('📋 붙여넣기 완료');
+    } else {
+      showToast('클립보드가 비어있어요');
+    }
+  }catch(e){
+    // 권한 거부/미지원 → 직접 붙여넣기 안내 + 입력창 포커스
+    el.focus();
+    showToast('입력창을 길게 눌러 "붙여넣기" 하세요');
+  }
+}
+
 
 async function adminEditLink(vid, linkKey){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
