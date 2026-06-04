@@ -12,17 +12,10 @@
 
 <style>
 :root{
-  --bg1:#fff5f8;
-  --bg2:#ffe7f0;
-  --bg3:#ffdbe9;
-  --pink:#ff5c8a;
-  --pink-deep:#e8407a;
-  --pink-soft:#ffd6e3;
-  --pink-tint:#fff0f5;
-  --ink:#3d2630;
-  --ink-soft:#8a6b76;
-  --line:#ffd9e6;
-  --card:#ffffff;
+  --bg1:#fff5f8; --bg2:#ffe7f0; --bg3:#ffdbe9;
+  --pink:#ff5c8a; --pink-deep:#e8407a; --pink-soft:#ffd6e3; --pink-tint:#fff0f5;
+  --ink:#3d2630; --ink-soft:#8a6b76; --line:#ffd9e6; --card:#ffffff;
+  --green:#1a8a3a; --green-bg:#e8f7ec; --green-line:#9bd9ab;
   --shadow:0 10px 30px -12px rgba(232,64,122,.30);
   --shadow-sm:0 4px 14px -6px rgba(232,64,122,.25);
   --radius:22px;
@@ -36,61 +29,36 @@ body{
     radial-gradient(120% 80% at 0% 0%, var(--bg3) 0%, transparent 55%),
     radial-gradient(120% 80% at 100% 10%, #ffe1ec 0%, transparent 50%),
     linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 100%);
-  background-attachment:fixed;
-  min-height:100vh;
-  -webkit-font-smoothing:antialiased;
+  background-attachment:fixed; min-height:100vh; -webkit-font-smoothing:antialiased;
 }
 .wrap{max-width:520px;margin:0 auto;padding:0 16px 48px;}
 .disp{font-family:"Gowun Dodum",sans-serif;}
-
 button{font-family:inherit;cursor:pointer;border:none;}
 input{font-family:inherit;}
-.btn{
-  background:linear-gradient(135deg,var(--pink) 0%,var(--pink-deep) 100%);
-  color:#fff;font-weight:700;font-size:16px;
-  padding:13px 18px;border-radius:14px;
-  box-shadow:var(--shadow-sm);
-  transition:transform .12s ease, box-shadow .12s ease, opacity .12s;
-}
+.btn{background:linear-gradient(135deg,var(--pink) 0%,var(--pink-deep) 100%);color:#fff;font-weight:700;font-size:16px;padding:13px 18px;border-radius:14px;box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .12s,opacity .12s;}
 .btn:active{transform:scale(.96);box-shadow:none;}
-.btn.ghost{background:#fff;color:var(--pink-deep);border:1.5px solid var(--pink-soft);box-shadow:none;}
 .btn.block{width:100%;}
-.btn:disabled{opacity:.5;}
-.field{
-  width:100%;background:#fff;border:1.5px solid var(--line);
-  border-radius:14px;padding:13px 15px;font-size:16px;color:var(--ink);
-  outline:none;transition:border-color .15s, box-shadow .15s;
-}
+.field{width:100%;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:13px 15px;font-size:16px;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s;}
 .field:focus{border-color:var(--pink);box-shadow:0 0 0 4px rgba(255,92,138,.12);}
 .field::placeholder{color:#c9a9b6;}
 
-#loginScreen{
-  min-height:100vh;display:flex;flex-direction:column;justify-content:center;
-  padding:24px;max-width:420px;margin:0 auto;
-}
+#loginScreen{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px;max-width:420px;margin:0 auto;}
 .logo{text-align:center;margin-bottom:30px;animation:rise .6s ease both;}
-.logo .heart{font-size:50px;line-height:1;filter:drop-shadow(0 6px 10px rgba(232,64,122,.35));}
-.logo h1{font-size:34px;margin:12px 0 4px;letter-spacing:-1px;}
-.logo p{margin:0;color:var(--ink-soft);font-size:14px;}
-.login-card{
-  background:var(--card);border-radius:var(--radius);padding:26px 22px;
-  box-shadow:var(--shadow);animation:rise .6s .08s ease both;
-}
-.login-card label{display:block;font-size:13px;font-weight:700;color:var(--ink-soft);margin:0 0 8px 2px;}
-.login-card .btn{margin-top:14px;}
-.adminlink{
-  display:block;text-align:center;margin-top:22px;color:var(--ink-soft);
-  font-size:13px;text-decoration:none;font-weight:600;
-}
-.adminlink:active{color:var(--pink-deep);}
+.brandmark{position:relative;display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:17px;background:linear-gradient(140deg,#ff86ad 0%,#e23a76 100%);box-shadow:0 10px 20px -8px rgba(226,58,118,.5);animation:float 4.2s ease-in-out infinite;overflow:hidden;}
+.brandmark::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 22% 12%, rgba(255,255,255,.38), transparent 55%);}
+.bm31{position:relative;z-index:1;font-weight:900;font-size:25px;color:#fff;letter-spacing:-1.5px;line-height:1;}
+.bm-heart{position:absolute;z-index:2;top:8px;right:9px;width:10px;height:10px;}
+.wordmark{font-size:24px;font-weight:800;letter-spacing:-1px;margin:13px 0 5px;color:var(--ink);}
+.wordmark span{color:var(--pink-deep);}
+.tagline{margin:0;color:var(--ink-soft);font-size:14px;font-weight:600;letter-spacing:-.2px;}
+.login-card{background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.8);border-radius:26px;padding:30px 24px 26px;box-shadow:0 26px 64px -22px rgba(226,58,118,.42);animation:rise .6s .08s ease both;}
+.login-card label{display:block;font-size:11px;font-weight:800;color:var(--pink-deep);letter-spacing:.5px;margin:0 0 9px 3px;}
+.login-card .btn{margin-top:14px;border-radius:15px;}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+.adminlink{display:block;text-align:center;margin-top:22px;color:var(--ink-soft);font-size:13px;text-decoration:none;font-weight:600;}
 .err{color:var(--pink-deep);font-size:13px;font-weight:600;margin:10px 2px 0;min-height:16px;}
 
-.topbar{
-  position:sticky;top:0;z-index:20;
-  background:rgba(255,245,248,.82);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--line);
-  padding:14px 16px;margin:0 -16px 18px;
-}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(255,245,248,.82);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:14px 16px;margin:0 -16px 18px;}
 .topbar-in{max-width:520px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;}
 .topbar .brand{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:800;letter-spacing:-.5px;}
 .topbar .brand .h{font-size:22px;}
@@ -100,10 +68,9 @@ input{font-family:inherit;}
 .iconbtn:active{transform:scale(.92);}
 .iconbtn.spin{animation:spin .7s linear infinite;}
 .logout{background:#fff;border:1.5px solid var(--pink-soft);color:var(--pink-deep);font-weight:700;font-size:13px;padding:8px 12px;border-radius:11px;}
-.logout:active{transform:scale(.95);}
 
-.tabs{display:flex;gap:8px;background:#fff;padding:6px;border-radius:16px;box-shadow:var(--shadow-sm);margin-bottom:18px;}
-.tab{flex:1;text-align:center;padding:11px 0;border-radius:11px;font-weight:700;font-size:14px;color:var(--ink-soft);background:transparent;transition:all .15s;}
+.tabs{display:flex;gap:6px;background:#fff;padding:6px;border-radius:16px;box-shadow:var(--shadow-sm);margin-bottom:18px;}
+.tab{flex:1;text-align:center;padding:11px 4px;border-radius:11px;font-weight:700;font-size:13px;color:var(--ink-soft);background:transparent;transition:all .15s;}
 .tab.on{background:linear-gradient(135deg,var(--pink),var(--pink-deep));color:#fff;box-shadow:var(--shadow-sm);}
 
 .section-title{font-size:14px;font-weight:800;color:var(--ink-soft);margin:4px 2px 12px;letter-spacing:-.3px;}
@@ -116,17 +83,8 @@ input{font-family:inherit;}
 .add-box .row2 .field{flex:1;}
 
 .chips{display:flex;flex-wrap:wrap;gap:8px;}
-.chip{
-  display:inline-flex;align-items:center;gap:8px;background:var(--pink-tint);
-  border:1px solid var(--line);border-radius:999px;padding:8px 8px 8px 15px;
-  font-weight:700;font-size:14px;animation:pop .3s ease both;
-}
-.chip .x{
-  width:22px;height:22px;border-radius:50%;background:#fff;color:var(--pink-deep);
-  font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--pink-soft);
-}
-.chip .x:active{transform:scale(.85);}
+.chip{display:inline-flex;align-items:center;gap:8px;background:var(--pink-tint);border:1px solid var(--line);border-radius:999px;padding:8px 8px 8px 15px;font-weight:700;font-size:14px;animation:pop .3s ease both;}
+.chip .x{width:22px;height:22px;border-radius:50%;background:#fff;color:var(--pink-deep);font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--pink-soft);}
 
 .week{border:1px solid var(--line);}
 .week-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;cursor:pointer;gap:10px;}
@@ -140,22 +98,48 @@ input{font-family:inherit;}
 .week-body{display:none;border-top:1px dashed var(--line);padding:6px 14px 14px;}
 .week.open .week-body{display:block;}
 
-.target{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px;border-bottom:1px solid #fbe6ee;animation:rise .35s ease both;}
-.target:last-child{border-bottom:none;}
+.target{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px 8px;}
 .target .info{min-width:0;}
 .target .tn{font-weight:800;font-size:15px;}
 .target .ti{font-size:13px;color:var(--ink-soft);font-weight:600;}
 .target .actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
-.go{
-  display:inline-flex;align-items:center;gap:6px;text-decoration:none;
-  background:linear-gradient(135deg,#ff7eb3,#ff5c8a);color:#fff;font-weight:800;font-size:13px;
-  padding:9px 13px;border-radius:12px;box-shadow:var(--shadow-sm);transition:transform .12s;
-}
+.go{display:inline-flex;align-items:center;gap:6px;text-decoration:none;background:linear-gradient(135deg,#ff7eb3,#ff5c8a);color:#fff;font-weight:800;font-size:13px;padding:9px 13px;border-radius:12px;box-shadow:var(--shadow-sm);transition:transform .12s;}
 .go:active{transform:scale(.93);}
 .del{background:#fff;border:1px solid var(--pink-soft);color:var(--pink-deep);font-weight:700;font-size:12px;padding:8px 10px;border-radius:11px;}
-.del:active{transform:scale(.9);}
 .delweek{margin-top:12px;width:100%;background:#fff;border:1.5px solid #f3c4d4;color:#d23a6e;font-weight:700;font-size:13px;padding:11px;border-radius:13px;}
-.delweek:active{transform:scale(.97);}
+.tcell{border-bottom:1px solid #fbe6ee;}
+.tcell:last-child{border-bottom:none;}
+
+.checkrow{display:flex;gap:8px;padding:0 4px 13px;}
+.chk{flex:1;font-size:12.5px;font-weight:800;padding:10px 8px;border-radius:11px;border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);transition:transform .1s;display:flex;align-items:center;justify-content:center;gap:5px;}
+.chk:active{transform:scale(.96);}
+.chk.on.f{background:var(--green-bg);border-color:var(--green-line);color:var(--green);}
+.chk.on.m{background:#ffe2ee;border-color:var(--pink);color:var(--pink-deep);}
+.chk.on.xx{background:#fdeaea;border-color:#f0a9a9;color:#c0392b;}
+
+.progress{font-size:11px;color:var(--ink-soft);font-weight:700;}
+.tmeta{font-size:12px;color:var(--ink-soft);font-weight:700;padding:0 4px 8px;}
+.lateb{display:inline-block;background:#fff3d6;color:#c08a00;font-weight:800;font-size:11px;padding:2px 7px;border-radius:999px;margin-left:4px;}
+.wkpills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.wkpill{padding:8px 14px;border-radius:999px;border:1.5px solid var(--line);background:#fff;color:var(--ink-soft);font-weight:700;font-size:13px;}
+.wkpill.on{background:linear-gradient(135deg,var(--pink),var(--pink-deep));color:#fff;border-color:transparent;}
+.modetoggle{display:flex;gap:6px;background:#fff;padding:5px;border-radius:13px;box-shadow:var(--shadow-sm);margin-bottom:16px;}
+.modetoggle button{flex:1;padding:9px 0;border-radius:9px;font-weight:700;font-size:13px;color:var(--ink-soft);background:transparent;}
+.modetoggle button.on{background:linear-gradient(135deg,var(--pink),var(--pink-deep));color:#fff;}
+.srow .nm{font-weight:800;font-size:15px;}
+.srow .ssub{font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:2px;}
+.mini{display:flex;gap:6px;padding:10px 4px;border-bottom:1px solid #fbe6ee;align-items:center;justify-content:space-between;}
+.mini:last-child{border-bottom:none;}
+.mini .mn{font-weight:700;font-size:14px;}
+.mini .mbtns{display:flex;gap:6px;flex-shrink:0;}
+.mini .chk{flex:0 0 auto;font-size:11px;padding:7px 10px;}
+.bars{display:flex;gap:14px;margin-top:3px;}
+.bars b{font-weight:800;}
+
+.filehint{font-size:12.5px;color:var(--ink-soft);margin:0 0 12px;line-height:1.55;}
+.filebtn{display:block;width:100%;background:var(--pink-tint);border:1.5px dashed var(--pink-soft);color:var(--pink-deep);font-weight:700;font-size:13.5px;padding:13px;border-radius:13px;text-align:center;margin-bottom:8px;}
+.filebtn:active{transform:scale(.98);}
+.fileresult{font-size:13px;line-height:1.7;margin-top:12px;color:var(--ink);font-weight:600;}
 
 .empty{text-align:center;padding:44px 20px;color:var(--ink-soft);}
 .empty .e{font-size:40px;margin-bottom:10px;opacity:.8;}
@@ -172,10 +156,12 @@ input{font-family:inherit;}
 
 <div id="loginScreen">
   <div class="logo">
-    <div class="heart">&#128151;</div>
-    <h1 class="disp">맞팔 명단</h1>
-    <p>이번 주 맞팔 대상을 확인하고 팔로우해요</p>
-    <p id="vmark" style="margin-top:6px;font-size:12px;color:var(--pink-deep);font-weight:800;">버전 v5</p>
+    <div class="brandmark">
+      <span class="bm31">31</span>
+      <svg class="bm-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21C5.5 15.8 2 12 2 7.8 2 4.6 4.6 2.4 7.5 3.6 9.2 4.3 10.8 5.9 12 7.4 13.2 5.9 14.8 4.3 16.5 3.6 19.4 2.4 22 4.6 22 7.8 22 12 18.5 15.8 12 21Z" fill="rgba(255,255,255,.92)"/></svg>
+    </div>
+    <h1 class="wordmark">맞팔 <span>31</span></h1>
+    <p class="tagline">매주 맞팔, 한눈에 정리</p>
   </div>
   <div class="login-card">
     <label for="loginName">닉네임</label>
@@ -205,8 +191,9 @@ input{font-family:inherit;}
 
   <div class="wrap">
     <div id="adminTabs" class="tabs hidden">
-      <button class="tab on" data-tab="weeks">&#128197; 주차별 맞팔</button>
-      <button class="tab" data-tab="members">&#128101; 멤버 관리</button>
+      <button class="tab on" data-tab="weeks">&#128197; 주차</button>
+      <button class="tab" data-tab="status">&#128202; 현황</button>
+      <button class="tab" data-tab="members">&#128101; 멤버</button>
     </div>
 
     <div id="viewMembers" class="hidden">
@@ -227,32 +214,42 @@ input{font-family:inherit;}
           <button id="addWeekBtn" class="btn">추가</button>
         </div>
       </div>
+      <div id="fileBox" class="add-box hidden">
+        <div class="section-title" style="margin-top:0">&#128194; 팔로우 파일로 자동 확인</div>
+        <p class="filehint">인스타 &#8594; 내 정보 다운로드(JSON)로 받은 파일을 올리면, 이번 맞팔 명단과 자동 대조해요. 파일은 이 폰 안에서만 읽고 저장하지 않아요.</p>
+        <label class="filebtn"><span id="fName1">&#128229; 팔로워 파일 선택 (followers)</span><input id="fFollowers" type="file" accept=".json,application/json" style="display:none"></label>
+        <label class="filebtn"><span id="fName2">&#128229; 팔로잉 파일 선택 (following · 선택)</span><input id="fFollowing" type="file" accept=".json,application/json" style="display:none"></label>
+        <button id="applyFileBtn" class="btn block" style="margin-top:8px">자동 확인하기</button>
+        <div id="fileResult" class="fileresult"></div>
+      </div>
       <div id="weekList" class="stagger"></div>
+    </div>
+
+    <div id="viewStatus" class="hidden">
+      <div id="statusWeekPills" class="wkpills"></div>
+      <div class="modetoggle">
+        <button id="modeTarget" class="on" data-mode="target">대상자별</button>
+        <button id="modeMember" data-mode="member">사원별</button>
+      </div>
+      <div id="statusList" class="stagger"></div>
     </div>
   </div>
 </div>
 
 <script>
-/* ============================================================
-   follow31  —  crew31/game31과 동일한 REST 방식 (Firebase SDK 불필요)
-   crew31:  .../crew31   /   follow31:  .../follow31  로 경로만 분리
-   ============================================================ */
 window.onerror=function(msg,src,line,col){try{var d=document.createElement("div");d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#d23a6e;color:#fff;padding:12px;font:13px monospace;white-space:pre-wrap;";d.textContent="JS 에러: "+msg+" (줄 "+line+":"+col+")";(document.body||document.documentElement).appendChild(d);}catch(_){}return false;};
 
+/* ===== follow31 : crew31과 동일한 REST 방식 ===== */
 const DB = 'https://gacha-31-default-rtdb.firebaseio.com/follow31';
-
-/* 관리자 비밀번호 (원하는 값으로 바꾸세요) */
 const ADMIN_PW = "1234";
 
-/* ---------- REST 헬퍼 (crew31과 동일) ---------- */
 async function dbGet(p){ try{ const r=await fetch(DB+"/"+p+".json"); return await r.json(); }catch(e){ return null; } }
 async function dbPush(p,d){ try{ const r=await fetch(DB+"/"+p+".json",{method:'POST',body:JSON.stringify(d)}); return await r.json(); }catch(e){ return null; } }
+async function dbSet(p,d){ try{ await fetch(DB+"/"+p+".json",{method:'PUT',body:JSON.stringify(d)}); }catch(e){} }
 async function dbDel(p){ try{ await fetch(DB+"/"+p+".json",{method:'DELETE'}); }catch(e){} }
 
-/* ---------- 상태 ---------- */
-const state = { role:null, name:null, members:[], weeks:[], expanded:new Set() };
+const state = { role:null, name:null, mid:null, members:[], weeks:[], checks:{}, expanded:new Set(), tab:"weeks", statusWid:null, statusMode:"target", efilter:"all", fMap:null, gMap:null };
 
-/* ---------- 헬퍼 ---------- */
 function $(id){ return document.getElementById(id); }
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
 function getKSTDate(){ const n=new Date(); return new Date(n.getTime()+n.getTimezoneOffset()*60000+9*3600000); }
@@ -261,46 +258,51 @@ function cleanHandle(h){ return (h||"").trim().replace(/^@+/,"").replace(/\s+/g,
 function instaUrl(h){ return "https://www.instagram.com/"+encodeURIComponent(cleanHandle(h))+"/"; }
 function save(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 function load(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function ck(wid,tid,mid){ try{ return state.checks[wid][tid][mid] || {}; }catch(e){ return {}; } }
+function fmtTs(sec){ if(!sec) return ""; const u=new Date(sec*1000); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); return (k.getMonth()+1)+"/"+k.getDate()+" "+("0"+k.getHours()).slice(-2)+":"+("0"+k.getMinutes()).slice(-2); }
+function fmtDeadline(ms){ if(!ms) return ""; const u=new Date(ms); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); return (k.getMonth()+1)+"/"+k.getDate()+" "+("0"+k.getHours()).slice(-2)+":"+("0"+k.getMinutes()).slice(-2); }
+function dlInputValue(ms){ if(!ms) return ""; const u=new Date(ms); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); return k.getFullYear()+"-"+("0"+(k.getMonth()+1)).slice(-2)+"-"+("0"+k.getDate()).slice(-2)+"T"+("0"+k.getHours()).slice(-2)+":"+("0"+k.getMinutes()).slice(-2); }
 
-/* ---------- 데이터 새로고침 ---------- */
 async function refreshAll(){
   const btn=$("refreshBtn"); if(btn) btn.classList.add("spin");
-  const mraw = await dbGet("members");
-  const wraw = await dbGet("weeks");
-  const mv = mraw || {};
-  state.members = Object.keys(mv).map(function(id){ return {id:id,name:mv[id].name}; })
+  const mraw=await dbGet("members");
+  const wraw=await dbGet("weeks");
+  const craw=await dbGet("checks");
+  const mv=mraw||{};
+  state.members=Object.keys(mv).map(function(id){ return {id:id,name:mv[id].name}; })
     .sort(function(a,b){ return (a.name||"").localeCompare(b.name||"","ko"); });
-  const wv = wraw || {};
-  state.weeks = Object.keys(wv).map(function(id){
+  const wv=wraw||{};
+  state.weeks=Object.keys(wv).map(function(id){
     const w=wv[id]; const t=w.targets||{};
-    return {
-      id:id, label:w.label||"(제목 없음)", createdAt:w.createdAt||0,
+    return { id:id, label:w.label||"(제목 없음)", createdAt:w.createdAt||0, deadline:w.deadline||0,
       targets:Object.keys(t).map(function(tid){ return {id:tid,name:t[tid].name,insta:t[tid].insta,createdAt:t[tid].createdAt||0}; })
-                   .sort(function(a,b){ return a.createdAt-b.createdAt; })
-    };
+                   .sort(function(a,b){ return a.createdAt-b.createdAt; }) };
   }).sort(function(a,b){ return b.createdAt-a.createdAt; });
+  state.checks=craw||{};
   if(btn) btn.classList.remove("spin");
-  renderMembers(); renderWeeks();
-  if(state.role==="employee" && !state.members.some(function(m){return (m.name||"").trim()===state.name;})){ doLogout(true); }
+  if(state.role==="employee"){
+    const me=state.members.filter(function(m){ return (m.name||"").trim()===state.name; })[0];
+    if(me){ state.mid=me.id; } else { doLogout(true); return; }
+  }
+  if(state.statusWid===null && state.weeks.length){ state.statusWid=state.weeks[0].id; }
+  if(state.statusWid && !state.weeks.some(function(w){return w.id===state.statusWid;})){ state.statusWid=state.weeks.length?state.weeks[0].id:null; }
+  renderMembers(); renderWeeks(); renderStatus();
 }
 
-/* ---------- 인증 ---------- */
 async function doEmployeeLogin(name){
   const n=(name||"").trim();
   if(!n){ $("loginErr").textContent="닉네임을 입력해 주세요."; return; }
   $("loginErr").textContent="확인 중...";
-  const mraw = await dbGet("members"); const mv = mraw || {};
-  const found = Object.keys(mv).some(function(id){ return (mv[id].name||"").trim()===n; });
-  if(found){
-    state.role="employee"; state.name=n;
+  const mraw=await dbGet("members"); const mv=mraw||{};
+  const hit=Object.keys(mv).filter(function(id){ return (mv[id].name||"").trim()===n; })[0];
+  if(hit){
+    state.role="employee"; state.name=n; state.mid=hit;
     save("follow31_role","employee"); save("follow31_name",n);
     enterApp();
-  } else {
-    $("loginErr").textContent="등록된 사원 명단에 없는 닉네임이에요.";
-  }
+  } else { $("loginErr").textContent="등록된 사원 명단에 없는 닉네임이에요."; }
 }
 function doAdminLogin(){
-  const pw = ($("adminPw").value||"");
+  const pw=($("adminPw").value||"");
   if(pw===ADMIN_PW){
     state.role="admin"; state.name="관리자";
     save("follow31_role","admin"); save("follow31_name","관리자");
@@ -309,12 +311,10 @@ function doAdminLogin(){
   } else { $("adminErr").textContent="비밀번호가 올바르지 않습니다."; }
 }
 function doLogout(silent){
-  state.role=null; state.name=null;
+  state.role=null; state.name=null; state.mid=null;
   save("follow31_role",""); save("follow31_name","");
-  $("app").classList.add("hidden");
-  $("loginScreen").classList.remove("hidden");
-  $("loginName").value="";
-  $("loginErr").textContent = silent ? "명단이 변경되어 다시 로그인해 주세요." : "";
+  $("app").classList.add("hidden"); $("loginScreen").classList.remove("hidden");
+  $("loginName").value=""; $("loginErr").textContent = silent ? "명단이 변경되어 다시 로그인해 주세요." : "";
 }
 function restoreSession(){
   const r=load("follow31_role"), n=load("follow31_name");
@@ -322,126 +322,264 @@ function restoreSession(){
   else if(r==="employee" && n){ state.role="employee"; state.name=n; enterApp(); }
 }
 
-/* ---------- 데이터 조작 ---------- */
 async function addMember(){
-  const el=$("memberName"); const name=(el.value||"").trim();
-  if(!name) return;
-  el.value="";
-  await dbPush("members",{name:name,createdAt:Date.now()});
-  await refreshAll(); el.focus();
+  const el=$("memberName"); const name=(el.value||"").trim(); if(!name) return;
+  el.value=""; await dbPush("members",{name:name,createdAt:Date.now()}); await refreshAll(); el.focus();
 }
 async function removeMember(id,name){
   if(confirm("'"+name+"' 사원을 삭제할까요?")){ await dbDel("members/"+id); await refreshAll(); }
 }
 async function addWeek(){
-  const el=$("weekLabel"); const label=(el.value||"").trim() || suggestWeekLabel();
-  el.value="";
-  await dbPush("weeks",{label:label,createdAt:Date.now()});
-  await refreshAll();
+  const el=$("weekLabel"); const label=(el.value||"").trim()||suggestWeekLabel();
+  el.value=""; const res=await dbPush("weeks",{label:label,createdAt:Date.now()});
+  if(res && res.name){ state.statusWid=res.name; } await refreshAll();
 }
 async function removeWeek(id,label){
-  if(confirm("'"+label+"' 주차를 통째로 삭제할까요?\n안의 대상자 명단도 함께 사라져요.")){ await dbDel("weeks/"+id); await refreshAll(); }
+  if(confirm("'"+label+"' 주차를 통째로 삭제할까요?\n안의 대상자와 체크 기록도 함께 사라져요.")){
+    await dbDel("weeks/"+id); await dbDel("checks/"+id); await refreshAll();
+  }
 }
 async function addTarget(weekId){
   const nEl=$("tn_"+weekId), iEl=$("ti_"+weekId);
   const name=(nEl.value||"").trim(); const insta=cleanHandle(iEl.value);
-  if(!name){ nEl.focus(); return; }
-  if(!insta){ iEl.focus(); return; }
-  nEl.value=""; iEl.value="";
+  if(!name){ nEl.focus(); return; } if(!insta){ iEl.focus(); return; }
+  nEl.value=""; iEl.value=""; state.expanded.add(weekId);
   await dbPush("weeks/"+weekId+"/targets",{name:name,insta:insta,createdAt:Date.now()});
-  state.expanded.add(weekId);
-  await refreshAll();
-  const f=$("tn_"+weekId); if(f) f.focus();
+  await refreshAll(); const f=$("tn_"+weekId); if(f) f.focus();
 }
 async function removeTarget(weekId,tid){
-  await dbDel("weeks/"+weekId+"/targets/"+tid);
-  await refreshAll();
+  await dbDel("weeks/"+weekId+"/targets/"+tid); await dbDel("checks/"+weekId+"/"+tid); await refreshAll();
+}
+function extractEntries(j, isFollowing){
+  let arr=[];
+  if(isFollowing){ arr=(j && j.relationships_following) || (Array.isArray(j)?j:[]); }
+  else { arr=Array.isArray(j) ? j : ((j && (j.relationships_followers||j.relationships_following)) || []); }
+  const out=[];
+  for(var i=0;i<arr.length;i++){
+    var sld=arr[i] && arr[i].string_list_data;
+    if(sld && sld.length){
+      var v=sld[0].value;
+      if(!v && sld[0].href){ var p=sld[0].href.split("instagram.com/"); v=p[1]||""; }
+      if(v) out.push([cleanHandle(v).toLowerCase(), sld[0].timestamp||0]);
+    }
+  }
+  return out;
+}
+function parseFileToMap(file, isFollowing, cb){
+  const r=new FileReader();
+  r.onload=function(){ try{ cb(new Map(extractEntries(JSON.parse(r.result), isFollowing))); }catch(e){ cb(null); } };
+  r.onerror=function(){ cb(null); };
+  r.readAsText(file);
+}
+async function applyFile(){
+  const res=$("fileResult");
+  if(!state.fMap && !state.gMap){ res.innerHTML='<span style="color:var(--pink-deep)">먼저 파일을 선택해 주세요.</span>'; return; }
+  res.innerHTML="대조 중...";
+  const writes=[]; let mutual=0, onlyMe=0, none=0, late=0, dropped=[], lateList=[];
+  state.weeks.forEach(function(w){
+    const dl=w.deadline||0;
+    w.targets.forEach(function(t){
+      const id=cleanHandle(t.insta).toLowerCase();
+      const prev=ck(w.id,t.id,state.mid);
+      let f=!!prev.f, m=!!prev.m, x=false, ft=prev.ft||0, mt=prev.mt||0;
+      if(state.gMap){ f=state.gMap.has(id); ft=f?(state.gMap.get(id)||0):0; }
+      if(state.fMap){ const has=state.fMap.has(id); if(prev.m===true && has===false){ x=true; dropped.push(t.name); } m=has; mt=has?(state.fMap.get(id)||0):0; }
+      const next={ f:!!f, m:!!m, x:!!x, ft:ft, mt:mt };
+      if(!!prev.f!==next.f || !!prev.m!==next.m || !!prev.x!==next.x || (prev.ft||0)!==ft || (prev.mt||0)!==mt){
+        if(!state.checks[w.id]) state.checks[w.id]={};
+        if(!state.checks[w.id][t.id]) state.checks[w.id][t.id]={};
+        state.checks[w.id][t.id][state.mid]=next;
+        writes.push(dbSet("checks/"+w.id+"/"+t.id+"/"+state.mid, next));
+      }
+      if(next.m){ mutual++; if(dl && mt && mt*1000>dl){ late++; lateList.push(t.name); } } else if(next.f){ onlyMe++; } else { none++; }
+    });
+  });
+  renderWeeks();
+  await Promise.all(writes);
+  let msg='<b>&#10003; 자동 확인 완료</b><br>맞팔 '+mutual+'명 · 나만 선팔 '+onlyMe+'명 · 안 함 '+none+'명';
+  if(!state.gMap){ msg+='<br><span style="color:var(--ink-soft)">(팔로잉 파일은 없어서 "맞팔 여부"만 갱신했어요)</span>'; }
+  if(late){ msg+='<br><br><span style="color:#c08a00">&#9201; 마감 후 맞팔(지각) '+late+'명: '+lateList.map(esc).join(", ")+'</span>'; }
+  if(dropped.length){ msg+='<br><br><span style="color:#c0392b">&#9888;&#65039; 지난번 맞팔이었는데 이번에 빠짐: '+dropped.map(esc).join(", ")+'</span>'; }
+  res.innerHTML=msg;
 }
 
-/* ---------- 화면 전환 ---------- */
+async function setDeadline(wid){
+  const el=$("dl_"+wid); if(!el) return;
+  const v=el.value;
+  const ms = v ? new Date(v).getTime() : 0;
+  if(!state.weeks.some(function(w){ if(w.id===wid){ w.deadline=ms; return true; } return false; })){}
+  await dbSet("weeks/"+wid+"/deadline", ms);
+  renderWeeks();
+}
+
+async function toggleCheck(wid,tid,mid,field){
+  const cur=ck(wid,tid,mid); const next={ f:!!cur.f, m:!!cur.m, x:!!cur.x }; next[field]=!next[field];
+  if(next.m){ next.x=false; } if(next.x){ next.m=false; }
+  if(!state.checks[wid]) state.checks[wid]={};
+  if(!state.checks[wid][tid]) state.checks[wid][tid]={};
+  state.checks[wid][tid][mid]=next;
+  renderWeeks(); renderStatus();
+  await dbSet("checks/"+wid+"/"+tid+"/"+mid, next);
+}
+
 function enterApp(){
-  $("loginScreen").classList.add("hidden");
-  $("app").classList.remove("hidden");
-  const isAdmin = state.role==="admin";
+  $("loginScreen").classList.add("hidden"); $("app").classList.remove("hidden");
+  const isAdmin=state.role==="admin";
   $("whoName").textContent = isAdmin ? "관리자" : (state.name+"님");
   $("adminTabs").classList.toggle("hidden", !isAdmin);
   $("addWeekBox").classList.toggle("hidden", !isAdmin);
-  if(isAdmin){
-    $("weekLabel").value="";
-    $("weekLabel").setAttribute("placeholder","예: "+suggestWeekLabel());
-    switchTab("weeks");
-  } else {
-    $("viewMembers").classList.add("hidden");
-    $("viewWeeks").classList.remove("hidden");
-  }
+  $("fileBox").classList.toggle("hidden", isAdmin);
+  if(isAdmin){ $("weekLabel").setAttribute("placeholder","예: "+suggestWeekLabel()); switchTab("weeks"); }
+  else { switchTab("weeks"); $("viewMembers").classList.add("hidden"); $("viewStatus").classList.add("hidden"); }
   refreshAll();
 }
 function switchTab(tab){
+  state.tab=tab;
   document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("on", t.dataset.tab===tab); });
-  $("viewMembers").classList.toggle("hidden", tab!=="members");
   $("viewWeeks").classList.toggle("hidden", tab!=="weeks");
+  $("viewMembers").classList.toggle("hidden", tab!=="members");
+  $("viewStatus").classList.toggle("hidden", tab!=="status");
+  if(tab==="status") renderStatus();
 }
 
-/* ---------- 렌더 ---------- */
 function renderMembers(){
   if(state.role!=="admin") return;
   $("memberCount").textContent = state.members.length ? "("+state.members.length+"명)" : "";
   const box=$("memberList");
-  if(!state.members.length){
-    box.innerHTML='<div class="empty" style="width:100%"><div class="e">&#128100;</div><p>아직 등록된 사원이 없어요.<br>위에서 추가해 주세요.</p></div>';
-    return;
-  }
-  box.innerHTML = state.members.map(function(m){
+  if(!state.members.length){ box.innerHTML='<div class="empty" style="width:100%"><div class="e">&#128100;</div><p>아직 등록된 사원이 없어요.<br>위에서 추가해 주세요.</p></div>'; return; }
+  box.innerHTML=state.members.map(function(m){
     return '<span class="chip">'+esc(m.name)+'<button class="x" data-act="delMember" data-id="'+m.id+'" data-name="'+esc(m.name)+'">&#10005;</button></span>';
   }).join("");
 }
+
+function statusOf(c){ if(c.x) return "broken"; if(c.m) return "mutual"; if(c.f) return "pending"; return "none"; }
+
 function renderWeeks(){
-  const box=$("weekList");
-  const isAdmin = state.role==="admin";
+  const box=$("weekList"); const isAdmin=state.role==="admin";
   if(!state.weeks.length){
-    box.innerHTML='<div class="empty"><div class="e">&#128197;</div><p>'+(isAdmin?"아직 주차가 없어요.<br>위에서 새 주차를 만들어 주세요.":"아직 등록된 맞팔 주차가 없어요.<br>관리자가 등록하면 여기에 보여요.")+'</p></div>';
-    return;
+    box.innerHTML='<div class="empty"><div class="e">&#128197;</div><p>'+(isAdmin?"아직 주차가 없어요.<br>위에서 새 주차를 만들어 주세요.":"아직 등록된 맞팔 주차가 없어요.<br>관리자가 등록하면 여기에 보여요.")+'</p></div>'; return;
   }
-  box.innerHTML = state.weeks.map(function(w, idx){
-    const open = state.expanded.has(w.id);
-    const cnt = w.targets.length;
-    let body="";
-    if(cnt){
-      body += w.targets.map(function(t){
-        return '<div class="target">'+
-          '<div class="info"><div class="tn">'+esc(t.name)+'</div><div class="ti">@'+esc(cleanHandle(t.insta))+'</div></div>'+
-          '<div class="actions">'+
-            '<a class="go" href="'+instaUrl(t.insta)+'" target="_blank" rel="noopener">팔로우 &rarr;</a>'+
-            (isAdmin?'<button class="del" data-act="delTarget" data-week="'+w.id+'" data-id="'+t.id+'">삭제</button>':'')+
-          '</div></div>';
-      }).join("");
-    } else {
-      body += '<div class="empty" style="padding:26px 10px"><p>'+(isAdmin?"아래에서 대상자를 추가해 주세요.":"아직 등록된 대상자가 없어요.")+'</p></div>';
-    }
-    if(isAdmin){
-      body += '<div class="add-box" style="margin:12px 0 0;box-shadow:none;border:1px dashed var(--line)">'+
-        '<div class="row2">'+
-          '<input id="tn_'+w.id+'" class="field" type="text" placeholder="신입 닉네임" autocomplete="off">'+
-          '<input id="ti_'+w.id+'" class="field" type="text" placeholder="인스타 @아이디" autocomplete="off">'+
-        '</div>'+
-        '<button class="btn block" data-act="addTarget" data-week="'+w.id+'">대상자 추가</button>'+
-        '<button class="delweek" data-act="delWeek" data-id="'+w.id+'" data-label="'+esc(w.label)+'">이 주차 삭제</button>'+
-      '</div>';
-    }
-    return '<div class="card week'+(open?' open':'')+'" style="animation-delay:'+(idx*0.04)+'s">'+
-      '<div class="week-head" data-act="toggle" data-id="'+w.id+'">'+
-        '<div class="meta"><div class="wlabel">'+esc(w.label)+'</div><div class="wsub">맞팔 대상 '+cnt+'명</div></div>'+
-        '<div class="right"><span class="count">'+cnt+'</span><span class="caret">&#9660;</span></div>'+
-      '</div>'+
-      '<div class="week-body">'+body+'</div>'+
+  let head="";
+  if(!isAdmin){
+    head='<div class="wkpills" style="margin-bottom:16px">'+
+      '<button class="wkpill'+(state.efilter==="all"?" on":"")+'" data-act="efilter" data-f="all">전체</button>'+
+      '<button class="wkpill'+(state.efilter==="pending"?" on":"")+'" data-act="efilter" data-f="pending">&#9888;&#65039; 맞팔 안 됨</button>'+
+      '<button class="wkpill'+(state.efilter==="broken"?" on":"")+'" data-act="efilter" data-f="broken">&#10006; 끊김</button>'+
     '</div>';
+  }
+  box.innerHTML = head + state.weeks.map(function(w,idx){
+    const open=state.expanded.has(w.id); const cnt=w.targets.length; let body="";
+    let arr=w.targets;
+    if(!isAdmin && state.efilter!=="all"){
+      arr=w.targets.filter(function(t){ const s=statusOf(ck(w.id,t.id,state.mid)); return state.efilter==="pending" ? s==="pending" : s==="broken"; });
+    }
+    if(cnt){
+      if(!isAdmin && !arr.length){
+        body+='<div class="empty" style="padding:24px 10px"><p>'+(state.efilter==="pending"?"맞팔 안 된 사람이 없어요 &#128077;":"끊긴 사람이 없어요 &#128077;")+'</p></div>';
+      } else {
+        body+=arr.map(function(t){
+          const c=ck(w.id,t.id,state.mid);
+          let row='<div class="tcell">'+
+            '<div class="target"><div class="info"><div class="tn">'+esc(t.name)+'</div><div class="ti">@'+esc(cleanHandle(t.insta))+'</div></div>'+
+            '<div class="actions"><a class="go" href="'+instaUrl(t.insta)+'" target="_blank" rel="noopener">'+(isAdmin?'팔로우 &rarr;':'프로필 &rarr;')+'</a>'+
+            (isAdmin?'<button class="del" data-act="delTarget" data-week="'+w.id+'" data-id="'+t.id+'">삭제</button>':'')+'</div></div>';
+          if(!isAdmin){
+            const late = w.deadline && c.mt && (c.mt*1000 > w.deadline);
+            if(c.mt||c.ft){ row+='<div class="tmeta">'+(c.mt?('맞팔 '+fmtTs(c.mt)+(late?' <span class="lateb">지각</span>':'')):'')+(c.ft?((c.mt?' · ':'')+'선팔 '+fmtTs(c.ft)):'')+'</div>'; }
+            row+='<div class="checkrow">'+
+              '<button class="chk f'+(c.f?" on":"")+'" data-act="chk" data-w="'+w.id+'" data-t="'+t.id+'" data-m="'+state.mid+'" data-field="f">'+(c.f?"&#10003; ":"")+'선팔함</button>'+
+              '<button class="chk m'+(c.m?" on":"")+'" data-act="chk" data-w="'+w.id+'" data-t="'+t.id+'" data-m="'+state.mid+'" data-field="m">'+(c.m?"&#10003; ":"")+'맞팔됨</button>'+
+              '<button class="chk xx'+(c.x?" on":"")+'" data-act="chk" data-w="'+w.id+'" data-t="'+t.id+'" data-m="'+state.mid+'" data-field="x">'+(c.x?"&#10006; ":"")+'끊김</button>'+
+            '</div>';
+          }
+          row+='</div>'; return row;
+        }).join("");
+      }
+    } else { body+='<div class="empty" style="padding:26px 10px"><p>'+(isAdmin?"아래에서 대상자를 추가해 주세요.":"아직 등록된 대상자가 없어요.")+'</p></div>'; }
+    if(isAdmin){
+      body+='<div class="add-box" style="margin:12px 0 0;box-shadow:none;border:1px dashed var(--line)">'+
+        '<div class="row2"><input id="tn_'+w.id+'" class="field" type="text" placeholder="신입 닉네임" autocomplete="off">'+
+        '<input id="ti_'+w.id+'" class="field" type="text" placeholder="인스타 @아이디" autocomplete="off"></div>'+
+        '<button class="btn block" data-act="addTarget" data-week="'+w.id+'">대상자 추가</button>'+
+        '<div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:12px">'+
+        '<div class="section-title" style="margin:0 0 6px">&#9201; 투표 마감 시각</div>'+
+        '<div style="display:flex;gap:8px"><input id="dl_'+w.id+'" type="datetime-local" class="field" style="flex:1" value="'+dlInputValue(w.deadline)+'">'+
+        '<button class="btn" data-act="setDeadline" data-id="'+w.id+'">저장</button></div></div>'+
+        '<button class="delweek" data-act="delWeek" data-id="'+w.id+'" data-label="'+esc(w.label)+'">이 주차 삭제</button></div>';
+    }
+    let sub='맞팔 대상 '+cnt+'명';
+    if(!isAdmin && cnt){
+      let nm=0,np=0,nx=0; w.targets.forEach(function(t){ const s=statusOf(ck(w.id,t.id,state.mid)); if(s==="mutual")nm++; else if(s==="pending")np++; else if(s==="broken")nx++; });
+      sub='맞팔 '+nm+' · 선팔만 '+np+' · 끊김 '+nx;
+    }
+    if(w.deadline){ sub+=' · 마감 '+fmtDeadline(w.deadline); }
+    return '<div class="card week'+(open?' open':'')+'" style="animation-delay:'+(idx*0.04)+'s">'+
+      '<div class="week-head" data-act="toggle" data-id="'+w.id+'"><div class="meta"><div class="wlabel">'+esc(w.label)+'</div><div class="wsub">'+sub+'</div></div>'+
+      '<div class="right"><span class="count">'+cnt+'</span><span class="caret">&#9660;</span></div></div>'+
+      '<div class="week-body">'+body+'</div></div>';
   }).join("");
 }
 
-/* ---------- 이벤트 ---------- */
+function miniBtns(wid,tid,mid,c){
+  return '<span class="mbtns">'+
+    '<button class="chk f'+(c.f?" on":"")+'" data-act="chk" data-w="'+wid+'" data-t="'+tid+'" data-m="'+mid+'" data-field="f">'+(c.f?"&#10003;":"")+'선팔</button>'+
+    '<button class="chk m'+(c.m?" on":"")+'" data-act="chk" data-w="'+wid+'" data-t="'+tid+'" data-m="'+mid+'" data-field="m">'+(c.m?"&#10003;":"")+'맞팔</button>'+
+    '<button class="chk xx'+(c.x?" on":"")+'" data-act="chk" data-w="'+wid+'" data-t="'+tid+'" data-m="'+mid+'" data-field="x">'+(c.x?"&#10006;":"")+'끊김</button>'+
+  '</span>';
+}
+function bars(nm,np,nx){
+  return '<div class="bars"><span class="progress"><b style="color:var(--pink-deep)">맞팔 '+nm+'</b></span>'+
+    '<span class="progress"><b style="color:#c08a00">선팔만 '+np+'</b></span>'+
+    '<span class="progress"><b style="color:#c0392b">끊김 '+nx+'</b></span></div>';
+}
+function renderStatus(){
+  if(state.role!=="admin") return;
+  const pillBox=$("statusWeekPills"); const list=$("statusList");
+  if(!state.weeks.length){ pillBox.innerHTML=""; list.innerHTML='<div class="empty"><div class="e">&#128202;</div><p>주차가 없어요. 먼저 주차와 대상자를 등록해 주세요.</p></div>'; return; }
+  pillBox.innerHTML=state.weeks.map(function(w){
+    return '<button class="wkpill'+(w.id===state.statusWid?' on':'')+'" data-act="pickWeek" data-id="'+w.id+'">'+esc(w.label)+'</button>';
+  }).join("");
+  $("modeTarget").classList.toggle("on", state.statusMode==="target");
+  $("modeMember").classList.toggle("on", state.statusMode==="member");
+
+  const week=state.weeks.filter(function(w){return w.id===state.statusWid;})[0];
+  if(!week){ list.innerHTML=""; return; }
+  const targets=week.targets; const members=state.members;
+  if(!targets.length){ list.innerHTML='<div class="empty" style="padding:34px"><p>이 주차에 등록된 대상자가 없어요.</p></div>'; return; }
+  if(!members.length){ list.innerHTML='<div class="empty" style="padding:34px"><p>등록된 사원이 없어요. 멤버 탭에서 추가해 주세요.</p></div>'; return; }
+
+  if(state.statusMode==="target"){
+    list.innerHTML=targets.map(function(t){
+      const key="st_t_"+state.statusWid+"_"+t.id; const open=state.expanded.has(key);
+      let nm=0,np=0,nx=0; members.forEach(function(m){ const s=statusOf(ck(state.statusWid,t.id,m.id)); if(s==="mutual")nm++; else if(s==="pending")np++; else if(s==="broken")nx++; });
+      let body=members.map(function(m){
+        const c=ck(state.statusWid,t.id,m.id);
+        return '<div class="mini"><span class="mn">'+esc(m.name)+'</span>'+miniBtns(state.statusWid,t.id,m.id,c)+'</div>';
+      }).join("");
+      return '<div class="card'+(open?' open':'')+'"><div class="week-head" data-act="toggle" data-id="'+key+'">'+
+        '<div class="meta"><div class="wlabel">'+esc(t.name)+'</div><div class="ssub">@'+esc(cleanHandle(t.insta))+'</div>'+bars(nm,np,nx)+'</div>'+
+        '<span class="caret">&#9660;</span></div>'+
+        '<div class="week-body" style="display:'+(open?'block':'none')+'">'+body+'</div></div>';
+    }).join("");
+  } else {
+    list.innerHTML=members.map(function(m){
+      const key="st_m_"+state.statusWid+"_"+m.id; const open=state.expanded.has(key);
+      let nm=0,np=0,nx=0; targets.forEach(function(t){ const s=statusOf(ck(state.statusWid,t.id,m.id)); if(s==="mutual")nm++; else if(s==="pending")np++; else if(s==="broken")nx++; });
+      let body=targets.map(function(t){
+        const c=ck(state.statusWid,t.id,m.id);
+        return '<div class="mini"><span class="mn">'+esc(t.name)+' <span style="color:var(--ink-soft);font-weight:600;font-size:12px">@'+esc(cleanHandle(t.insta))+'</span></span>'+miniBtns(state.statusWid,t.id,m.id,c)+'</div>';
+      }).join("");
+      return '<div class="card'+(open?' open':'')+'"><div class="week-head" data-act="toggle" data-id="'+key+'">'+
+        '<div class="meta"><div class="wlabel">'+esc(m.name)+'</div>'+bars(nm,np,nx)+'</div>'+
+        '<span class="caret">&#9660;</span></div>'+
+        '<div class="week-body" style="display:'+(open?'block':'none')+'">'+body+'</div></div>';
+    }).join("");
+  }
+}
+
 $("loginBtn").addEventListener("click", function(){ doEmployeeLogin($("loginName").value); });
 $("loginName").addEventListener("keydown", function(e){ if(e.key==="Enter") doEmployeeLogin($("loginName").value); });
-$("toAdmin").addEventListener("click", function(e){ e.preventDefault(); const box=$("adminBox"); box.classList.toggle("hidden"); if(!box.classList.contains("hidden")) $("adminPw").focus(); });
+$("toAdmin").addEventListener("click", function(e){ e.preventDefault(); const b=$("adminBox"); b.classList.toggle("hidden"); if(!b.classList.contains("hidden")) $("adminPw").focus(); });
 $("adminLoginBtn").addEventListener("click", doAdminLogin);
 $("adminPw").addEventListener("keydown", function(e){ if(e.key==="Enter") doAdminLogin(); });
 $("logoutBtn").addEventListener("click", function(){ doLogout(false); });
@@ -450,26 +588,28 @@ $("addMemberBtn").addEventListener("click", addMember);
 $("memberName").addEventListener("keydown", function(e){ if(e.key==="Enter") addMember(); });
 $("addWeekBtn").addEventListener("click", addWeek);
 $("weekLabel").addEventListener("keydown", function(e){ if(e.key==="Enter") addWeek(); });
+$("modeTarget").addEventListener("click", function(){ state.statusMode="target"; renderStatus(); });
+$("modeMember").addEventListener("click", function(){ state.statusMode="member"; renderStatus(); });
+$("fFollowers").addEventListener("change", function(e){ const f=e.target.files[0]; if(!f) return; $("fName1").textContent="읽는 중..."; parseFileToMap(f,false,function(map){ if(!map){ $("fName1").textContent="\u26A0\uFE0F 파일 오류 (다시 선택)"; state.fMap=null; return; } state.fMap=map; $("fName1").textContent="\u2705 팔로워 "+map.size+"명 불러옴"; }); });
+$("fFollowing").addEventListener("change", function(e){ const f=e.target.files[0]; if(!f) return; $("fName2").textContent="읽는 중..."; parseFileToMap(f,true,function(map){ if(!map){ $("fName2").textContent="\u26A0\uFE0F 파일 오류 (다시 선택)"; state.gMap=null; return; } state.gMap=map; $("fName2").textContent="\u2705 팔로잉 "+map.size+"명 불러옴"; }); });
+$("applyFileBtn").addEventListener("click", applyFile);
 document.querySelectorAll(".tab").forEach(function(t){ t.addEventListener("click", function(){ switchTab(t.dataset.tab); }); });
 
 $("app").addEventListener("click", function(e){
-  const el = e.target.closest("[data-act]");
-  if(!el) return;
+  const el=e.target.closest("[data-act]"); if(!el) return;
   const act=el.dataset.act;
-  if(act==="toggle"){
-    const id=el.dataset.id;
-    if(state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
-    renderWeeks();
-  } else if(act==="delMember"){ removeMember(el.dataset.id, el.dataset.name); }
+  if(act==="toggle"){ const id=el.dataset.id; if(state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id); renderWeeks(); renderStatus(); }
+  else if(act==="delMember"){ removeMember(el.dataset.id, el.dataset.name); }
   else if(act==="addTarget"){ addTarget(el.dataset.week); }
   else if(act==="delTarget"){ removeTarget(el.dataset.week, el.dataset.id); }
   else if(act==="delWeek"){ removeWeek(el.dataset.id, el.dataset.label); }
+  else if(act==="chk"){ toggleCheck(el.dataset.w, el.dataset.t, el.dataset.m, el.dataset.field); }
+  else if(act==="efilter"){ state.efilter=el.dataset.f; renderWeeks(); }
+  else if(act==="setDeadline"){ setDeadline(el.dataset.id); }
+  else if(act==="pickWeek"){ state.statusWid=el.dataset.id; renderStatus(); }
 });
 
-/* ---------- 시작 ---------- */
-(function(){ var v=$("vmark"); if(v) v.innerHTML='버전 v5 &nbsp;<span style="color:#1a8a3a;font-size:14px">&#10003; JS 작동중</span>'; })();
 restoreSession();
-
 </script>
 </body>
 </html>
