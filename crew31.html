@@ -3545,7 +3545,7 @@ async function renderVoteCard(vid,v){
     const ta = a[1].time||0, tb = b[1].time||0;
     if(ta&&tb) return ta-tb;
     return a[0]<b[0]?-1:1; // pushId 알파벳순 = 시간순
-  }).map(([,l])=>l);
+  }).map(([k,l])=>({...l, _key:k}));
   if(sortedLinks.length>0 || bonusVoters.length>0){
     // 닉네임 기준으로 그룹핑 (투피드 2개 링크 묶기)
     const grouped = {};
@@ -3584,8 +3584,11 @@ async function renderVoteCard(vid,v){
         if(badgeText) html+=`<span style="background:${linkType==='tupide'?'#FF85C1':linkType==='leave'?'#FFB347':'#94a3b8'};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${badgeText}</span>`;
         html+=`</div>`;
         entry.links.forEach(l=>{
-          html+=`<div style="margin-bottom:2px">`;
-          html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);word-break:break-all">${escH(l.url||'')}</a>`;
+          html+=`<div style="margin-bottom:2px;display:flex;align-items:center;gap:6px">`;
+          html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);word-break:break-all;flex:1">${escH(l.url||'')}</a>`;
+          if(isAdmin && l._key){
+            html+=`<button onclick="adminEditLink('${vid}','${l._key}')" style="flex-shrink:0;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ 수정</button>`;
+          }
           html+=`</div>`;
           if(l.note) html+=`<div style="font-size:11px;color:var(--text3)">ㄴ${escH(l.note)}</div>`;
         });
@@ -3862,6 +3865,22 @@ function toggleImgCollapse(id){
   const el = document.getElementById(id);
   if(!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function adminEditLink(vid, linkKey){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const cur = await dbGet(`votes/${vid}/links/${linkKey}`);
+  if(!cur){ showToast('링크를 찾을 수 없습니다'); return; }
+  const newUrl = prompt(`${cur.nick||''}님 링크 수정\n현재: ${cur.url||'(없음)'}`, cur.url||'');
+  if(newUrl===null) return; // 취소
+  const clean = (typeof cleanUrl==='function') ? cleanUrl(newUrl.trim()) : newUrl.trim();
+  // 이전 링크는 기록으로 남기고, 활성 url만 교체
+  await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur.url||'');
+  await dbSet(`votes/${vid}/links/${linkKey}/editedBy`, CU.name);
+  await dbSet(`votes/${vid}/links/${linkKey}/editedAt`, Date.now());
+  await dbSet(`votes/${vid}/links/${linkKey}/url`, clean);
+  showToast('✅ 링크 수정됨');
+  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
 async function copyAllLinks(vid){
