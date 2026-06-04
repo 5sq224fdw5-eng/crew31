@@ -329,7 +329,6 @@ document.addEventListener('keydown',e=>{
     <!-- 그룹 내 탭바 (그룹 선택시) -->
     <div class="tab-bar" id="mainTabBar" style="display:flex;align-items:center">
       <button class="tab-item active group-only" data-tab="home" onclick="goTab('home')" style="display:none">🗳️ 투표</button>
-      <button class="tab-item group-only" data-tab="chat" onclick="goTab('chat')" style="display:none">💬 채팅<span id="chatBadge" style="display:none;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-left:3px"></span></button>
       <button class="tab-item group-only" data-tab="members" onclick="goTab('members')" style="display:none">👥 멤버</button>
       <button class="tab-item group-only" data-tab="notice" onclick="goTab('notice')" style="display:none;margin-left:auto;position:relative">📢 공지<span id="noticeDot" style="display:none;position:absolute;top:0px;right:-2px;width:8px;height:8px;background:#FF3B30;border-radius:50%"></span></button>
     </div>
@@ -679,6 +678,19 @@ async function dbGet(p){
     const r=await fetch(`${DB}/${p}.json`,{signal:controller.signal});
     clearTimeout(t);
     return await r.json();
+  }catch{return null;}
+}
+// 다운로드 절감: createdAt 기준 최근 N개만 받기 (전체 대신)
+// 인덱스 없어도 동작하도록 limitToLast만 사용 (서버가 마지막 N개 키만 전송)
+async function dbGetRecent(p, limit=15){
+  try{
+    const controller=new AbortController();
+    const t=setTimeout(()=>controller.abort(),8000);
+    const url=`${DB}/${p}.json?orderBy="$key"&limitToLast=${limit}`;
+    const r=await fetch(url,{signal:controller.signal});
+    clearTimeout(t);
+    const j=await r.json();
+    return j;
   }catch{return null;}
 }
 async function dbSet(p,d,retry=0){
@@ -1394,6 +1406,7 @@ function setMainHeader(title,sub='',actionsHtml=''){
 // ── TAB NAVIGATION ──
 // ══════════════════════════════════════════════
 function goTab(tab){
+  if(tab==='chat') tab='home'; // 채팅 기능 종료 → 투표로
   // 관리자 전용 탭 가드 (사원 차단)
   if((tab==='settings'||tab==='status') && CU?.role!=='admin'){
     showToast('관리자 전용 메뉴입니다');
@@ -1439,7 +1452,6 @@ function goTab(tab){
   setMainHeader(title,sub);
 
   if(tab==='notice')loadNoticePage();
-  if(tab==='chat')loadChatTab();
   if(tab==='home')loadHome();
   if(tab==='calendar')renderCalendar();
   if(tab==='leave')loadLeave();
@@ -1816,7 +1828,8 @@ if(!joined){
   html+=`</div>`;
 }
 mb.innerHTML=`<div style="display:flex;flex-direction:column;height:calc(100vh - 52px)">${html}</div>`;
-if(joined||isAdmin){fetchChatMessages();clearInterval(window._chatPoll);window._chatPoll=setInterval(fetchChatMessages,4000);loadChatMemberCount();loadChatMemberPanel();}
+// 채팅 기능 종료 — 폴링 비활성화 (용량 절감). 화면만 표시.
+if(false){fetchChatMessages();clearInterval(window._chatPoll);window._chatPoll=setInterval(fetchChatMessages,8000);loadChatMemberCount();loadChatMemberPanel();}
 }
 
 async function loadChatMemberCount(){
@@ -1939,7 +1952,7 @@ async function fetchChatMessages(){
 const el=document.getElementById('chatMessages');
 if(!el||!_currentChatRoom)return;
 const path=getChatPath(_currentChatRoom);
-const msgs=await dbGet(path);
+const msgs=await dbGetRecent(path,50);
 window._currentMsgData=msgs||{};
 
 if(!msgs){
@@ -6099,7 +6112,7 @@ async function requestNotiPermission(){
 async function pollNotices(){
   if(!CU)return;
   const seenTs=getSeenTs('notice');
-  const notices=await dbGet('notices');
+  const notices=await dbGetRecent('notices',20);
   if(!notices)return;
   Object.values(notices).forEach(n=>{
     if(!n||!n.createdAt)return;
@@ -6160,7 +6173,7 @@ async function pollDMs(){
 async function pollVotes(){
   if(!CU)return;
   const seenTs=getSeenTs('votes');
-  const votes=await dbGet('votes');
+  const votes=await dbGetRecent('votes',20);
   if(!votes)return;
   let notified={};
   try{ notified=JSON.parse(localStorage.getItem('crew31NotifiedVotes')||'{}'); }catch{}
@@ -6238,7 +6251,7 @@ async function startNotiPolling(){
     updateNotiBadge();
   };
   poll();
-  _notiPollInterval=setInterval(poll,30000);
+  _notiPollInterval=setInterval(poll,120000);
 }
 
 async function _initSeenIfEmpty(){
