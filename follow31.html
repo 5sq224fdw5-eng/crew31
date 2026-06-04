@@ -175,7 +175,7 @@ input{font-family:inherit;}
     <div class="heart">&#128151;</div>
     <h1 class="disp">맞팔 명단</h1>
     <p>이번 주 맞팔 대상을 확인하고 팔로우해요</p>
-    <p style="margin-top:6px;font-size:12px;color:var(--pink-deep);font-weight:800;">버전 v3</p>
+    <p id="vmark" style="margin-top:6px;font-size:12px;color:var(--pink-deep);font-weight:800;">버전 v5</p>
   </div>
   <div class="login-card">
     <label for="loginName">닉네임</label>
@@ -237,6 +237,8 @@ input{font-family:inherit;}
    follow31  —  crew31/game31과 동일한 REST 방식 (Firebase SDK 불필요)
    crew31:  .../crew31   /   follow31:  .../follow31  로 경로만 분리
    ============================================================ */
+window.onerror=function(msg,src,line,col){try{var d=document.createElement("div");d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#d23a6e;color:#fff;padding:12px;font:13px monospace;white-space:pre-wrap;";d.textContent="JS 에러: "+msg+" (줄 "+line+":"+col+")";(document.body||document.documentElement).appendChild(d);}catch(_){}return false;};
+
 const DB = 'https://gacha-31-default-rtdb.firebaseio.com/follow31';
 
 /* 관리자 비밀번호 (원하는 값으로 바꾸세요) */
@@ -465,4 +467,5 @@ $("app").addEventListener("click", function(e){
 });
 
 /* ---------- 시작 ---------- */
+(function(){ var v=$("vmark"); if(v) v.innerHTML='버전 v5 &nbsp;<span style="color:#1a8a3a;font-size:14px">&#10003; JS 작동중</span>'; })();
 restoreSession();
