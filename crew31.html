@@ -3180,12 +3180,23 @@ async function loadDeptPage(gid){
       : Object.keys(v2.responses||{}).length;
     const isEnd2 = (v2.title||'').includes('완료')||v2.imageUpload;
     const badge = isEnd2 ? '🌙' : '🌅';
+    // 내 참여 여부 → 출근/퇴근 완료 도장
+    const myNameKey = CU?.name||'';
+    const iJoined = v2.imageUpload
+      ? !!(v2.images && v2.images[myNameKey] && v2.images[myNameKey].length>0)
+      : !!(v2.responses && v2.responses[myNameKey]!==undefined);
+    let stampHtml = '';
+    if(iJoined){
+      const stampText = isEnd2 ? '퇴근완료' : '출근완료';
+      const stampColor = isEnd2 ? '#5B9BD5' : '#f0454f';
+      stampHtml = `<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:50%;border:2.5px solid ${stampColor};color:${stampColor};font-size:10px;font-weight:900;line-height:1.1;text-align:center;transform:rotate(-12deg);margin-left:8px;letter-spacing:-0.5px">${stampText}</span>`;
+    }
     html+=`<div style="background:white;border-radius:14px;margin:0 14px 8px;overflow:hidden;border:1px solid var(--border)">`;
     html+=`<div onclick="toggleVoteDetail('${vid2}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer">`;
     html+=`<div style="flex:1;min-width:0">`;
     html+=`<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${badge} ${escH(v2.title||'')}</div>`;
     html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">${isClosed2?'🔒 마감':'⏰ 진행중'} · ${resCount}명 참여 · ${v2.date||''}</div>`;
-    html+=`</div><span style="color:var(--text3);font-size:12px;margin-left:8px">▼</span>`;
+    html+=`</div>${stampHtml}<span style="color:var(--text3);font-size:12px;margin-left:8px">▼</span>`;
     html+=`</div>`;
     html+=`<div id="voteDetail_${vid2}" style="display:none;border-top:1px solid var(--border)"></div>`;
     html+=`</div>`;
