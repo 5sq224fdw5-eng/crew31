@@ -2995,6 +2995,10 @@ async function renderCalendar(){
               html+=`<span style="background:var(--surface2);color:var(--text2);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${escH(name)}</span>`;
             });
             html+=`</div></div>`;
+            // 참여 다음에 구분선 (참여 = 시작만, 아래 = 완료처리 그룹)
+            if(result==='참여'){
+              html+=`<div style="border-top:1.5px dashed var(--border);margin:8px 0"></div>`;
+            }
           });
           html+=`</div>`;
         });
