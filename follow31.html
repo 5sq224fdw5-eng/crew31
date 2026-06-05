@@ -85,6 +85,9 @@ input{font-family:inherit;}
 .chips{display:flex;flex-wrap:wrap;gap:8px;}
 .chip{display:inline-flex;align-items:center;gap:8px;background:var(--pink-tint);border:1px solid var(--line);border-radius:999px;padding:8px 8px 8px 15px;font-weight:700;font-size:14px;animation:pop .3s ease both;}
 .chip .x{width:22px;height:22px;border-radius:50%;background:#fff;color:var(--pink-deep);font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--pink-soft);}
+.chip .chipid{font-size:11px;color:var(--ink-soft);font-weight:600;}
+.ilink{color:inherit;text-decoration:none;border-bottom:1.5px solid var(--pink-soft);}
+.ilink:active{color:var(--pink-deep);}
 
 .week{border:1px solid var(--line);}
 .week-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;cursor:pointer;gap:10px;}
@@ -96,12 +99,22 @@ input{font-family:inherit;}
 .caret{color:var(--pink);font-size:13px;transition:transform .25s;}
 .week.open .caret{transform:rotate(180deg);}
 .week-body{display:none;border-top:1px dashed var(--line);padding:6px 14px 14px;}
-.week.open .week-body{display:block;}
+.week.open .week-body{display:block;animation:slidedown .26s ease;}
+@keyframes slidedown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+.offrow{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.officialbtn{display:flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;background:linear-gradient(135deg,#ffe1ec,#ffd0e1);color:var(--pink-deep);font-weight:800;font-size:14px;padding:14px;border-radius:16px;border:1.5px solid var(--pink-soft);box-shadow:var(--shadow-sm);}
+.officialbtn:active{transform:scale(.98);}
+.reelbtn{display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;background:#fff;color:var(--pink-deep);font-weight:800;font-size:13px;padding:11px;border-radius:13px;border:1.5px solid var(--pink-soft);margin:6px 0 4px;}
+.reelbtn:active{transform:scale(.98);}
 
 .target{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px 8px;}
 .target .info{min-width:0;}
 .target .tn{font-weight:800;font-size:15px;}
 .target .ti{font-size:13px;color:var(--ink-soft);font-weight:600;}
+.ptag{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;vertical-align:middle;margin-left:3px;}
+.pt-ig{background:#ffe2ee;color:var(--pink-deep);}
+.pt-blog{background:#e4f5e8;color:#1a8a3a;}
+.pt-ohou{background:#e9eefb;color:#3a5bd0;}
 .target .actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .go{display:inline-flex;align-items:center;gap:6px;text-decoration:none;background:linear-gradient(135deg,#ff7eb3,#ff5c8a);color:#fff;font-weight:800;font-size:13px;padding:9px 13px;border-radius:12px;box-shadow:var(--shadow-sm);transition:transform .12s;}
 .go:active{transform:scale(.93);}
@@ -197,16 +210,23 @@ input{font-family:inherit;}
     </div>
 
     <div id="viewMembers" class="hidden">
-      <div class="section-title">사원 닉네임 등록</div>
-      <div class="add-row">
-        <input id="memberName" class="field" type="text" placeholder="사원 닉네임" autocomplete="off">
-        <button id="addMemberBtn" class="btn">추가</button>
+      <div class="section-title">사원 등록</div>
+      <div class="add-box" style="margin-bottom:18px">
+        <div class="row2"><input id="memberName" class="field" type="text" placeholder="사원 닉네임" autocomplete="off">
+        <input id="memberInsta" class="field" type="text" placeholder="인스타 @아이디 (선택)" autocomplete="off"></div>
+        <button id="addMemberBtn" class="btn block">추가</button>
       </div>
       <div class="section-title">등록된 사원 <span id="memberCount"></span></div>
       <div id="memberList" class="chips"></div>
     </div>
 
     <div id="viewWeeks">
+      <div id="officialAdmin" class="add-box hidden">
+        <div class="section-title" style="margin-top:0">&#128204; 공식 계정 (사이트 상단에 표시)</div>
+        <div class="add-row"><input id="officialIg" class="field" type="text" placeholder="&#128247; 인스타 @아이디/링크" autocomplete="off"><button class="btn" data-act="saveOfficial" data-p="ig">저장</button></div>
+        <div class="add-row"><input id="officialBlog" class="field" type="text" placeholder="&#128221; 블로그 아이디/링크" autocomplete="off"><button class="btn" data-act="saveOfficial" data-p="blog">저장</button></div>
+        <div class="add-row" style="margin-bottom:0"><input id="officialOhou" class="field" type="text" placeholder="&#128715; 오늘의집 아이디/링크" autocomplete="off"><button class="btn" data-act="saveOfficial" data-p="ohou">저장</button></div>
+      </div>
       <div id="addWeekBox" class="add-box hidden">
         <div class="section-title" style="margin-top:0">새 주차 만들기</div>
         <div class="add-row" style="margin-bottom:0">
@@ -241,14 +261,14 @@ window.onerror=function(msg,src,line,col){try{var d=document.createElement("div"
 
 /* ===== follow31 : crew31과 동일한 REST 방식 ===== */
 const DB = 'https://gacha-31-default-rtdb.firebaseio.com/follow31';
-const ADMIN_PW = "1234";
+const ADMIN_PW = "0307";
 
 async function dbGet(p){ try{ const r=await fetch(DB+"/"+p+".json"); return await r.json(); }catch(e){ return null; } }
 async function dbPush(p,d){ try{ const r=await fetch(DB+"/"+p+".json",{method:'POST',body:JSON.stringify(d)}); return await r.json(); }catch(e){ return null; } }
 async function dbSet(p,d){ try{ await fetch(DB+"/"+p+".json",{method:'PUT',body:JSON.stringify(d)}); }catch(e){} }
 async function dbDel(p){ try{ await fetch(DB+"/"+p+".json",{method:'DELETE'}); }catch(e){} }
 
-const state = { role:null, name:null, mid:null, members:[], weeks:[], checks:{}, expanded:new Set(), tab:"weeks", statusWid:null, statusMode:"target", efilter:"all", fMap:null, gMap:null };
+const state = { role:null, name:null, mid:null, members:[], weeks:[], checks:{}, expanded:new Set(), tab:"weeks", statusWid:null, statusMode:"target", efilter:"all", fMap:null, gMap:null, config:{} };
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
@@ -262,23 +282,31 @@ function ck(wid,tid,mid){ try{ return state.checks[wid][tid][mid] || {}; }catch(
 function fmtTs(sec){ if(!sec) return ""; const u=new Date(sec*1000); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); return (k.getMonth()+1)+"/"+k.getDate()+" "+("0"+k.getHours()).slice(-2)+":"+("0"+k.getMinutes()).slice(-2); }
 function fmtDeadline(ms){ if(!ms) return ""; const u=new Date(ms); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); return (k.getMonth()+1)+"/"+k.getDate()+" "+("0"+k.getHours()).slice(-2)+":"+("0"+k.getMinutes()).slice(-2); }
 function dlInputValue(ms){ if(!ms) return ""; const u=new Date(ms); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); return k.getFullYear()+"-"+("0"+(k.getMonth()+1)).slice(-2)+"-"+("0"+k.getDate()).slice(-2)+"T"+("0"+k.getHours()).slice(-2)+":"+("0"+k.getMinutes()).slice(-2); }
+function nameLink(name,insta){ const n=esc(name); return insta ? '<a class="ilink" href="'+instaUrl(insta)+'" target="_blank" rel="noopener">'+n+'</a>' : n; }
+function linkUrl(v){ v=(v||"").trim(); if(!v) return ""; if(/^https?:\/\//i.test(v)) return v; return instaUrl(v); }
+function platformUrl(p,h){ h=(h||"").trim(); if(!h) return "#"; if(/^https?:\/\//i.test(h)) return h; h=h.replace(/^@+/,""); if(p==="blog") return "https://blog.naver.com/"+encodeURIComponent(h); if(p==="ohou") return "https://ohou.se/users/"+encodeURIComponent(h); return "https://www.instagram.com/"+encodeURIComponent(h)+"/"; }
+function platformLabel(p){ return p==="blog"?"블로그":(p==="ohou"?"오늘의집":"인스타"); }
+function platformIcon(p){ return p==="blog"?"&#128221;":(p==="ohou"?"&#128715;":"&#128247;"); }
 
 async function refreshAll(){
   const btn=$("refreshBtn"); if(btn) btn.classList.add("spin");
   const mraw=await dbGet("members");
   const wraw=await dbGet("weeks");
   const craw=await dbGet("checks");
+  const cfgraw=await dbGet("config");
+  state.config=cfgraw||{};
   const mv=mraw||{};
-  state.members=Object.keys(mv).map(function(id){ return {id:id,name:mv[id].name}; })
+  state.members=Object.keys(mv).map(function(id){ return {id:id,name:mv[id].name,insta:mv[id].insta||""}; })
     .sort(function(a,b){ return (a.name||"").localeCompare(b.name||"","ko"); });
   const wv=wraw||{};
   state.weeks=Object.keys(wv).map(function(id){
     const w=wv[id]; const t=w.targets||{};
-    return { id:id, label:w.label||"(제목 없음)", createdAt:w.createdAt||0, deadline:w.deadline||0,
-      targets:Object.keys(t).map(function(tid){ return {id:tid,name:t[tid].name,insta:t[tid].insta,createdAt:t[tid].createdAt||0}; })
+    return { id:id, label:w.label||"(제목 없음)", createdAt:w.createdAt||0, deadline:w.deadline||0, link:w.link||"",
+      targets:Object.keys(t).map(function(tid){ return {id:tid,name:t[tid].name,insta:t[tid].insta,platform:t[tid].platform||"ig",createdAt:t[tid].createdAt||0}; })
                    .sort(function(a,b){ return a.createdAt-b.createdAt; }) };
   }).sort(function(a,b){ return b.createdAt-a.createdAt; });
   state.checks=craw||{};
+  if(state.weeks.length && !state._didAutoOpen){ state.expanded.add(state.weeks[0].id); state._didAutoOpen=true; }
   if(btn) btn.classList.remove("spin");
   if(state.role==="employee"){
     const me=state.members.filter(function(m){ return (m.name||"").trim()===state.name; })[0];
@@ -323,8 +351,9 @@ function restoreSession(){
 }
 
 async function addMember(){
-  const el=$("memberName"); const name=(el.value||"").trim(); if(!name) return;
-  el.value=""; await dbPush("members",{name:name,createdAt:Date.now()}); await refreshAll(); el.focus();
+  const el=$("memberName"); const iel=$("memberInsta"); const name=(el.value||"").trim(); if(!name) return;
+  const insta=cleanHandle(iel.value);
+  el.value=""; iel.value=""; await dbPush("members",{name:name,insta:insta,createdAt:Date.now()}); await refreshAll(); el.focus();
 }
 async function removeMember(id,name){
   if(confirm("'"+name+"' 사원을 삭제할까요?")){ await dbDel("members/"+id); await refreshAll(); }
@@ -340,11 +369,13 @@ async function removeWeek(id,label){
   }
 }
 async function addTarget(weekId){
-  const nEl=$("tn_"+weekId), iEl=$("ti_"+weekId);
-  const name=(nEl.value||"").trim(); const insta=cleanHandle(iEl.value);
+  const nEl=$("tn_"+weekId), iEl=$("ti_"+weekId), pEl=$("tp_"+weekId);
+  const platform = pEl ? pEl.value : "ig";
+  const name=(nEl.value||"").trim();
+  const insta = platform==="ig" ? cleanHandle(iEl.value) : (iEl.value||"").trim();
   if(!name){ nEl.focus(); return; } if(!insta){ iEl.focus(); return; }
   nEl.value=""; iEl.value=""; state.expanded.add(weekId);
-  await dbPush("weeks/"+weekId+"/targets",{name:name,insta:insta,createdAt:Date.now()});
+  await dbPush("weeks/"+weekId+"/targets",{name:name,insta:insta,platform:platform,createdAt:Date.now()});
   await refreshAll(); const f=$("tn_"+weekId); if(f) f.focus();
 }
 async function removeTarget(weekId,tid){
@@ -379,6 +410,7 @@ async function applyFile(){
   state.weeks.forEach(function(w){
     const dl=w.deadline||0;
     w.targets.forEach(function(t){
+      if((t.platform||"ig")!=="ig") return;
       const id=cleanHandle(t.insta).toLowerCase();
       const prev=ck(w.id,t.id,state.mid);
       let f=!!prev.f, m=!!prev.m, x=false, ft=prev.ft||0, mt=prev.mt||0;
@@ -411,6 +443,21 @@ async function setDeadline(wid){
   await dbSet("weeks/"+wid+"/deadline", ms);
   renderWeeks();
 }
+async function setWeekLink(wid){
+  const el=$("lk_"+wid); if(!el) return;
+  const v=(el.value||"").trim();
+  state.weeks.some(function(w){ if(w.id===wid){ w.link=v; return true; } return false; });
+  await dbSet("weeks/"+wid+"/link", v);
+  renderWeeks();
+}
+async function setOfficial(p){
+  const map={ ig:["officialIg","official"], blog:["officialBlog","blog"], ohou:["officialOhou","ohou"] };
+  const m=map[p]; if(!m) return;
+  const el=$(m[0]); const v=(el.value||"").trim();
+  state.config[m[1]]=v;
+  await dbSet("config/"+m[1], v);
+  renderWeeks();
+}
 
 async function toggleCheck(wid,tid,mid,field){
   const cur=ck(wid,tid,mid); const next={ f:!!cur.f, m:!!cur.m, x:!!cur.x }; next[field]=!next[field];
@@ -429,6 +476,7 @@ function enterApp(){
   $("adminTabs").classList.toggle("hidden", !isAdmin);
   $("addWeekBox").classList.toggle("hidden", !isAdmin);
   $("fileBox").classList.toggle("hidden", isAdmin);
+  $("officialAdmin").classList.toggle("hidden", !isAdmin);
   if(isAdmin){ $("weekLabel").setAttribute("placeholder","예: "+suggestWeekLabel()); switchTab("weeks"); }
   else { switchTab("weeks"); $("viewMembers").classList.add("hidden"); $("viewStatus").classList.add("hidden"); }
   refreshAll();
@@ -448,7 +496,8 @@ function renderMembers(){
   const box=$("memberList");
   if(!state.members.length){ box.innerHTML='<div class="empty" style="width:100%"><div class="e">&#128100;</div><p>아직 등록된 사원이 없어요.<br>위에서 추가해 주세요.</p></div>'; return; }
   box.innerHTML=state.members.map(function(m){
-    return '<span class="chip">'+esc(m.name)+'<button class="x" data-act="delMember" data-id="'+m.id+'" data-name="'+esc(m.name)+'">&#10005;</button></span>';
+    const tag = m.insta ? '<span class="chipid">@'+esc(cleanHandle(m.insta))+'</span>' : '';
+    return '<span class="chip">'+nameLink(m.name,m.insta)+tag+'<button class="x" data-act="delMember" data-id="'+m.id+'" data-name="'+esc(m.name)+'">&#10005;</button></span>';
   }).join("");
 }
 
@@ -460,8 +509,16 @@ function renderWeeks(){
     box.innerHTML='<div class="empty"><div class="e">&#128197;</div><p>'+(isAdmin?"아직 주차가 없어요.<br>위에서 새 주차를 만들어 주세요.":"아직 등록된 맞팔 주차가 없어요.<br>관리자가 등록하면 여기에 보여요.")+'</p></div>'; return;
   }
   let head="";
+  if(isAdmin){
+    const oig=$("officialIg"), obl=$("officialBlog"), ooh=$("officialOhou");
+    if(oig && document.activeElement!==oig) oig.value=state.config.official||"";
+    if(obl && document.activeElement!==obl) obl.value=state.config.blog||"";
+    if(ooh && document.activeElement!==ooh) ooh.value=state.config.ohou||"";
+  }
+  const offs=[["ig",state.config.official],["blog",state.config.blog],["ohou",state.config.ohou]].filter(function(o){return o[1];});
+  if(offs.length){ head+='<div class="offrow">'+offs.map(function(o){ return '<a class="officialbtn" href="'+platformUrl(o[0],o[1])+'" target="_blank" rel="noopener">'+platformIcon(o[0])+' '+platformLabel(o[0])+' 공식 계정</a>'; }).join("")+'</div>'; }
   if(!isAdmin){
-    head='<div class="wkpills" style="margin-bottom:16px">'+
+    head+='<div class="wkpills" style="margin-bottom:16px">'+
       '<button class="wkpill'+(state.efilter==="all"?" on":"")+'" data-act="efilter" data-f="all">전체</button>'+
       '<button class="wkpill'+(state.efilter==="pending"?" on":"")+'" data-act="efilter" data-f="pending">&#9888;&#65039; 맞팔 안 됨</button>'+
       '<button class="wkpill'+(state.efilter==="broken"?" on":"")+'" data-act="efilter" data-f="broken">&#10006; 끊김</button>'+
@@ -469,6 +526,7 @@ function renderWeeks(){
   }
   box.innerHTML = head + state.weeks.map(function(w,idx){
     const open=state.expanded.has(w.id); const cnt=w.targets.length; let body="";
+    if(w.link){ body+='<a class="reelbtn" href="'+linkUrl(w.link)+'" target="_blank" rel="noopener">&#128247; 이번 주 리포 보기</a>'; }
     let arr=w.targets;
     if(!isAdmin && state.efilter!=="all"){
       arr=w.targets.filter(function(t){ const s=statusOf(ck(w.id,t.id,state.mid)); return state.efilter==="pending" ? s==="pending" : s==="broken"; });
@@ -479,9 +537,11 @@ function renderWeeks(){
       } else {
         body+=arr.map(function(t){
           const c=ck(w.id,t.id,state.mid);
+          const pf=t.platform||"ig";
+          const psub = pf==="ig" ? '@'+esc(cleanHandle(t.insta)) : esc((t.insta||"").replace(/^@+/,""));
           let row='<div class="tcell">'+
-            '<div class="target"><div class="info"><div class="tn">'+esc(t.name)+'</div><div class="ti">@'+esc(cleanHandle(t.insta))+'</div></div>'+
-            '<div class="actions"><a class="go" href="'+instaUrl(t.insta)+'" target="_blank" rel="noopener">'+(isAdmin?'팔로우 &rarr;':'프로필 &rarr;')+'</a>'+
+            '<div class="target"><div class="info"><div class="tn">'+esc(t.name)+' <span class="ptag pt-'+pf+'">'+platformIcon(pf)+' '+platformLabel(pf)+'</span></div><div class="ti">'+psub+'</div></div>'+
+            '<div class="actions"><a class="go" href="'+platformUrl(pf,t.insta)+'" target="_blank" rel="noopener">'+(isAdmin?'바로가기 &rarr;':'프로필 &rarr;')+'</a>'+
             (isAdmin?'<button class="del" data-act="delTarget" data-week="'+w.id+'" data-id="'+t.id+'">삭제</button>':'')+'</div></div>';
           if(!isAdmin){
             const late = w.deadline && c.mt && (c.mt*1000 > w.deadline);
@@ -498,13 +558,17 @@ function renderWeeks(){
     } else { body+='<div class="empty" style="padding:26px 10px"><p>'+(isAdmin?"아래에서 대상자를 추가해 주세요.":"아직 등록된 대상자가 없어요.")+'</p></div>'; }
     if(isAdmin){
       body+='<div class="add-box" style="margin:12px 0 0;box-shadow:none;border:1px dashed var(--line)">'+
-        '<div class="row2"><input id="tn_'+w.id+'" class="field" type="text" placeholder="신입 닉네임" autocomplete="off">'+
-        '<input id="ti_'+w.id+'" class="field" type="text" placeholder="인스타 @아이디" autocomplete="off"></div>'+
-        '<button class="btn block" data-act="addTarget" data-week="'+w.id+'">대상자 추가</button>'+
+        '<div class="row2"><input id="tn_'+w.id+'" class="field" type="text" placeholder="대상 닉네임" autocomplete="off">'+
+        '<input id="ti_'+w.id+'" class="field" type="text" placeholder="아이디 또는 링크" autocomplete="off"></div>'+
+        '<div style="display:flex;gap:8px"><select id="tp_'+w.id+'" class="field" style="flex:1"><option value="ig">&#128247; 인스타</option><option value="blog">&#128221; 블로그</option><option value="ohou">&#128715; 오늘의집</option></select>'+
+        '<button class="btn" data-act="addTarget" data-week="'+w.id+'" style="white-space:nowrap">추가</button></div>'+
         '<div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:12px">'+
         '<div class="section-title" style="margin:0 0 6px">&#9201; 투표 마감 시각</div>'+
         '<div style="display:flex;gap:8px"><input id="dl_'+w.id+'" type="datetime-local" class="field" style="flex:1" value="'+dlInputValue(w.deadline)+'">'+
         '<button class="btn" data-act="setDeadline" data-id="'+w.id+'">저장</button></div></div>'+
+        '<div style="margin-top:10px"><div class="section-title" style="margin:0 0 6px">&#128247; 이번 주 리포 링크</div>'+
+        '<div style="display:flex;gap:8px"><input id="lk_'+w.id+'" type="text" class="field" style="flex:1" placeholder="@아이디 또는 https:// 링크" value="'+esc(w.link)+'">'+
+        '<button class="btn" data-act="setWeekLink" data-id="'+w.id+'">저장</button></div></div>'+
         '<button class="delweek" data-act="delWeek" data-id="'+w.id+'" data-label="'+esc(w.label)+'">이 주차 삭제</button></div>';
     }
     let sub='맞팔 대상 '+cnt+'명';
@@ -554,7 +618,7 @@ function renderStatus(){
       let nm=0,np=0,nx=0; members.forEach(function(m){ const s=statusOf(ck(state.statusWid,t.id,m.id)); if(s==="mutual")nm++; else if(s==="pending")np++; else if(s==="broken")nx++; });
       let body=members.map(function(m){
         const c=ck(state.statusWid,t.id,m.id);
-        return '<div class="mini"><span class="mn">'+esc(m.name)+'</span>'+miniBtns(state.statusWid,t.id,m.id,c)+'</div>';
+        return '<div class="mini"><span class="mn">'+nameLink(m.name,m.insta)+'</span>'+miniBtns(state.statusWid,t.id,m.id,c)+'</div>';
       }).join("");
       return '<div class="card'+(open?' open':'')+'"><div class="week-head" data-act="toggle" data-id="'+key+'">'+
         '<div class="meta"><div class="wlabel">'+esc(t.name)+'</div><div class="ssub">@'+esc(cleanHandle(t.insta))+'</div>'+bars(nm,np,nx)+'</div>'+
@@ -570,7 +634,7 @@ function renderStatus(){
         return '<div class="mini"><span class="mn">'+esc(t.name)+' <span style="color:var(--ink-soft);font-weight:600;font-size:12px">@'+esc(cleanHandle(t.insta))+'</span></span>'+miniBtns(state.statusWid,t.id,m.id,c)+'</div>';
       }).join("");
       return '<div class="card'+(open?' open':'')+'"><div class="week-head" data-act="toggle" data-id="'+key+'">'+
-        '<div class="meta"><div class="wlabel">'+esc(m.name)+'</div>'+bars(nm,np,nx)+'</div>'+
+        '<div class="meta"><div class="wlabel">'+nameLink(m.name,m.insta)+'</div>'+bars(nm,np,nx)+'</div>'+
         '<span class="caret">&#9660;</span></div>'+
         '<div class="week-body" style="display:'+(open?'block':'none')+'">'+body+'</div></div>';
     }).join("");
@@ -606,6 +670,8 @@ $("app").addEventListener("click", function(e){
   else if(act==="chk"){ toggleCheck(el.dataset.w, el.dataset.t, el.dataset.m, el.dataset.field); }
   else if(act==="efilter"){ state.efilter=el.dataset.f; renderWeeks(); }
   else if(act==="setDeadline"){ setDeadline(el.dataset.id); }
+  else if(act==="setWeekLink"){ setWeekLink(el.dataset.id); }
+  else if(act==="saveOfficial"){ setOfficial(el.dataset.p); }
   else if(act==="pickWeek"){ state.statusWid=el.dataset.id; renderStatus(); }
 });
 
