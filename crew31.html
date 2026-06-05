@@ -1079,7 +1079,7 @@ async function checkAutoVote(){
       if(voteExists(title, gid)) continue;                  // 이미 생성됨
       if(!(await claimGuard(guardKey))) continue;           // 서버 선점 실패 → 다른 기기가 생성
       const gData = groups[gid]||{};
-      const opts = ['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+      const opts = ['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','오늘 당직이에요 (당직)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
       const startData = {title,group:gid,date:todayStr2,time:sch.startCloseTime||'22:00',options:opts,createdAt:Date.now()};
       if(sch.startMode==='image') startData.imageUpload=true;
       await dbPush('votes',startData);
@@ -2978,7 +2978,7 @@ async function renderCalendar(){
           html+=`<span style="font-size:11px;color:var(--text3);margin-left:auto">총 ${totalCount}명</span>`;
           html+=`</div>`;
           // 표시 순서 통일: 참여 → 완료 → 프패 → 공게 → 지각 → 봉사 → 노피드 → 투피드 → 확인증 → 기타
-          const _order=['참여','완료','프패','공게','지각','봉사','노피드','투피드','확인증'];
+          const _order=['참여','완료','당직','프패','공게','지각','봉사','노피드','투피드','확인증'];
           const sortedResults=Object.entries(results).sort((a,b)=>{
             let ia=_order.indexOf(a[0]); let ib=_order.indexOf(b[0]);
             if(ia<0)ia=999; if(ib<0)ib=999;
@@ -3187,7 +3187,7 @@ async function loadDeptPage(gid){
     if(!(sv.title||'').includes('시작')) return;
     if(!sv.responses || sv.responses[myNameForLeave]===undefined) return;
     const opt = ((sv.options||[])[sv.responses[myNameForLeave]]||'').toLowerCase();
-    if(opt.includes('연차')||opt.includes('프패')){
+    if(opt.includes('연차')||opt.includes('프패')||opt.includes('당직')){
       const m=(sv.title||'').match(/(\d+)월\s*(\d+)일/);
       if(m) myLeaveDays.add(`${m[1]}월${m[2]}일`);
     }
@@ -3353,20 +3353,26 @@ async function renderVoteCard(vid,v){
           const _started = Object.keys(_sv.responses);
           const _done = new Set(Object.keys(v.responses||{}));
           const _svOpts = _sv.options||[];
-          // 시작 투표에서 연차(프패) 선택한 사람 = 완료 안 해도 완료 간주
+          // 시작 투표에서 연차(프패)/당직 선택한 사람 = 완료 안 해도 완료 간주
           const _leaveSet = new Set(_started.filter(nm=>{
             const opt = (_svOpts[_sv.responses[nm]]||'').toLowerCase();
             return opt.includes('연차')||opt.includes('프패');
           }));
-          const _doneCnt = _started.filter(n=>_done.has(n)||_leaveSet.has(n)).length;
+          const _dutySet = new Set(_started.filter(nm=>{
+            const opt = (_svOpts[_sv.responses[nm]]||'').toLowerCase();
+            return opt.includes('당직');
+          }));
+          const _doneCnt = _started.filter(n=>_done.has(n)||_leaveSet.has(n)||_dutySet.has(n)).length;
           html+=`<div style="background:var(--surface2);border-radius:12px;padding:10px 12px;margin-bottom:12px">`;
-          html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">✅ 완료 체크 (${_doneCnt}/${_started.length}) · <span style="color:#A78BFA">■</span> 연차</div>`;
+          html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">✅ 완료 체크 (${_doneCnt}/${_started.length}) · <span style="color:#C3B0F0">■</span> 연차 <span style="color:#7EC8E3">■</span> 당직</div>`;
           html+=`<div style="display:flex;flex-wrap:wrap;gap:4px">`;
           _started.forEach(nm=>{
             const isLeave=_leaveSet.has(nm);
+            const isDuty=_dutySet.has(nm);
             const ok=_done.has(nm);
             let bg, col, bd;
-            if(isLeave){ bg='#A78BFA'; col='white'; bd='#A78BFA'; }        // 연차 = 보라
+            if(isDuty){ bg='#7EC8E3'; col='white'; bd='#7EC8E3'; }         // 당직 = 하늘색
+            else if(isLeave){ bg='#C3B0F0'; col='white'; bd='#C3B0F0'; }   // 연차 = 연한 보라
             else if(ok){ bg=gColor; col='white'; bd=gColor; }             // 완료 = 그룹색
             else { bg='var(--surface)'; col='var(--text3)'; bd='var(--border)'; } // 미완료 = 회색
             html+=`<span style="background:${bg};color:${col};padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700;border:1px solid ${bd}">${escH(nm)}</span>`;
@@ -4856,7 +4862,7 @@ async function openVoteModal(vid, defaultGroup, voteType){
     if(voteType==='start'){
       document.getElementById('voteTitle').value=`${dateLabel} 업무(참여) 시작`;
       document.getElementById('voteTime').value=defaultStartTime;
-      _editOptList=['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+      _editOptList=['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','오늘 당직이에요 (당직)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
     } else if(voteType==='end'){
       document.getElementById('voteTitle').value=`${dateLabel} 업무 완료`;
       document.getElementById('voteTime').value=defaultEndTime;
@@ -5151,7 +5157,7 @@ async function loadStatusGroup(gid) {
     return;
   }
 
-  const resultColor = {'완료':'#5DB88A','참여':'#5DB88A','지각':'#E8927C','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0','봉사·미완료':'#A78BFA','투피드·미완료':'#f59e0b','노피드·미완료':'#94a3b8'};
+  const resultColor = {'완료':'#5DB88A','참여':'#5DB88A','지각':'#E8927C','당직':'#7C9CDB','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','시작':'#c7b8e0','봉사·미완료':'#A78BFA','투피드·미완료':'#f59e0b','노피드·미완료':'#94a3b8'};
   const ADMIN_NAMES = ['고인물','에이스','경력직','불주먹','김월루','퇴사각'];
   let html = '';
 
