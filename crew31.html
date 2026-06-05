@@ -3320,8 +3320,8 @@ async function renderVoteCard(vid,v){
     }
   }
 
-  // 완료 투표(선택지형, 이미지투표 아님) → 같은 날 시작 참여자 목록 (완료자 색 채움)
-  if(isEndVote && !isImageVote){
+  // 완료 투표(선택지형, 이미지투표 아님) → 같은 날 시작 참여자 목록 (완료자 색 채움) — 관리자만
+  if(isEndVote && !isImageVote && CU?.role==='admin'){
     try{
       const _allV = await dbGet('votes');
       if(_allV){
