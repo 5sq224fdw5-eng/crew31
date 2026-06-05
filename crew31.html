@@ -5215,7 +5215,7 @@ async function loadStatusGroup(gid) {
     sortedMembers.forEach(([mname, mdates]) => {
       const fullCount = dates.filter(d => {
         const r = mdates[d];
-        return ['완료','공게','투피드','노피드','프패','확인증'].includes(r);
+        return ['완료','당직','공게','투피드','노피드','프패','확인증'].includes(r);
       }).length;
       const isFull = fullCount >= 7;
       const isAdminM = ADMIN_NAMES.includes(mname);
@@ -5322,7 +5322,7 @@ async function checkFullAttendance(gid, mondayStr, memberKey) {
     if(!att) return;
     const results = Object.values(att);
     // 봉사(열정페이)는 풀참 합산에서 제외
-    const validCount = results.filter(r => ['완료','공게','투피드','노피드','프패','확인증'].includes(r)).length;
+    const validCount = results.filter(r => ['완료','당직','공게','투피드','노피드','프패','확인증'].includes(r)).length;
     if(validCount >= 7) {
       // 연차 지급 (오락실 Firebase)
       const gameMembers = await gameGet('members');
@@ -5376,8 +5376,8 @@ function openAttendanceEdit(gid, mondayStr) {
   renderAttEditList(gid, mondayStr, dates, '');
 }
 
-const _attResultCycle = ['완료','지각','프패','공게','봉사','노피드','투피드','확인증',''];
-const _attResultColor = {'완료':'#5DB88A','지각':'#E8927C','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','':'#ddd'};
+const _attResultCycle = ['완료','당직','지각','프패','공게','봉사','노피드','투피드','확인증',''];
+const _attResultColor = {'완료':'#5DB88A','당직':'#7C9CDB','지각':'#E8927C','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','':'#ddd'};
 
 async function renderAttEditList(gid, mondayStr, dates, filter){
   const listEl = document.getElementById('attEditList');
@@ -5412,7 +5412,7 @@ async function renderAttEditList(gid, mondayStr, dates, filter){
   }
   if(filter) members = members.filter(m=>m.name.includes(filter));
   members.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-  const opts = ['','완료','지각','프패','공게','봉사','노피드','투피드','확인증'];
+  const opts = ['','완료','당직','지각','프패','공게','봉사','노피드','투피드','확인증'];
   const searchInput = document.querySelector('#attEditModal input');
   const scrollTop = listEl.scrollTop;
   listEl.innerHTML = members.map(m=>{
@@ -5621,7 +5621,7 @@ async function downloadWeekExcel(gid, mondayStr) {
     allMembers.forEach((m, idx) => {
       const row = [null, idx+1, m.name, ''];
       // 봉사(열정페이)는 풀참 합산에서 제외
-      const valid = ['완료','공게','투피드','노피드','프패','확인증'];
+      const valid = ['완료','당직','공게','투피드','노피드','프패','확인증'];
       let ppCount = 0;
       dates.forEach(d => {
         const r = memberResults[m.name]?.[d] || '';
