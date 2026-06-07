@@ -4320,22 +4320,39 @@ async function adminEditLink(vid, linkKey){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   const cur = await dbGet(`votes/${vid}/links/${linkKey}`);
   if(!cur){ showToast('링크를 찾을 수 없습니다'); return; }
-  // 1) @아이디 수정 (잘못 입력한 인스타 아이디 고치기)
-  const newId = prompt(`${cur.nick||''}님 @아이디 수정\n(@ 빼고 입력 · 그대로 두려면 OK)`, cur.id||'');
-  if(newId===null) return; // 취소
-  // 2) 링크(URL) 수정
-  const newUrl = prompt(`${cur.nick||''}님 링크 수정\n현재: ${cur.url||'(없음)'}`, cur.url||'');
-  if(newUrl===null) return; // 취소
-  const cleanId = newId.trim().replace(/^@+/,'');
-  const clean = (typeof cleanUrl==='function') ? cleanUrl(newUrl.trim()) : newUrl.trim();
-  // 이전 링크는 기록으로 남기고 교체
-  if(clean !== (cur.url||'')) await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur.url||'');
-  await dbSet(`votes/${vid}/links/${linkKey}/editedBy`, CU.name);
-  await dbSet(`votes/${vid}/links/${linkKey}/editedAt`, Date.now());
-  await dbSet(`votes/${vid}/links/${linkKey}/id`, cleanId);
-  await dbSet(`votes/${vid}/links/${linkKey}/url`, clean);
-  showToast('✅ 수정됨 (@아이디·링크)');
-  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+  // 한 화면에서 @아이디 + 링크 둘 다 수정 (원하는 것만 고치면 됨)
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(40,20,40,0.55);display:flex;align-items:center;justify-content:center;padding:22px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)';
+  const card=document.createElement('div');
+  card.style.cssText='background:#fff;border-radius:22px;padding:22px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.35)';
+  card.innerHTML=
+    '<div style="font-size:16px;font-weight:900;color:#E84C8A;margin-bottom:16px">✏️ '+escH(cur.nick||'')+'님 수정</div>'+
+    '<label style="font-size:12px;font-weight:700;color:#999;display:block;margin-bottom:5px">@아이디 (@ 빼고)</label>'+
+    '<input id="_elId" style="width:100%;padding:11px 12px;border:1.5px solid #f0d9e6;border-radius:10px;font-size:14px;margin-bottom:13px;outline:none;box-sizing:border-box" autocapitalize="off" autocorrect="off" spellcheck="false">'+
+    '<label style="font-size:12px;font-weight:700;color:#999;display:block;margin-bottom:5px">링크 (URL)</label>'+
+    '<input id="_elUrl" style="width:100%;padding:11px 12px;border:1.5px solid #f0d9e6;border-radius:10px;font-size:14px;margin-bottom:18px;outline:none;box-sizing:border-box" autocapitalize="off" autocorrect="off" spellcheck="false">'+
+    '<div style="display:flex;gap:8px"><button id="_elCancel" style="flex:1;padding:12px;border:none;border-radius:12px;background:#f0eef2;color:#777;font-size:15px;font-weight:800;cursor:pointer">취소</button>'+
+    '<button id="_elOk" style="flex:1;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF85C1,#f87286);color:#fff;font-size:15px;font-weight:800;cursor:pointer">확인</button></div>';
+  ov.appendChild(card);
+  document.body.appendChild(ov);
+  card.querySelector('#_elId').value = cur.id||'';
+  card.querySelector('#_elUrl').value = cur.url||'';
+  const close=()=>ov.remove();
+  ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
+  card.querySelector('#_elCancel').addEventListener('click', close);
+  card.querySelector('#_elOk').addEventListener('click', async ()=>{
+    const newId = (card.querySelector('#_elId').value||'').trim().replace(/^@+/,'');
+    const rawUrl = (card.querySelector('#_elUrl').value||'').trim();
+    const clean = (typeof cleanUrl==='function') ? cleanUrl(rawUrl) : rawUrl;
+    close();
+    if(clean !== (cur.url||'')) await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur.url||'');
+    await dbSet(`votes/${vid}/links/${linkKey}/editedBy`, CU.name);
+    await dbSet(`votes/${vid}/links/${linkKey}/editedAt`, Date.now());
+    await dbSet(`votes/${vid}/links/${linkKey}/id`, newId);
+    await dbSet(`votes/${vid}/links/${linkKey}/url`, clean);
+    showToast('✅ 수정됨');
+    if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+  });
 }
 
 async function copyAllLinks(vid){
@@ -4846,6 +4863,7 @@ async function pickVoteOption(vid, optIdx){
     // 링크 불필요 → 바로 저장
     await castVote(vid, optIdx);
     if(window._pendingVote) delete window._pendingVote[vid];
+    votePopup(v);
     return;
   }
   // 임시 선택만 (화면 표시). [투표 제출] 눌러야 실제 저장
