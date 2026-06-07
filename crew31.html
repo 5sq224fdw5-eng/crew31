@@ -2495,7 +2495,6 @@ html+=`<div id="groupList">`;
     html+=`<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(realName)}</div>`;
     if(!isMe)html+=`<div onclick="openDMWithMember('${escH(realName)}','${escH(realName)}')" style="font-size:11px;color:var(--accent);font-weight:700;cursor:pointer;margin-top:1px">💬 DM</div>`;
     html+=`</div>`;
-    if(isAdmin)html+=`<button onclick="renameMemberNickname('${escH(realName)}')" title="닉네임 수정" style="flex-shrink:0;width:28px;height:28px;border:none;border-radius:8px;background:var(--surface2);color:var(--text3);font-size:13px;cursor:pointer">✏️</button>`;
     html+=`</div>`;
   });
   html+=`</div></div></div>`;
@@ -4321,15 +4320,21 @@ async function adminEditLink(vid, linkKey){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   const cur = await dbGet(`votes/${vid}/links/${linkKey}`);
   if(!cur){ showToast('링크를 찾을 수 없습니다'); return; }
+  // 1) @아이디 수정 (잘못 입력한 인스타 아이디 고치기)
+  const newId = prompt(`${cur.nick||''}님 @아이디 수정\n(@ 빼고 입력 · 그대로 두려면 OK)`, cur.id||'');
+  if(newId===null) return; // 취소
+  // 2) 링크(URL) 수정
   const newUrl = prompt(`${cur.nick||''}님 링크 수정\n현재: ${cur.url||'(없음)'}`, cur.url||'');
   if(newUrl===null) return; // 취소
+  const cleanId = newId.trim().replace(/^@+/,'');
   const clean = (typeof cleanUrl==='function') ? cleanUrl(newUrl.trim()) : newUrl.trim();
-  // 이전 링크는 기록으로 남기고, 활성 url만 교체
-  await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur.url||'');
+  // 이전 링크는 기록으로 남기고 교체
+  if(clean !== (cur.url||'')) await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur.url||'');
   await dbSet(`votes/${vid}/links/${linkKey}/editedBy`, CU.name);
   await dbSet(`votes/${vid}/links/${linkKey}/editedAt`, Date.now());
+  await dbSet(`votes/${vid}/links/${linkKey}/id`, cleanId);
   await dbSet(`votes/${vid}/links/${linkKey}/url`, clean);
-  showToast('✅ 링크 수정됨');
+  showToast('✅ 수정됨 (@아이디·링크)');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
@@ -4515,7 +4520,7 @@ async function uploadImages(vid, input){
     await recordAttendance(vid, (myIdx!==undefined?myIdx:0), myKey);
   }
 
-  showToast(`✅ ${uploaded.length}장 업로드 완료!`);
+  votePopup(v, `사진 ${uploaded.length}장`);
   input.value = '';
 
   // 화면 새로고침
@@ -4907,9 +4912,41 @@ async function submitVote(vid){
   if(!isBonusOnly && preData){
     await submitVoteLinkNew(vid, true, preData);
   }
-  const _gn = groups[v?.group]?.name || '';
-  showToast(_gn ? `✅ ${_gn} 그룹 투표 제출 완료!` : '✅ 투표 제출 완료!');
+  votePopup(v);
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+// 큰 완료 팝업 (눌러야 닫힘)
+function bigDonePopup(msg, emoji){
+  emoji = emoji || '✅';
+  if(!document.getElementById('bigpopStyle')){
+    const st=document.createElement('style');st.id='bigpopStyle';
+    st.textContent='@keyframes bigpopIn{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}';
+    document.head.appendChild(st);
+  }
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(40,20,40,0.55);display:flex;align-items:center;justify-content:center;padding:30px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)';
+  const card=document.createElement('div');
+  card.style.cssText='background:#fff;border-radius:26px;padding:34px 26px 26px;max-width:320px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35);animation:bigpopIn .28s cubic-bezier(.175,.885,.32,1.275)';
+  card.innerHTML='<div style="font-size:62px;line-height:1;margin-bottom:14px">'+emoji+'</div>'+
+    '<div style="font-size:21px;font-weight:900;color:#E84C8A;line-height:1.35;white-space:pre-line;margin-bottom:22px">'+msg+'</div>'+
+    '<button style="width:100%;padding:15px;border:none;border-radius:16px;background:linear-gradient(135deg,#FF85C1,#f87286);color:#fff;font-size:17px;font-weight:800;cursor:pointer">확인</button>';
+  ov.appendChild(card);
+  const close=()=>ov.remove();
+  ov.addEventListener('click',close);
+  card.querySelector('button').addEventListener('click',function(e){e.stopPropagation();close();});
+  document.body.appendChild(ov);
+}
+
+// 투표 종류(시작/완료)·그룹에 맞춰 완료 팝업
+function votePopup(v, extra){
+  const gn = (typeof groups!=='undefined' && groups[v?.group]?.name) || '';
+  const isEnd = (v?.title||'').includes('완료');
+  const kind = isEnd ? '퇴근' : '출근';
+  const emoji = isEnd ? '🌙' : '🌅';
+  let msg = (gn ? gn+' 그룹\n' : '') + kind + ' 투표 제출 완료!';
+  if(extra) msg += '\n' + extra;
+  bigDonePopup(msg, emoji);
 }
 
 async function castVote(vid,optIdx){
@@ -6106,7 +6143,6 @@ async function loadSettings(){
   memberHtml += `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">오락실 연동 그룹 전용</div>`;
   memberHtml += `<button class="btn-pri" onclick="syncGameMembers()" style="width:100%;padding:12px">🔄 오락실 연동 멤버 동기화</button>`;
   memberHtml += `<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
-  memberHtml += `<button onclick="renameMemberNickname()" style="width:100%;margin-top:10px;padding:12px;background:#7E9CD8;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">✏️ 멤버 닉네임 수정</button>`;
   memberHtml += `<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6">닉네임을 바꿔도 출석·투표 기록을 함께 옮겨 과거 이력이 유지돼요. 경품·연차·주식은 자동 보존됩니다. (진행 전 백업 파일이 받아집니다)</div>`;
 
 
