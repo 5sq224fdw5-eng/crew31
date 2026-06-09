@@ -901,274 +901,6 @@ async function diagAttendance(){
   loadHeaderWeeklyAtt();
 }
 
-// 자동투표가 안 올라올 때: Worker가 보는 설정 + 오늘 생성 흔적을 그대로 읽어 원인 파악
-async function diagAutoVote(){
-  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
-  showToast('⏳ 자동투표 상태 확인 중...');
-  const [sch, guard, votesNow] = await Promise.all([
-    dbGet('autoVoteSchedule'), dbGet('autoVoteGuard'), dbGet('votes')
-  ]);
-  const now=new Date(); const k=new Date(now.getTime()+9*60*60*1000);
-  const pad=n=>String(n).padStart(2,'0');
-  const today=`${k.getUTCFullYear()}-${pad(k.getUTCMonth()+1)}-${pad(k.getUTCDate())}`;
-  const hhmm=`${pad(k.getUTCHours())}:${pad(k.getUTCMinutes())}`;
-
-  let out=`[자동투표 상태]  지금 KST ${hhmm} (${today})\n\n`;
-  if(!sch){ alert(out+'❌ autoVoteSchedule 설정 자체가 없습니다.\n→ 설정에서 시각을 다시 입력해 저장하세요.'); return; }
-  out+=`마스터 스위치: ${sch.enabled?'✅ ON':'❌ OFF (이게 꺼져 있으면 절대 생성 안 됨)'}\n\n`;
-  const gs = sch.groups||{};
-  if(Object.keys(gs).length===0) out+='⚠️ 그룹별 자동생성 설정이 비어 있습니다.\n';
-  for(const [gid,g] of Object.entries(gs)){
-    const name=(groups[gid]?.name)||gid;
-    const dead = groups[gid] ? '' : ' ⚠️(현재 없는 그룹)';
-    out+=`· ${name}${dead}: ${g.enabled?'켜짐':'꺼짐'} / 시작 ${g.startTime||'미설정'} / 완료 ${g.endTime||'미설정'}\n`;
-  }
-
-  out+=`\n[오늘 생성 흔적]\n`;
-  const todays = Object.entries(guard||{}).filter(([key])=>key.endsWith('_'+today));
-  if(todays.length===0) out+='없음 — 오늘은 아무것도 생성 시도 안 됨\n';
-  else todays.forEach(([key,v])=> out+=`· ${key}  (by: ${v?.by||'?'})\n`);
-
-  // 오늘 실제로 올라온 자동투표 개수
-  const todayVotes = Object.values(votesNow||{}).filter(v=>v && !v.deleted && (v.date===today) && /업무/.test(v.title||'')).length;
-  out+=`\n오늘 화면에 떠 있는 업무투표: ${todayVotes}개\n`;
-
-  out+=`\n[해석]\n`;
-  out+=`· 흔적에 'by: server'가 있으면 → Worker는 살아있음(cron 정상)\n`;
-  out+=`· 흔적이 전혀 없으면 → 마스터 OFF / 시각 미설정 / Cloudflare cron 멈춤 중 하나\n`;
-  out+=`· 흔적은 있는데 화면 투표가 0이면 → 만든 뒤 삭제·정리된 것\n`;
-  out+=`· '현재 없는 그룹'이 보이면 → 그룹을 새로 만들며 옛 설정만 남은 것(그 그룹에 시각 다시 입력 필요)`;
-  alert(out);
-}
-
-// ───────────────────────────────────────────────────────────────
-// 관리자: 멤버 닉네임 수정 (과거 기록까지 함께 이동 = B안)
-//
-// 데이터 구조 메모:
-//  - 경품/연차/주식(game31 memberPrizes·memberLeave·leaveLog·stockLog)은 멤버 push키 기반 → 닉네임 바꿔도 자동 유지(건드리지 않음)
-//  - crew31 attendance/attendanceManual/투표 응답·이미지·메모·연차사용·시간은 "닉네임"을 키로 씀 → 옮겨줘야 함
-//  - 투표 links 는 CU.key(push키) 기반 → 안 끊김 (nick 표시필드만 후속 보정)
-//  - game31 history 는 전체이름(*그룹명닉네임)을 필드로 저장 → 끝 닉네임만 치환
-//  - 닉네임은 로그인 키라 전역 유일해야 함(중복 차단)
-// ───────────────────────────────────────────────────────────────
-function _saniKey(s){ return (s||'').replace(/[\.\#\$\/\[\]\s]/g,'_'); }
-
-async function renameMemberNickname(prefillOld){
-  if(CU?.role!=='admin'){ showToast('관리자 전용 기능입니다'); return; }
-
-  const oldNick = (prompt('수정할 멤버의 현재 닉네임을 입력하세요\n(그룹명 빼고, 예: 냠냠이)', prefillOld||'')||'').trim();
-  if(!oldNick) return;
-  const newNick = (prompt(`"${oldNick}" → 바꿀 새 닉네임\n(그룹명 빼고)`, '')||'').trim();
-  if(!newNick){ return; }
-  if(newNick===oldNick){ showToast('같은 닉네임입니다'); return; }
-
-  showToast('⏳ 영향 범위 확인 중...');
-
-  // 옛 키 후보(원본 + 특수문자 치환형) / 새 키 매핑
-  const oldKeys = [...new Set([oldNick, _saniKey(oldNick)])];
-  const newKeyFor = k => (k===oldNick ? newNick : _saniKey(newNick));
-
-  // ── 1) game31 members 매칭 ──
-  const gameMembers = await gameGet('members') || {};
-
-  // 그룹명 목록(접두어 분리용)
-  const GAME_GROUPS = Object.values(groups).map(g=>g.name).filter(Boolean);
-  const realNameOf = (fullName)=>{
-    const clean = (fullName||'').replace(/^\*/,'');
-    const g = GAME_GROUPS.find(g=>clean.startsWith(g));
-    return g ? clean.slice(g.length) : clean;
-  };
-
-  const memberHits = []; // {key, oldName, newName}
-  const existingRealNames = new Set();
-  for(const [k,m] of Object.entries(gameMembers)){
-    if(!m || !m.name) continue;
-    const rn = realNameOf(m.name);
-    if(rn === oldNick){
-      const newName = m.name.slice(0, m.name.length - oldNick.length) + newNick;
-      memberHits.push({key:k, oldName:m.name, newName});
-    } else {
-      existingRealNames.add(rn);
-    }
-  }
-  if(memberHits.length===0){
-    alert(`⚠️ "${oldNick}" 닉네임의 오락실 멤버를 찾지 못했어요.\n닉네임 철자를 확인해 주세요.`);
-    return;
-  }
-  // 중복 닉네임 차단(로그인 키 충돌 방지)
-  if(existingRealNames.has(newNick)){
-    alert(`❌ "${newNick}" 은(는) 이미 다른 멤버가 쓰는 닉네임이에요.\n로그인이 충돌하므로 다른 닉네임을 써 주세요.`);
-    return;
-  }
-
-  // ── 2) crew31 attendance / attendanceManual / votes + game31 history
-  //        + crew31 자체 멤버명단(/crew31/members, 로그인·현황·채팅용) + groupMembers(독립멤버) 스캔 ──
-  const [attendance, attManual, votes, history, crewMembers, groupMembersData] = await Promise.all([
-    dbGet('attendance'), dbGet('attendanceManual'), dbGet('votes'), gameGet('history'),
-    dbGet('members'), dbGet('groupMembers')
-  ]);
-
-  // crew31 자체 명단에 새 닉네임이 이미 다른 사람으로 있으면 로그인 충돌 → 차단
-  if(crewMembers && Object.values(crewMembers).some(m=>m && m.name===newNick)){
-    alert(`❌ "${newNick}" 은(는) 인트라넷 멤버 명단에 이미 있어요.\n로그인이 충돌하므로 다른 닉네임을 써 주세요.`);
-    return;
-  }
-
-  const attOps = [];      // {base:'attendance'|'attendanceManual', gid, wk, oldK, newK, val}
-  function scanAtt(root, base){
-    if(!root) return;
-    for(const [gid, weeks] of Object.entries(root)){
-      for(const [wk, mem] of Object.entries(weeks||{})){
-        if(!mem) continue;
-        for(const ok of oldKeys){
-          if(mem[ok]!==undefined){
-            attOps.push({base, gid, wk, oldK:ok, newK:newKeyFor(ok), val:mem[ok]});
-          }
-        }
-      }
-    }
-  }
-  scanAtt(attendance, 'attendance');
-  scanAtt(attManual, 'attendanceManual');
-
-  // 투표 하위(닉네임 키) — links 제외(키 기반이라 안 끊김)
-  const VOTE_SUBS = ['responses','responseTimes','images','memos','leaveUsed'];
-  const voteOps = []; // {vid, sub, oldK, newK, val}
-  if(votes){
-    for(const [vid, v] of Object.entries(votes)){
-      if(!v) continue;
-      for(const sub of VOTE_SUBS){
-        const node = v[sub];
-        if(!node) continue;
-        for(const ok of oldKeys){
-          if(node[ok]!==undefined){
-            voteOps.push({vid, sub, oldK:ok, newK:newKeyFor(ok), val:node[ok]});
-          }
-        }
-      }
-    }
-  }
-
-  // game31 history (전체이름 끝의 oldNick → newNick)
-  const histOps = []; // {hk, newName}
-  if(history){
-    for(const [hk, h] of Object.entries(history)){
-      if(!h || !h.name) continue;
-      if(h.name.endsWith(oldNick) && realNameOf(h.name)===oldNick){
-        histOps.push({hk, newName: h.name.slice(0, h.name.length-oldNick.length)+newNick});
-      }
-    }
-  }
-
-  // crew31 자체 멤버 명단(/crew31/members) — name 필드가 닉네임(로그인·현황·채팅에서 사용)
-  const crewMemOps = []; // {key}
-  if(crewMembers){
-    for(const [k,m] of Object.entries(crewMembers)){
-      if(m && m.name===oldNick) crewMemOps.push({key:k});
-    }
-  }
-
-  // groupMembers/{gid} — 독립멤버 닉네임 배열
-  const groupMemOps = []; // {gid, newArr}
-  if(groupMembersData){
-    for(const [gid, arr] of Object.entries(groupMembersData)){
-      if(Array.isArray(arr) && arr.includes(oldNick)){
-        groupMemOps.push({gid, newArr: arr.map(n=> n===oldNick ? newNick : n)});
-      }
-    }
-  }
-
-  // 충돌 점검(새 키 자리에 이미 다른 값이 있으면 덮어쓰지 않고 건너뜀)
-  let conflicts = 0;
-  attOps.forEach(o=>{
-    const base = (o.base==='attendance'?attendance:attManual);
-    const exist = base?.[o.gid]?.[o.wk]?.[o.newK];
-    if(exist!==undefined && o.newK!==o.oldK){ o.skip=true; conflicts++; }
-  });
-  voteOps.forEach(o=>{
-    const exist = votes?.[o.vid]?.[o.sub]?.[o.newK];
-    if(exist!==undefined && o.newK!==o.oldK){ o.skip=true; conflicts++; }
-  });
-
-  // ── 3) 미리보기 ──
-  let out = `[닉네임 수정 미리보기]\n"${oldNick}" → "${newNick}"\n\n`;
-  out += `● 오락실 멤버 이름 변경: ${memberHits.length}건\n`;
-  memberHits.forEach(h=> out += `   ${h.oldName} → ${h.newName}\n`);
-  out += `\n● 옮길 과거 기록\n`;
-  out += `   · 인트라넷 멤버명단(로그인용): ${crewMemOps.length}건\n`;
-  out += `   · 독립멤버 목록: ${groupMemOps.length}건\n`;
-  out += `   · 출석(attendance): ${attOps.filter(o=>!o.skip&&o.base==='attendance').length}건\n`;
-  out += `   · 출석 수동기록: ${attOps.filter(o=>!o.skip&&o.base==='attendanceManual').length}건\n`;
-  out += `   · 투표 기록(응답/이미지/메모/연차/시간): ${voteOps.filter(o=>!o.skip).length}건\n`;
-  out += `   · 오락실 히스토리: ${histOps.length}건\n`;
-  if(conflicts>0) out += `   ⚠️ 새 닉네임 자리에 이미 기록이 있어 건너뛰는 항목: ${conflicts}건\n`;
-  out += `\n● 자동 유지(건드리지 않음)\n   · 경품·연차·주식: 내부 키 기반이라 그대로 보존됩니다.\n`;
-  out += `\n진행하면 되돌리기용 백업 파일(JSON)이 먼저 다운로드됩니다.\n계속할까요?`;
-
-  if(!confirm(out)) return;
-
-  // ── 4) 백업 다운로드(되돌리기용) ──
-  try{
-    const backup = {
-      type:'crew31-nickname-rename-backup',
-      ts:new Date().toISOString(),
-      oldNick, newNick,
-      members: memberHits,
-      crewMemberKeys: crewMemOps.map(o=>o.key),
-      groupMemberOps: groupMemOps,
-      attendanceOps: attOps.filter(o=>!o.skip),
-      voteOps: voteOps.filter(o=>!o.skip),
-      historyOps: histOps
-    };
-    const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `nickname-rename_${oldNick}_to_${newNick}_${Date.now()}.json`;
-    document.body.appendChild(a); a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  }catch(e){ /* 백업 실패해도 진행 여부는 아래에서 한번 더 확인 */
-    if(!confirm('백업 파일 다운로드에 실패했어요. 그래도 진행할까요?')) return;
-  }
-
-  showToast('⏳ 이동 중...');
-
-  // ── 5) 실행: 새 위치에 먼저 쓰고(set) → 옛 위치 삭제(delete) 순서로 안전하게 ──
-  try{
-    // (a) game31 멤버 이름
-    await Promise.all(memberHits.map(h=> gameSet(`members/${h.key}/name`, h.newName)));
-
-    // (a-2) crew31 자체 멤버명단(로그인·현황·채팅용) name 필드
-    await Promise.all(crewMemOps.map(o=> dbSet(`members/${o.key}/name`, newNick)));
-
-    // (a-3) groupMembers 독립멤버 배열
-    await Promise.all(groupMemOps.map(o=> dbSet(`groupMembers/${o.gid}`, o.newArr)));
-
-    // (b) 출석 / 수동기록 — set 먼저
-    const attMoves = attOps.filter(o=>!o.skip && o.newK!==o.oldK);
-    await Promise.all(attMoves.map(o=> dbSet(`${o.base}/${o.gid}/${o.wk}/${o.newK}`, o.val)));
-    await Promise.all(attMoves.map(o=> dbDelete(`${o.base}/${o.gid}/${o.wk}/${o.oldK}`)));
-
-    // (c) 투표 하위 — set 먼저
-    const voteMoves = voteOps.filter(o=>!o.skip && o.newK!==o.oldK);
-    await Promise.all(voteMoves.map(o=> dbSet(`votes/${o.vid}/${o.sub}/${o.newK}`, o.val)));
-    await Promise.all(voteMoves.map(o=> dbDelete(`votes/${o.vid}/${o.sub}/${o.oldK}`)));
-
-    // (d) game31 history 이름 필드
-    await Promise.all(histOps.map(o=> gameSet(`history/${o.hk}/name`, o.newName)));
-
-    const total = memberHits.length + crewMemOps.length + groupMemOps.length + attMoves.length + voteMoves.length + histOps.length;
-    showToast(`✅ 닉네임 변경 완료 (${total}곳 반영)`);
-    alert(`✅ "${oldNick}" → "${newNick}" 변경 완료\n\n- 오락실 멤버: ${memberHits.length}건\n- 인트라넷 명단(로그인): ${crewMemOps.length}건\n- 독립멤버: ${groupMemOps.length}건\n- 출석: ${attMoves.filter(o=>o.base==='attendance').length}건\n- 수동기록: ${attMoves.filter(o=>o.base==='attendanceManual').length}건\n- 투표 기록: ${voteMoves.length}건\n- 히스토리: ${histOps.length}건${conflicts>0?`\n- 건너뜀(충돌): ${conflicts}건`:''}\n\n경품·연차·주식은 내부 키 기반이라 그대로 유지됩니다.`);
-  }catch(e){
-    alert('⚠️ 진행 중 오류가 발생했어요. 다운로드한 백업 파일로 복구할 수 있습니다.\n\n' + (e?.message||e));
-    return;
-  }
-
-  // 화면 갱신
-  if(_currentTab==='members') loadMembersPage();
-  else if(typeof loadSettings==='function' && _currentTab==='settings'){ /* 설정탭 유지 */ }
-}
-
 // 헤더 새로고침 버튼 길게 누르면(0.6초) 강제 업데이트 (사원/관리자 공통)
 (function(){
   function bindLongPress(){
@@ -1314,19 +1046,15 @@ async function checkAutoVote(){
   if(!schedule||!schedule.enabled)return;
 
   const now = new Date();
-  // 한국시간(KST) 기준 — Cloudflare Worker와 동일 규칙으로 맞춰 누락/중복 방지
-  const _k = new Date(now.getTime() + 9*60*60*1000);
-  const _pad = n=>String(n).padStart(2,'0');
-  const hhmm = `${_pad(_k.getUTCHours())}:${_pad(_k.getUTCMinutes())}`;
-  const todayStr2 = `${_k.getUTCFullYear()}-${_pad(_k.getUTCMonth()+1)}-${_pad(_k.getUTCDate())}`;
-  const _tmr = new Date(_k.getTime() + 24*60*60*1000);
-  const tomorrowStr2 = `${_tmr.getUTCFullYear()}-${_pad(_tmr.getUTCMonth()+1)}-${_pad(_tmr.getUTCDate())}`;
-  const dateLabel = `${_k.getUTCMonth()+1}월 ${_k.getUTCDate()}일`;
+  const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const todayStr2 = now.toISOString().slice(0,10);
+  const tomorrow = new Date(now.getTime() + 24*60*60*1000);
+  const tomorrowStr2 = tomorrow.toISOString().slice(0,10);
+  const dateLabel = `${now.getMonth()+1}월 ${now.getDate()}일`;
 
-  // 같은 제목 투표 존재 확인 — 실제 시각이 맞을 때만 votes를 읽어 다운로드 부하 최소화
-  let existingVotes = null;
-  async function voteExists(title, group){
-    if(existingVotes===null) existingVotes = await dbGet('votes') || {};
+  // 이미 같은 제목의 투표가 오늘 존재하는지 확인 (여러 기기 중복 생성 방지)
+  const existingVotes = await dbGet('votes') || {};
+  function voteExists(title, group){
     return Object.values(existingVotes).some(sv=>sv && !sv.deleted && sv.group===group && sv.title===title);
   }
   // 서버 가드: autoVoteGuard/{gid}_{date}_{type} 를 원자적으로 선점
@@ -1348,7 +1076,7 @@ async function checkAutoVote(){
       const guardKey = `start_${gid}_${todayStr2}`;
       if(localStorage.getItem('autoVoteDone_'+guardKey)) continue;
       localStorage.setItem('autoVoteDone_'+guardKey,'1');   // 같은 기기 즉시 차단
-      if(await voteExists(title, gid)) continue;            // 이미 생성됨
+      if(voteExists(title, gid)) continue;                  // 이미 생성됨
       if(!(await claimGuard(guardKey))) continue;           // 서버 선점 실패 → 다른 기기가 생성
       const gData = groups[gid]||{};
       const opts = ['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','오늘 당직이에요 (당직)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
@@ -1365,7 +1093,7 @@ async function checkAutoVote(){
       const guardKey = `end_${gid}_${todayStr2}`;
       if(localStorage.getItem('autoVoteDone_'+guardKey)) continue;
       localStorage.setItem('autoVoteDone_'+guardKey,'1');
-      if(await voteExists(title, gid)) continue;
+      if(voteExists(title, gid)) continue;
       if(!(await claimGuard(guardKey))) continue;
       const gData = groups[gid]||{};
       const opts = ['퇴근할게요 (완료)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
@@ -1379,12 +1107,10 @@ async function checkAutoVote(){
 }
 
 function startAutoVoteScheduler(){
-  // 1순위는 Cloudflare Worker(24시간 동작). 이건 "관리자가 앱을 열어둔 동안" 함께 도는 보조 생성기.
-  // autoVoteGuard + voteExists 로 Worker와 중복 생성이 막히므로 둘 다 켜져 있어도 안전하다.
-  if(CU?.role!=='admin') return;
-  try{ checkAutoVote(); }catch(e){}
-  clearInterval(window._autoVotePoll);
-  window._autoVotePoll = setInterval(()=>{ try{ checkAutoVote(); }catch(e){} }, 60000); // 매분 점검(시각 일치 시에만 votes 읽음)
+  // 자동 투표 생성은 서버(Cloudflare Worker)가 담당합니다.
+  // 폰에서도 만들면 중복되므로 폰 기반 생성은 비활성화.
+  // (설정 화면에서 시간/유형/on-off 수정은 그대로 가능 — 서버가 그 설정을 읽어 실행함)
+  return;
 }
 
 async function logout(){
@@ -1398,7 +1124,6 @@ async function logout(){
   document.getElementById('loginPage').style.display='flex';
   document.getElementById('app').style.display='none';
   clearInterval(window._chatPoll);
-  clearInterval(window._autoVotePoll);
 }
 
 async function enterApp(){
@@ -2494,8 +2219,7 @@ html+=`<div id="groupList">`;
     html+=`<div style="flex:1;min-width:0">`;
     html+=`<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(realName)}</div>`;
     if(!isMe)html+=`<div onclick="openDMWithMember('${escH(realName)}','${escH(realName)}')" style="font-size:11px;color:var(--accent);font-weight:700;cursor:pointer;margin-top:1px">💬 DM</div>`;
-    html+=`</div>`;
-    html+=`</div>`;
+    html+=`</div></div>`;
   });
   html+=`</div></div></div>`;
 });
@@ -3768,9 +3492,8 @@ async function renderVoteCard(vid,v){
         html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
         if(uploadCount>0){
           html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
-          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">추가</button>`;
-          html+=`<button onclick="deleteSelectedImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">선택삭제</button>`;
-          html+=`<button onclick="deleteMyImages('${vid}')" title="전체 삭제" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️전체</button>`;
+          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">수정</button>`;
+          html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
           html+=`</div>`;
         } else {
           html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
@@ -3781,9 +3504,7 @@ async function renderVoteCard(vid,v){
         html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
         window._imgGallery_v = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url); sorted.forEach((img,imgIdx)=>{
           const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
-          html+=`<div style="position:relative;aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})">`;
-          if(isMe && !isClosed) html+=`<input type="checkbox" class="imgsel_${vid}" data-id="${escH(img.publicId||img.url)}" onclick="event.stopPropagation()" style="position:absolute;top:4px;left:4px;width:20px;height:20px;z-index:2;accent-color:#FF5C5C;cursor:pointer">`;
-          html+=`<img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+          html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
         });
         html+=`</div>`;
       }
@@ -3988,25 +3709,19 @@ async function renderVoteCard(vid,v){
       html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
       html+=`<input id="linkUrl_${vid}_1" placeholder="링크 1" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`<button onclick="pasteToLink('linkUrl_${vid}_1')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋</button>`;
-      html+=`</div>`;
-      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-      html+=`<input id="linkNote_${vid}_1" placeholder="요청사항 1 (선택)" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}_1" placeholder="요청" style="width:64px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`</div>`;
       html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
       html+=`<input id="linkUrl_${vid}_2" placeholder="링크 2" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`<button onclick="pasteToLink('linkUrl_${vid}_2')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋</button>`;
-      html+=`</div>`;
-      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-      html+=`<input id="linkNote_${vid}_2" placeholder="요청사항 2 (선택)" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}_2" placeholder="요청" style="width:64px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`</div>`;
     } else {
       // 일반 → 링크 1칸 (+ 붙여넣기 버튼)
       html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
       html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`<button onclick="pasteToLink('linkUrl_${vid}')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋 붙여넣기</button>`;
-      html+=`</div>`;
-      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-      html+=`<input id="linkNote_${vid}" placeholder="요청사항 (선택)" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}" placeholder="요청사항" style="width:70px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`</div>`;
     }
     html+=`<button onclick="submitVote('${vid}')" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">✅ 투표 제출</button>`;
@@ -4200,44 +3915,6 @@ async function deleteMyImages(vid){
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
-// 체크박스로 고른 사진만 선택 삭제
-async function deleteSelectedImages(vid){
-  const checked = Array.from(document.querySelectorAll('.imgsel_'+vid+':checked'));
-  if(checked.length===0){ showToast('삭제할 사진을 먼저 선택하세요'); return; }
-  const selectedIds = new Set(checked.map(c=>c.dataset.id));
-  if(!confirm(`선택한 ${checked.length}장을 삭제할까요?`)) return;
-
-  const myKey = (CU?.name||'').replace(/[\.\#\$\/\[\]\s]/g,'_');
-  // 이미지가 저장된 실제 키 찾기(정제형 우선, 없으면 원본 이름)
-  let usedKey = myKey;
-  let arr = await dbGet(`votes/${vid}/images/${myKey}`);
-  if(!arr || arr.length===0){
-    const raw = await dbGet(`votes/${vid}/images/${CU?.name||''}`);
-    if(raw && raw.length>0){ usedKey = CU?.name||''; arr = raw; }
-  }
-  arr = arr || [];
-  if(arr.length===0){ showToast('삭제할 사진이 없어요'); return; }
-
-  const kept = arr.filter(img=> !selectedIds.has(img.publicId||img.url));
-
-  if(kept.length===0){
-    // 남는 사진이 없으면 전체 삭제와 동일하게 출석 기록도 정리
-    await dbDelete(`votes/${vid}/images/${usedKey}`);
-    const v = await dbGet(`votes/${vid}`);
-    if(v && v.group && v.date){
-      const attDate = getTitleDate(v);
-      const mondayStr = getWeekKey(attDate);
-      await dbDelete(`attendance/${v.group}/${mondayStr}/${CU?.name||myKey}/${attDate}`);
-    }
-  } else {
-    await dbSet(`votes/${vid}/images/${usedKey}`, kept);
-  }
-
-  showToast(`🗑️ ${arr.length-kept.length}장 삭제됨`);
-  if(_currentTab==='home')loadHome();
-  else if(_currentTab==='dept')loadDeptPage(_currentDept);
-}
-
 async function toggleNickBtn(vid, collapseId, nick){
   const el = document.getElementById(collapseId);
   if(!el) return;
@@ -4269,9 +3946,8 @@ async function toggleNickBtn(vid, collapseId, nick){
   } else if(isMe && !isClosed && realImgs.length>0){
     html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
     html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
-    html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">추가</button>`;
-    html+=`<button onclick="deleteSelectedImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">선택삭제</button>`;
-    html+=`<button onclick="deleteMyImages('${vid}')" title="전체 삭제" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️전체</button>`;
+    html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">수정</button>`;
+    html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
     html+=`</div>`;
   }
   if(realImgs.length>0){
@@ -4280,9 +3956,7 @@ async function toggleNickBtn(vid, collapseId, nick){
     window._imgGallery_v = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url);
     sorted.forEach((img,imgIdx)=>{
       const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
-      html+=`<div style="position:relative;aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})">`;
-      if(isMe && !isClosed) html+=`<input type="checkbox" class="imgsel_${vid}" data-id="${escH(img.publicId||img.url)}" onclick="event.stopPropagation()" style="position:absolute;top:4px;left:4px;width:20px;height:20px;z-index:2;accent-color:#FF5C5C;cursor:pointer">`;
-      html+=`<img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+      html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
     });
     html+=`</div>`;
   }
@@ -4320,39 +3994,16 @@ async function adminEditLink(vid, linkKey){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   const cur = await dbGet(`votes/${vid}/links/${linkKey}`);
   if(!cur){ showToast('링크를 찾을 수 없습니다'); return; }
-  // 한 화면에서 @아이디 + 링크 둘 다 수정 (원하는 것만 고치면 됨)
-  const ov=document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(40,20,40,0.55);display:flex;align-items:center;justify-content:center;padding:22px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)';
-  const card=document.createElement('div');
-  card.style.cssText='background:#fff;border-radius:22px;padding:22px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.35)';
-  card.innerHTML=
-    '<div style="font-size:16px;font-weight:900;color:#E84C8A;margin-bottom:16px">✏️ '+escH(cur.nick||'')+'님 수정</div>'+
-    '<label style="font-size:12px;font-weight:700;color:#999;display:block;margin-bottom:5px">@아이디 (@ 빼고)</label>'+
-    '<input id="_elId" style="width:100%;padding:11px 12px;border:1.5px solid #f0d9e6;border-radius:10px;font-size:14px;margin-bottom:13px;outline:none;box-sizing:border-box" autocapitalize="off" autocorrect="off" spellcheck="false">'+
-    '<label style="font-size:12px;font-weight:700;color:#999;display:block;margin-bottom:5px">링크 (URL)</label>'+
-    '<input id="_elUrl" style="width:100%;padding:11px 12px;border:1.5px solid #f0d9e6;border-radius:10px;font-size:14px;margin-bottom:18px;outline:none;box-sizing:border-box" autocapitalize="off" autocorrect="off" spellcheck="false">'+
-    '<div style="display:flex;gap:8px"><button id="_elCancel" style="flex:1;padding:12px;border:none;border-radius:12px;background:#f0eef2;color:#777;font-size:15px;font-weight:800;cursor:pointer">취소</button>'+
-    '<button id="_elOk" style="flex:1;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF85C1,#f87286);color:#fff;font-size:15px;font-weight:800;cursor:pointer">확인</button></div>';
-  ov.appendChild(card);
-  document.body.appendChild(ov);
-  card.querySelector('#_elId').value = cur.id||'';
-  card.querySelector('#_elUrl').value = cur.url||'';
-  const close=()=>ov.remove();
-  ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
-  card.querySelector('#_elCancel').addEventListener('click', close);
-  card.querySelector('#_elOk').addEventListener('click', async ()=>{
-    const newId = (card.querySelector('#_elId').value||'').trim().replace(/^@+/,'');
-    const rawUrl = (card.querySelector('#_elUrl').value||'').trim();
-    const clean = (typeof cleanUrl==='function') ? cleanUrl(rawUrl) : rawUrl;
-    close();
-    if(clean !== (cur.url||'')) await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur.url||'');
-    await dbSet(`votes/${vid}/links/${linkKey}/editedBy`, CU.name);
-    await dbSet(`votes/${vid}/links/${linkKey}/editedAt`, Date.now());
-    await dbSet(`votes/${vid}/links/${linkKey}/id`, newId);
-    await dbSet(`votes/${vid}/links/${linkKey}/url`, clean);
-    showToast('✅ 수정됨');
-    if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
-  });
+  const newUrl = prompt(`${cur.nick||''}님 링크 수정\n현재: ${cur.url||'(없음)'}`, cur.url||'');
+  if(newUrl===null) return; // 취소
+  const clean = (typeof cleanUrl==='function') ? cleanUrl(newUrl.trim()) : newUrl.trim();
+  // 이전 링크는 기록으로 남기고, 활성 url만 교체
+  await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur.url||'');
+  await dbSet(`votes/${vid}/links/${linkKey}/editedBy`, CU.name);
+  await dbSet(`votes/${vid}/links/${linkKey}/editedAt`, Date.now());
+  await dbSet(`votes/${vid}/links/${linkKey}/url`, clean);
+  showToast('✅ 링크 수정됨');
+  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
 async function copyAllLinks(vid){
@@ -4537,7 +4188,7 @@ async function uploadImages(vid, input){
     await recordAttendance(vid, (myIdx!==undefined?myIdx:0), myKey);
   }
 
-  votePopup(v, `사진 ${uploaded.length}장`);
+  showToast(`✅ ${uploaded.length}장 업로드 완료!`);
   input.value = '';
 
   // 화면 새로고침
@@ -4863,7 +4514,6 @@ async function pickVoteOption(vid, optIdx){
     // 링크 불필요 → 바로 저장
     await castVote(vid, optIdx);
     if(window._pendingVote) delete window._pendingVote[vid];
-    votePopup(v);
     return;
   }
   // 임시 선택만 (화면 표시). [투표 제출] 눌러야 실제 저장
@@ -4930,41 +4580,9 @@ async function submitVote(vid){
   if(!isBonusOnly && preData){
     await submitVoteLinkNew(vid, true, preData);
   }
-  votePopup(v);
+  const _gn = groups[v?.group]?.name || '';
+  showToast(_gn ? `✅ ${_gn} 그룹 투표 제출 완료!` : '✅ 투표 제출 완료!');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
-}
-
-// 큰 완료 팝업 (눌러야 닫힘)
-function bigDonePopup(msg, emoji){
-  emoji = emoji || '✅';
-  if(!document.getElementById('bigpopStyle')){
-    const st=document.createElement('style');st.id='bigpopStyle';
-    st.textContent='@keyframes bigpopIn{0%{transform:scale(.6);opacity:0}100%{transform:scale(1);opacity:1}}';
-    document.head.appendChild(st);
-  }
-  const ov=document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(40,20,40,0.55);display:flex;align-items:center;justify-content:center;padding:30px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)';
-  const card=document.createElement('div');
-  card.style.cssText='background:#fff;border-radius:26px;padding:34px 26px 26px;max-width:320px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35);animation:bigpopIn .28s cubic-bezier(.175,.885,.32,1.275)';
-  card.innerHTML='<div style="font-size:62px;line-height:1;margin-bottom:14px">'+emoji+'</div>'+
-    '<div style="font-size:21px;font-weight:900;color:#E84C8A;line-height:1.35;white-space:pre-line;margin-bottom:22px">'+msg+'</div>'+
-    '<button style="width:100%;padding:15px;border:none;border-radius:16px;background:linear-gradient(135deg,#FF85C1,#f87286);color:#fff;font-size:17px;font-weight:800;cursor:pointer">확인</button>';
-  ov.appendChild(card);
-  const close=()=>ov.remove();
-  ov.addEventListener('click',close);
-  card.querySelector('button').addEventListener('click',function(e){e.stopPropagation();close();});
-  document.body.appendChild(ov);
-}
-
-// 투표 종류(시작/완료)·그룹에 맞춰 완료 팝업
-function votePopup(v, extra){
-  const gn = (typeof groups!=='undefined' && groups[v?.group]?.name) || '';
-  const isEnd = (v?.title||'').includes('완료');
-  const kind = isEnd ? '퇴근' : '출근';
-  const emoji = isEnd ? '🌙' : '🌅';
-  let msg = (gn ? gn+' 그룹\n' : '') + kind + ' 투표 제출 완료!';
-  if(extra) msg += '\n' + extra;
-  bigDonePopup(msg, emoji);
 }
 
 async function castVote(vid,optIdx){
@@ -6161,7 +5779,6 @@ async function loadSettings(){
   memberHtml += `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">오락실 연동 그룹 전용</div>`;
   memberHtml += `<button class="btn-pri" onclick="syncGameMembers()" style="width:100%;padding:12px">🔄 오락실 연동 멤버 동기화</button>`;
   memberHtml += `<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
-  memberHtml += `<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6">닉네임을 바꿔도 출석·투표 기록을 함께 옮겨 과거 이력이 유지돼요. 경품·연차·주식은 자동 보존됩니다. (진행 전 백업 파일이 받아집니다)</div>`;
 
 
 
@@ -6171,7 +5788,6 @@ async function loadSettings(){
   autoHtml += `<span style="font-size:14px;font-weight:600">자동 생성 활성화</span>`;
   autoHtml += `<button onclick="toggleAutoVote()" style="padding:6px 16px;border-radius:20px;border:none;cursor:pointer;font-weight:700;font-size:13px;background:${sch.enabled?'#FF85C1':'var(--surface2)'};color:${sch.enabled?'white':'var(--text3)'};">${sch.enabled?'ON':'OFF'}</button>`;
   autoHtml += `</div>`;
-  autoHtml += `<button onclick="diagAutoVote()" style="width:100%;margin:6px 0 4px;padding:10px;background:#C49BD8;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🤖 자동투표 상태 점검 (안 올라올 때)</button>`;
   for(const [gid,g] of Object.entries(groups)){
     const gs=sch.groups?.[gid]||{};
     const gEnabled = gs.enabled===true;
