@@ -3514,17 +3514,35 @@ async function renderVoteCard(vid,v){
 
   } else if(!v.imageUpload) {
     // 일반 투표만
+    // 연차 정원 계산 (이 그룹 이 투표의 연차 인원 vs 설정 정원)
+    let _leaveQuota = Infinity, _leaveUsed = 0, _quotaReady = false;
+    try{
+      const _gName = groups[v.group]?.name || '';
+      if(_gName){
+        const _qd = await dbGet(`leaveQuota/${_gName}`);
+        _leaveQuota = (_qd!==null && _qd!==undefined) ? Number(_qd) : (typeof getLeaveQuota==='function'? getLeaveQuota(_gName) : 3);
+        _leaveUsed = Object.entries(responses).filter(([k,ri])=>{
+          const ot=(opts[ri]||'').toLowerCase();
+          return ot.includes('프패')||ot.includes('연차')||ot.includes('프리패스');
+        }).length;
+        _quotaReady = true;
+      }
+    }catch(e){}
     opts.forEach((opt,i)=>{
       const cnt=Object.values(responses).filter(r=>r===i).length;
       const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
       const isMe=myVote===i;
-      const canVote=!isClosed;
+      // 이 선택지가 연차인지 + 정원 찼는지 (본인이 이미 연차면 계속 보이게 허용)
+      const _optLow=(opt||'').toLowerCase();
+      const _isLeaveOpt=_optLow.includes('프패')||_optLow.includes('연차')||_optLow.includes('프리패스');
+      const _leaveFull = _quotaReady && _isLeaveOpt && !isMe && _leaveUsed>=_leaveQuota;
+      const canVote=!isClosed && !_leaveFull;
       const onclickAttr=canVote?`onclick="pickVoteOption('${vid}',${i})"`:'';
       const isPending = (window._pendingVote && window._pendingVote[vid]===i);
-      html+=`<div class="vopt${isMe||isPending?' selected':''}${isClosed?' closed':''}" ${onclickAttr}>`;
+      html+=`<div class="vopt${isMe||isPending?' selected':''}${isClosed?' closed':''}" ${onclickAttr} style="${_leaveFull?'opacity:0.5;background:var(--surface2);cursor:not-allowed;':''}">`;
       html+=`<div class="vbar" style="width:${pct}%"></div>`;
       html+=`<div class="vopt-chk">${isMe||isPending?'✓':''}</div>`;
-      html+=`<div class="vopt-label">${escH(opt)}</div>`;
+      html+=`<div class="vopt-label">${escH(opt)}${_leaveFull?` <span style="color:#E8927C;font-size:11px;font-weight:800">· 연차 마감 (${_leaveUsed}/${_leaveQuota})</span>`:''}</div>`;
       html+=`<div class="vopt-cnt">${cnt}명 ${pct}%</div>`;
       html+=`</div>`;
       // 모든 사용자에게 선택지별 투표자 이름 표시
@@ -3688,6 +3706,7 @@ async function renderVoteCard(vid,v){
           html+=`<a href="${escH(l.url||'')}" target="_blank" style="font-size:12px;color:var(--accent);word-break:break-all;flex:1">${escH(l.url||'')}</a>`;
           if(isAdmin && l._key){
             html+=`<button onclick="adminEditLink('${vid}','${l._key}')" style="flex-shrink:0;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ 수정</button>`;
+            html+=`<button onclick="adminDeleteLink('${vid}','${l._key}')" style="flex-shrink:0;background:rgba(255,92,92,0.12);color:var(--red);border:none;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">🗑️ 삭제</button>`;
           }
           html+=`</div>`;
           if(l.note) html+=`<div style="font-size:11px;color:var(--text3)">ㄴ${escH(l.note)}</div>`;
@@ -3784,6 +3803,11 @@ async function renderVoteCard(vid,v){
           html+=`<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;${bg}">${escH(n)}${tag}</span>`;
         });
         html+=`</div></div>`;
+        // 🎴 카드 추첨 버튼 (관리자 전용)
+        const _drawCandJson = encodeURIComponent(JSON.stringify(allParticipants));
+        html+=`<div style="padding:0 14px 12px">`;
+        html+=`<button onclick="openDrawModal('${vid}','${escH(v.group||'')}',decodeURIComponent('${_drawCandJson}'))" style="width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF85C1,#A78BFA);color:white;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 10px rgba(167,139,250,0.3)">🎴 참여자 추첨하기 (${allParticipants.length}명)</button>`;
+        html+=`</div>`;
       }
     }catch(e){}
   }
@@ -4003,6 +4027,16 @@ async function adminEditLink(vid, linkKey){
   await dbSet(`votes/${vid}/links/${linkKey}/editedAt`, Date.now());
   await dbSet(`votes/${vid}/links/${linkKey}/url`, clean);
   showToast('✅ 링크 수정됨');
+  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+async function adminDeleteLink(vid, linkKey){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const cur = await dbGet(`votes/${vid}/links/${linkKey}`);
+  if(!cur){ showToast('링크를 찾을 수 없습니다'); return; }
+  if(!confirm(`${cur.nick||''}님 링크를 삭제할까요?\n${cur.url||''}`)) return;
+  await dbDelete(`votes/${vid}/links/${linkKey}`);
+  showToast('🗑️ 링크 삭제됨');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
@@ -4575,6 +4609,10 @@ async function submitVote(vid){
   if(pending!==undefined){
     await castVote(vid, optIdx);
     if(window._pendingVote) delete window._pendingVote[vid];
+    // castVote가 정원초과·연차소진 등으로 막혔으면 → 링크 저장도, 완료 팝업도 하지 않음
+    if(window._castVoteOK === false){
+      return;
+    }
   }
   // 2) 링크 저장 (미리 읽어둔 preData 사용 — DOM이 사라져도 안전)
   if(!isBonusOnly && preData){
@@ -4585,12 +4623,183 @@ async function submitVote(vid){
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
+// ═══════ 🎴 카드 뒤집기 추첨 ═══════
+function showBigAlert(emoji, title, desc){
+  let m=document.getElementById('bigAlertModal');
+  if(!m){ m=document.createElement('div'); m.id='bigAlertModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px'; document.body.appendChild(m); }
+  m.innerHTML=`<div style="background:var(--surface,#fff);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.25)">
+    <div style="font-size:48px;margin-bottom:12px">${emoji}</div>
+    <div style="font-size:18px;font-weight:900;margin-bottom:8px;color:var(--text)">${title}</div>
+    <div style="font-size:14px;color:var(--text3);line-height:1.5;margin-bottom:20px">${desc}</div>
+    <button onclick="document.getElementById('bigAlertModal').style.display='none'" style="width:100%;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF85C1,#A78BFA);color:white;font-size:15px;font-weight:800;cursor:pointer">확인</button>
+  </div>`;
+  m.style.display='flex';
+}
+
+let _drawCands = [];      // 현재 후보 목록
+let _drawGroup = '';      // 그룹명
+let _drawMinCount = 0;    // 최소 인원 (이 그룹 설정)
+
+async function openDrawModal(vid, groupName, candJson){
+  _drawGroup = groupName;
+  try{ _drawCands = JSON.parse(candJson)||[]; }catch(e){ _drawCands=[]; }
+  // 이 그룹의 최소 인원 설정 불러오기 (groups/{gid}/drawMin)
+  _drawMinCount = 0;
+  try{
+    const groups = await dbGet('groups')||{};
+    for(const gid in groups){
+      if((groups[gid].name||'')===groupName){ _drawMinCount = Number(groups[gid].drawMin)||0; break; }
+    }
+  }catch(e){}
+  let m = document.getElementById('drawModal');
+  if(!m){
+    m = document.createElement('div');
+    m.id = 'drawModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 12px';
+    document.body.appendChild(m);
+  }
+  renderDrawModal();
+  m.style.display='flex';
+}
+
+function renderDrawModal(){
+  const m = document.getElementById('drawModal'); if(!m) return;
+  const enough = _drawCands.length >= _drawMinCount;
+  let h = `<div style="background:var(--surface,#fff);border-radius:18px;max-width:440px;width:100%;padding:20px;margin:auto">`;
+  h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">`;
+  h += `<div style="font-size:17px;font-weight:900">🎴 ${escH(_drawGroup)} 추첨</div>`;
+  h += `<button onclick="closeDrawModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3)">✕</button></div>`;
+
+  // 후보 목록 (수정 가능)
+  h += `<div style="background:var(--surface2,#f5f5f7);border-radius:12px;padding:12px;margin-bottom:12px">`;
+  h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">`;
+  h += `<span style="font-size:12px;font-weight:800;color:var(--text3)">후보 ${_drawCands.length}명</span>`;
+  h += `<span style="font-size:11px;color:${enough?'#5DB88A':'#E8927C'};font-weight:700">최소 ${_drawMinCount}명 ${enough?'✓ 충족':'✗ 부족'}</span></div>`;
+  h += `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">`;
+  _drawCands.forEach((n,i)=>{
+    h += `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--surface,#fff);padding:3px 8px;border-radius:14px;font-size:11px;font-weight:700;border:1px solid var(--border,#ddd)">${escH(n)} <span onclick="removeDrawCand(${i})" style="cursor:pointer;color:#E8927C;font-weight:900">×</span></span>`;
+  });
+  h += `</div>`;
+  h += `<div style="display:flex;gap:6px"><input id="drawAddInput" type="text" placeholder="후보 추가" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--border,#ddd);font-size:12px"><button onclick="addDrawCand()" style="padding:7px 12px;border:none;border-radius:8px;background:var(--accent,#FF85C1);color:white;font-weight:700;font-size:12px;cursor:pointer">추가</button></div>`;
+  h += `</div>`;
+
+  // 뽑을 인원
+  h += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">`;
+  h += `<span style="font-size:13px;font-weight:700">뽑을 인원</span>`;
+  h += `<input id="drawPickCount" type="number" min="1" max="${_drawCands.length}" value="1" style="width:70px;padding:8px;border-radius:8px;border:1px solid var(--border,#ddd);font-size:14px;text-align:center;font-weight:700">명`;
+  h += `</div>`;
+
+  // 추첨 버튼
+  const canDraw = enough && _drawCands.length>0;
+  h += `<button onclick="runCardDraw()" ${canDraw?'':'disabled'} style="width:100%;padding:13px;border:none;border-radius:12px;background:${canDraw?'linear-gradient(135deg,#FF85C1,#A78BFA)':'#ccc'};color:white;font-size:15px;font-weight:900;cursor:${canDraw?'pointer':'not-allowed'}">🎲 추첨 시작!</button>`;
+  if(!enough){ h += `<div style="text-align:center;font-size:11px;color:#E8927C;margin-top:8px">최소 인원(${_drawMinCount}명)에 미달해서 추첨할 수 없어요</div>`; }
+
+  // 카드 영역 + 결과
+  h += `<div id="drawCardArea" style="margin-top:16px"></div>`;
+  h += `<div id="drawResult" style="margin-top:14px"></div>`;
+
+  // 최소 인원 설정 (관리자용 작은 링크)
+  h += `<div style="text-align:center;margin-top:14px"><span onclick="setDrawMin()" style="font-size:11px;color:var(--text3);text-decoration:underline;cursor:pointer">⚙️ 최소 인원 설정 (현재 ${_drawMinCount}명)</span></div>`;
+
+  h += `</div>`;
+  m.innerHTML = h;
+}
+
+function removeDrawCand(i){ _drawCands.splice(i,1); renderDrawModal(); }
+function addDrawCand(){
+  const inp=document.getElementById('drawAddInput'); if(!inp)return;
+  const v=inp.value.trim(); if(!v)return;
+  if(!_drawCands.includes(v)) _drawCands.push(v);
+  renderDrawModal();
+  setTimeout(()=>{const i2=document.getElementById('drawAddInput');if(i2)i2.focus();},50);
+}
+async function setDrawMin(){
+  const cur=_drawMinCount;
+  const v=prompt('이 그룹의 최소 인원을 입력하세요 (이 인원 이상 참여해야 추첨 가능)', cur);
+  if(v===null)return;
+  const n=Math.max(0,parseInt(v)||0);
+  try{
+    const groups=await dbGet('groups')||{};
+    let gid=null;
+    for(const k in groups){ if((groups[k].name||'')===_drawGroup){ gid=k; break; } }
+    if(gid){ await dbSet(`groups/${gid}/drawMin`, n); _drawMinCount=n; showToast(`✅ 최소 인원 ${n}명으로 설정`); renderDrawModal(); }
+    else showToast('그룹을 찾지 못했어요');
+  }catch(e){ showToast('설정 실패'); }
+}
+
+async function runCardDraw(){
+  const cntEl=document.getElementById('drawPickCount');
+  let pick=parseInt(cntEl?.value)||1;
+  pick=Math.max(1,Math.min(pick,_drawCands.length));
+  // 당첨자 랜덤 선정 (Fisher-Yates)
+  const pool=[..._drawCands];
+  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  const winners=pool.slice(0,pick);
+  const winSet=new Set(winners);
+
+  // 카드 깔기 (다 뒷면)
+  const area=document.getElementById('drawCardArea');
+  const resEl=document.getElementById('drawResult');
+  if(resEl) resEl.innerHTML='';
+  if(!area)return;
+  let cardsHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:7px">`;
+  _drawCands.forEach((n,i)=>{
+    cardsHtml+=`<div id="dcard_${i}" style="aspect-ratio:3/4;border-radius:8px;background:linear-gradient(135deg,#A78BFA,#FF85C1);display:flex;align-items:center;justify-content:center;font-size:20px;transition:transform 0.4s;transform-style:preserve-3d;position:relative">`;
+    cardsHtml+=`<span class="dcback" style="position:absolute">🂠</span>`;
+    cardsHtml+=`<span class="dcfront" style="position:absolute;display:none;font-size:10px;font-weight:800;color:#fff;text-align:center;padding:2px;line-height:1.1">${escH(n)}</span>`;
+    cardsHtml+=`</div>`;
+  });
+  cardsHtml+=`</div>`;
+  area.innerHTML=cardsHtml;
+
+  // 셔플 흔들기 애니메이션 후 당첨 카드 뒤집기
+  const allCards=_drawCands.map((n,i)=>({n,i}));
+  // 살짝 흔들기
+  allCards.forEach(({i})=>{ const c=document.getElementById('dcard_'+i); if(c){ c.style.transform='scale(0.92)'; } });
+  await new Promise(r=>setTimeout(r,350));
+  allCards.forEach(({i})=>{ const c=document.getElementById('dcard_'+i); if(c){ c.style.transform='scale(1)'; } });
+  await new Promise(r=>setTimeout(r,300));
+
+  // 당첨 카드만 순서대로 뒤집기
+  for(let i=0;i<_drawCands.length;i++){
+    if(winSet.has(_drawCands[i])){
+      const c=document.getElementById('dcard_'+i);
+      if(c){
+        c.style.transform='rotateY(180deg) scale(1.1)';
+        c.style.background='linear-gradient(135deg,#FFD86E,#FF9F43)';
+        c.style.boxShadow='0 4px 14px rgba(255,159,67,0.5)';
+        const back=c.querySelector('.dcback'); const front=c.querySelector('.dcfront');
+        if(back)back.style.display='none';
+        if(front){ front.style.display='block'; front.style.transform='rotateY(180deg)'; }
+        await new Promise(r=>setTimeout(r,400));
+        c.style.transform='rotateY(180deg) scale(1)';
+      }
+    } else {
+      const c=document.getElementById('dcard_'+i);
+      if(c){ c.style.opacity='0.35'; }
+    }
+  }
+
+  // 결과 표시
+  if(resEl){
+    let rh=`<div style="background:linear-gradient(135deg,#FFF4D6,#FFE0EC);border-radius:14px;padding:16px;text-align:center">`;
+    rh+=`<div style="font-size:13px;font-weight:700;color:#FF9F43;margin-bottom:8px">🎉 당첨!</div>`;
+    rh+=`<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">`;
+    winners.forEach(w=>{ rh+=`<span style="background:#fff;padding:6px 14px;border-radius:20px;font-size:15px;font-weight:900;color:#FF6B9D;box-shadow:0 2px 6px rgba(0,0,0,0.1)">✨ ${escH(w)}</span>`; });
+    rh+=`</div></div>`;
+    resEl.innerHTML=rh;
+  }
+}
+
+function closeDrawModal(){ const m=document.getElementById('drawModal'); if(m)m.style.display='none'; }
+
 async function castVote(vid,optIdx){
   // 이전 호출이 에러로 안 풀렸어도 3초 지나면 무시 (영구 잠김 방지)
   const nowTs = Date.now();
   if(window._castVoting && (nowTs - (window._castVotingAt||0)) < 3000) return;
   window._castVoting = true;
   window._castVotingAt = nowTs;
+  window._castVoteOK = false; // 성공 시에만 true (정원초과 등으로 막히면 false 유지)
   const myKey=CU?.name||CU?.key||'admin';
   const _voteStartUser=CU?.name||CU?.key||'admin'; // 시작 시점 사용자 고정
   const v=await dbGet(`votes/${vid}`);
@@ -4657,7 +4866,7 @@ async function castVote(vid,optIdx){
       }
       cnt.delete(myKey); // 본인은 제외하고 카운트
       if(cnt.size >= quota){
-        showToast(`⚠️ ${gName} 그룹은 하루 ${quota}명까지만 연차 가능해요 (이미 ${cnt.size}명)`);
+        showBigAlert('🏖️', '연차 마감', `${gName} 그룹은 하루 ${quota}명까지만 연차를 쓸 수 있어요.<br>이미 ${cnt.size}명이 연차를 신청했어요.<br><br>다른 선택지를 골라주세요!`);
         window._castVoting=false; return;
       }
     }catch(e){}
@@ -4771,6 +4980,7 @@ async function castVote(vid,optIdx){
     window._castVoting=false;
     return;
   }
+  window._castVoteOK = true; // 여기 도달 = 정원/연차/재선택 체크 다 통과 = 성공
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   dbSet(`votes/${vid}/responseTimes/${myKey}`,Date.now());
   await reconcileTupide(v.group, usedDate, myKey);
