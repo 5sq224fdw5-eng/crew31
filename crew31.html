@@ -4799,7 +4799,7 @@ async function castVote(vid,optIdx){
   if(window._castVoting && (nowTs - (window._castVotingAt||0)) < 3000) return;
   window._castVoting = true;
   window._castVotingAt = nowTs;
-  window._castVoteOK = false; // 성공 시에만 true (정원초과 등으로 막히면 false 유지)
+  window._castVoteOK = true; // 기본 통과. 정원초과·연차소진 등 막는 지점에서만 false로 바꿈
   const myKey=CU?.name||CU?.key||'admin';
   const _voteStartUser=CU?.name||CU?.key||'admin'; // 시작 시점 사용자 고정
   const v=await dbGet(`votes/${vid}`);
@@ -4825,7 +4825,7 @@ async function castVote(vid,optIdx){
     const newIsDuty = newOptText.includes('당직');
     if(!newIsNopid && !newIsDuty){
       showToast('⚠️ 한번 투표하면 재능기부(노피드)·당직으로만 변경할 수 있어요');
-      window._castVoting=false; return;
+      window._castVoteOK=false; window._castVoting=false; return;
     }
   }
 
@@ -4867,7 +4867,7 @@ async function castVote(vid,optIdx){
       cnt.delete(myKey); // 본인은 제외하고 카운트
       if(cnt.size >= quota){
         showBigAlert('🏖️', '연차 마감', `${gName} 그룹은 하루 ${quota}명까지만 연차를 쓸 수 있어요.<br>이미 ${cnt.size}명이 연차를 신청했어요.<br><br>다른 선택지를 골라주세요!`);
-        window._castVoting=false; return;
+        window._castVoteOK=false; window._castVoting=false; return;
       }
     }catch(e){}
     // ② 본인 보유 연차 확인
@@ -4875,7 +4875,7 @@ async function castVote(vid,optIdx){
       const gmKey=await _findGameKey();
       if(gmKey){
         const info=await _leaveInfo(gmKey);
-        if(info.total<=0){showToast('⚠️ 보유 연차가 없어요. 다른 선택지를 골라주세요!');window._castVoting=false;return;}
+        if(info.total<=0){showToast('⚠️ 보유 연차가 없어요. 다른 선택지를 골라주세요!');window._castVoteOK=false; window._castVoting=false;return;}
       }
     }catch(e){}
   }
@@ -4888,7 +4888,7 @@ async function castVote(vid,optIdx){
         const hasUndeducted=prizes.some(p=>p&&!p.deducted&&(p.name||'').includes('투피드'));
         const hasThisDay=prizes.some(p=>p&&p.deducted&&(p.name||'').includes('투피드')&&p.usedDate===usedDate);
         // 미사용 경품도 없고, 그날 이미 차감된 것도 없으면 막기
-        if(!hasUndeducted && !hasThisDay){showToast('⚠️ 보유 투피드 경품이 없어요. 다른 선택지를 골라주세요!');window._castVoting=false;return;}
+        if(!hasUndeducted && !hasThisDay){showToast('⚠️ 보유 투피드 경품이 없어요. 다른 선택지를 골라주세요!');window._castVoteOK=false; window._castVoting=false;return;}
       }
     }catch(e){}
   }
@@ -4980,7 +4980,6 @@ async function castVote(vid,optIdx){
     window._castVoting=false;
     return;
   }
-  window._castVoteOK = true; // 여기 도달 = 정원/연차/재선택 체크 다 통과 = 성공
   await dbSet(`votes/${vid}/responses/${myKey}`,optIdx);
   dbSet(`votes/${vid}/responseTimes/${myKey}`,Date.now());
   await reconcileTupide(v.group, usedDate, myKey);
