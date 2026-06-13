@@ -5999,6 +5999,20 @@ async function loadSettings(){
   memberHtml += `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">오락실 연동 그룹 전용</div>`;
   memberHtml += `<button class="btn-pri" onclick="syncGameMembers()" style="width:100%;padding:12px">🔄 오락실 연동 멤버 동기화</button>`;
   memberHtml += `<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
+  // 멤버 목록 + 닉네임 수정 (과거 데이터까지 옮기는 변경)
+  const _memEntries = Object.entries(gm2).filter(([,m])=>m&&m.name).sort((a,b)=>a[1].name.localeCompare(b[1].name,'ko'));
+  if(_memEntries.length>0){
+    memberHtml += `<input type="text" id="settingMemberSearch" placeholder="🔍 멤버 검색" oninput="filterSettingMembers()" style="width:100%;box-sizing:border-box;padding:9px 12px;margin-top:14px;margin-bottom:8px;border-radius:10px;border:1px solid var(--border);font-size:13px">`;
+    memberHtml += `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">닉네임 변경 시 과거 투표·출석·링크도 함께 이동돼요 (연차·투피드 유지)</div>`;
+    memberHtml += `<div id="settingMemberList" style="display:flex;flex-direction:column;gap:5px">`;
+    _memEntries.forEach(([k,m])=>{
+      memberHtml += `<div class="setting-member-row" data-name="${escH(m.name)}" style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:10px;padding:8px 12px">`;
+      memberHtml += `<span style="font-size:13px;font-weight:600">${escH(m.name)}</span>`;
+      memberHtml += `<button onclick="editMemberName('${k}','${escH(m.name)}')" style="background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">닉네임 변경</button>`;
+      memberHtml += `</div>`;
+    });
+    memberHtml += `</div>`;
+  }
 
 
 
@@ -6301,6 +6315,13 @@ async function addMember(){
   if(!name){showToast('이름을 입력하세요');return;}
   await dbPush('members',{name,createdAt:Date.now()});
   showToast('✅ 추가됨');loadSettings();
+}
+function filterSettingMembers(){
+  const q=((document.getElementById('settingMemberSearch')||{}).value||'').replace(/\s+/g,'').toLowerCase();
+  document.querySelectorAll('.setting-member-row').forEach(row=>{
+    const nm=(row.getAttribute('data-name')||'').replace(/\s+/g,'').toLowerCase();
+    row.style.display = (!q || nm.includes(q)) ? 'flex' : 'none';
+  });
 }
 async function deleteMember(key){
   if(!confirm('멤버를 삭제하시겠습니까?'))return;
