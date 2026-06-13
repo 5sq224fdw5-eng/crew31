@@ -4110,7 +4110,18 @@ async function copyAllLinks(vid){
     }
   });
   const dateStr = getTitleDate(v) || v.date || '';
-  const text = (dateStr?`${dateStr}일\n\n`:'') + lines.join('\n');
+  let dateHeader = '';
+  if(dateStr){
+    const _wd=['일','월','화','수','목','금','토'];
+    const _m=dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(_m){
+      const _d=new Date(Number(_m[1]),Number(_m[2])-1,Number(_m[3]));
+      dateHeader = `${dateStr} ${_wd[_d.getDay()]}요일`;
+    } else {
+      dateHeader = dateStr;
+    }
+  }
+  const text = (dateHeader?`${dateHeader}\n\n`:'') + lines.join('\n');
   await navigator.clipboard.writeText(text);
   showToast('📋 전체 복사됨');
 }
@@ -6296,10 +6307,99 @@ async function deleteMember(key){
   await dbDel(`members/${key}`);showToast('🗑️ 삭제됨');loadSettings();
 }
 async function editMemberName(key,current){
-  const name=prompt('새 이름 입력:',current);
-  if(!name||name===current)return;
-  await dbSet(`members/${key}/name`,name.trim());
-  showToast('✅ 수정됨');loadSettings();
+  // current 예: "*좋아요알잘딱" 또는 "알잘딱". 그룹 접두사 분리.
+  const cleanCur = current.replace(/^\*/,'');
+  const hadStar = current.startsWith('*');
+  // groups에서 접두사(그룹명) 찾기
+  let prefix='', nickOnly=cleanCur;
+  try{
+    const groups = await dbGet('groups')||{};
+    const gnames = Object.values(groups).map(g=>g.name).filter(Boolean).sort((a,b)=>b.length-a.length);
+    for(const gn of gnames){ if(cleanCur.startsWith(gn)){ prefix=gn; nickOnly=cleanCur.slice(gn.length); break; } }
+  }catch(e){}
+
+  const newNick = prompt(`새 닉네임 입력:\n(현재: ${nickOnly}${prefix?` / 그룹: ${prefix}`:''})`, nickOnly);
+  if(!newNick || !newNick.trim()) return;
+  const nn = newNick.trim();
+
+  const oldNick = prompt(`과거 기록에 쓰던 "예전 닉네임"이 있으면 입력하세요.\n(없으면 그냥 비우고 확인 — 현재 닉네임 기준으로 변경)\n\n예: 오락실에서 먼저 닉네임을 바꿔서 과거 투표·출석이 옛 닉네임으로 남아있는 경우, 그 옛 닉네임을 넣으세요.`, '');
+
+  // 전체 이름(접두사 포함) 구성
+  const star = hadStar ? '*' : '';
+  const newFull = `${star}${prefix}${nn}`;
+  const oldFull = (oldNick && oldNick.trim()) ? `${star}${prefix}${oldNick.trim()}` : current;
+
+  if(newFull===oldFull){ showToast('변경 사항 없음'); return; }
+  if(!confirm(`"${oldFull}" → "${newFull}"\n\n과거 기록(투표·출석·링크)을 새 이름으로 옮길까요?\n연차·투피드 보유는 그대로 유지됩니다.`)) return;
+  showToast('🔄 데이터 이동 중... 잠시만요');
+  try{
+    await migrateMemberName(key, oldFull, newFull);
+    showToast('✅ 닉네임 변경 + 데이터 이동 완료!');
+    loadSettings();
+  }catch(e){
+    showToast('변경 실패: '+(e.message||''));
+  }
+}
+
+// 멤버 이름 변경 시, 이름으로 저장된 모든 데이터를 옛이름→새이름으로 이동
+// (멤버 키는 그대로 → 연차/투피드 등 키 기반 데이터는 자동 유지)
+async function migrateMemberName(key, oldName, newName){
+  // 1) members 이름 변경
+  await dbSet(`members/${key}/name`, newName);
+
+  // 2) 모든 투표(votes)에서 responses, responseTimes, links, images의 이름 키 이동
+  const votes = await dbGet('votes') || {};
+  for(const vid in votes){
+    const v = votes[vid]; if(!v) continue;
+    // responses (이름 → 선택지번호)
+    if(v.responses && v.responses[oldName]!==undefined){
+      await dbSet(`votes/${vid}/responses/${newName}`, v.responses[oldName]);
+      await dbDel(`votes/${vid}/responses/${oldName}`);
+    }
+    // responseTimes
+    if(v.responseTimes && v.responseTimes[oldName]!==undefined){
+      await dbSet(`votes/${vid}/responseTimes/${newName}`, v.responseTimes[oldName]);
+      await dbDel(`votes/${vid}/responseTimes/${oldName}`);
+    }
+    // images (이름 → 이미지배열)
+    if(v.images && v.images[oldName]!==undefined){
+      await dbSet(`votes/${vid}/images/${newName}`, v.images[oldName]);
+      await dbDel(`votes/${vid}/images/${oldName}`);
+    }
+    // links: 키가 이름 기반(또는 _1/_2)이고, 내부 nick 필드도 옛이름 → 둘 다 처리
+    if(v.links){
+      for(const lk in v.links){
+        const lkBase = lk.replace(/_[12]$/,'');
+        const suffix = (lk.match(/_[12]$/)||[''])[0];
+        const link = v.links[lk];
+        let changed=false;
+        // nick 필드가 옛이름이면 새이름으로
+        if(link && link.nick===oldName){ link.nick=newName; changed=true; }
+        // 링크 키 자체가 옛이름 기반이면 새 키로 이동
+        if(lkBase===oldName){
+          await dbSet(`votes/${vid}/links/${newName}${suffix}`, link);
+          await dbDel(`votes/${vid}/links/${lk}`);
+        } else if(changed){
+          await dbSet(`votes/${vid}/links/${lk}`, link);
+        }
+      }
+    }
+  }
+
+  // 3) 출석(attendance, attendanceManual): gid/monday/이름
+  for(const path of ['attendance','attendanceManual']){
+    const root = await dbGet(path) || {};
+    for(const gid in root){
+      const weeks = root[gid]||{};
+      for(const wk in weeks){
+        const names = weeks[wk]||{};
+        if(names[oldName]!==undefined){
+          await dbSet(`${path}/${gid}/${wk}/${newName}`, names[oldName]);
+          await dbDel(`${path}/${gid}/${wk}/${oldName}`);
+        }
+      }
+    }
+  }
 }
 
 // ── 링크 모달 ──
