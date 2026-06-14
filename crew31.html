@@ -6353,8 +6353,8 @@ async function editMemberName(key,current){
   if(!confirm(`"${on}" → "${nn}" (으)로 이름 바꾸기\n\n모든 기록에서 "${on}"이 들어간 이름을 "${nn}"으로 바꿉니다.\n(별표·그룹 표시는 그대로 유지, 연차·투피드도 유지)`)) return;
   showToast('🔄 데이터 이동 중... 잠시만요');
   try{
-    await migrateMemberName(key, on, nn, newFull);
-    showToast('✅ 닉네임 변경 + 데이터 이동 완료!');
+    const movedCnt = await migrateMemberName(key, on, nn, newFull);
+    showToast(movedCnt>0 ? `✅ 닉네임 변경 + 기록 ${movedCnt}건 이동 완료!` : '⚠️ 옮긴 기록 0건 — 안내창을 확인하세요');
     loadSettings();
   }catch(e){
     showToast('변경 실패: '+(e.message||''));
@@ -6364,45 +6364,74 @@ async function editMemberName(key,current){
 // 멤버 닉네임 변경: 이름에 oldNick이 들어간 모든 키를, oldNick→newNick만 치환한 새 키로 이동.
 // 별표·그룹 접두사 등 형태는 그대로 유지됨. memberNewFull = members에 저장할 정식 이름.
 async function migrateMemberName(key, oldNick, newNick, memberNewFull){
-  // 이름 문자열에 oldNick이 포함돼 있으면 newNick으로 치환한 새 이름 반환, 아니면 null
-  const rename = (nm)=>{
-    if(typeof nm!=='string' || !nm.includes(oldNick)) return null;
-    const renamed = nm.split(oldNick).join(newNick);
-    return renamed===nm ? null : renamed;
+  // 한글 NFC/NFD(조합형/분해형) 차이를 흡수하기 위해 비교는 항상 NFC로 정규화해서 한다.
+  const nrm = (s)=> (typeof s==='string' ? s.normalize('NFC') : s);
+  const O  = nrm(oldNick);
+  const NK = nrm(newNick);
+
+  // 키 이름(nm)에 oldNick이 들어 있으면 바꿀 새 키를 돌려준다(아니면 null).
+  //  - 닉네임 전체가 일치(접두사 없는 일반 멤버): 멤버 정식 이름(memberNewFull)을 그대로 사용
+  //    → 다음 로그인 때 CU.name과 100% 일치하므로 읽기가 깨지지 않음
+  //  - 접두사/부분 포함(드문 케이스): 정규화 공간에서 oldNick→newNick 치환
+  const newKeyFor = (nm)=>{
+    if(typeof nm!=='string') return null;
+    const N = nrm(nm);
+    if(!N.includes(O)) return null;
+    if(N===O) return memberNewFull;
+    const out = N.split(O).join(NK);
+    return out===nm ? null : out;
   };
+
+  // 한 번에 옮기는 대량 읽기: dbGet의 8초 타임아웃·조용한 null 반환을 피하려고 직접 fetch.
+  // 실패하면 반드시 throw 해서 '아무것도 안 옮겼는데 성공처럼 보이는' 상황을 차단한다.
+  const bigGet = async (path)=>{
+    const c = new AbortController();
+    const t = setTimeout(()=>c.abort(), 30000);
+    let r;
+    try{ r = await fetch(`${DB}/${path}.json`, {signal:c.signal}); }
+    finally{ clearTimeout(t); }
+    if(!r || !r.ok) throw new Error(`'${path}' 데이터를 불러오지 못했습니다(네트워크/용량). 다시 시도해 주세요.`);
+    return (await r.json()) || {};
+  };
+
+  let moved = 0; // 실제로 옮긴 키 개수
+
   // 1) members 정식 이름
   await dbSet(`members/${key}/name`, memberNewFull);
 
-  // 2) votes: responses, responseTimes, images (이름 키), links (키+nick필드)
-  const votes = await dbGet('votes') || {};
+  // 2) votes: responses, responseTimes, images, memos, leaveUsed (이름 키) + links (키+nick필드)
+  const votes = await bigGet('votes');
   for(const vid in votes){
-    const v = votes[vid]; if(!v) continue;
-    for(const field of ['responses','responseTimes','images']){
-      const obj = v[field]; if(!obj) continue;
+    const v = votes[vid]; if(!v || typeof v!=='object') continue;
+    for(const field of ['responses','responseTimes','images','memos','leaveUsed']){
+      const obj = v[field]; if(!obj || typeof obj!=='object') continue;
       for(const nm in obj){
-        const nn2 = rename(nm);
-        if(nn2){
-          await dbSet(`votes/${vid}/${field}/${nn2}`, obj[nm]);
+        const nk = newKeyFor(nm);
+        if(nk && nk!==nm){
+          await dbSet(`votes/${vid}/${field}/${nk}`, obj[nm]);
           await dbDel(`votes/${vid}/${field}/${nm}`);
+          moved++;
         }
       }
     }
-    if(v.links){
+    if(v.links && typeof v.links==='object'){
       for(const lk in v.links){
         const lkBase = lk.replace(/_[12]$/,'');
         const suffix = (lk.match(/_[12]$/)||[''])[0];
         const link = v.links[lk];
-        const newBase = rename(lkBase);
+        const newBase = newKeyFor(lkBase);
         let nickChanged=false;
         if(link && typeof link.nick==='string'){
-          const nn3 = rename(link.nick);
-          if(nn3){ link.nick = nn3; nickChanged=true; }
+          const nn3 = newKeyFor(link.nick);
+          if(nn3 && nn3!==link.nick){ link.nick = nn3; nickChanged=true; }
         }
-        if(newBase){
+        if(newBase && `${newBase}${suffix}`!==lk){
           await dbSet(`votes/${vid}/links/${newBase}${suffix}`, link);
           await dbDel(`votes/${vid}/links/${lk}`);
+          moved++;
         } else if(nickChanged){
           await dbSet(`votes/${vid}/links/${lk}`, link);
+          moved++;
         }
       }
     }
@@ -6410,21 +6439,30 @@ async function migrateMemberName(key, oldNick, newNick, memberNewFull){
 
   // 3) 출석(attendance, attendanceManual): gid/monday/이름/날짜
   for(const path of ['attendance','attendanceManual']){
-    const root = await dbGet(path) || {};
+    const root = await bigGet(path);
     for(const gid in root){
       const weeks = root[gid]||{};
       for(const wk in weeks){
         const names = weeks[wk]||{};
         for(const nm in names){
-          const nn4 = rename(nm);
-          if(nn4){
-            await dbSet(`${path}/${gid}/${wk}/${nn4}`, names[nm]);
+          const nk = newKeyFor(nm);
+          if(nk && nk!==nm){
+            await dbSet(`${path}/${gid}/${wk}/${nk}`, names[nm]);
             await dbDel(`${path}/${gid}/${wk}/${nm}`);
+            moved++;
           }
         }
       }
     }
   }
+
+  // 결과를 반드시 사람이 보게 한다(0건이면 닉네임을 잘못 입력했거나 이미 옮겨진 것).
+  try{
+    alert(moved>0
+      ? `✅ "${oldNick}" → "${newNick}" 데이터 이동 완료\n옮긴 기록: ${moved}건`
+      : `⚠️ "${oldNick}" 이름으로 옮길 기록을 찾지 못했습니다(0건).\n\n• "예전 닉네임"을 정확히 입력했는지\n• 이미 한 번 옮겨졌는지\n확인해 주세요.`);
+  }catch(e){}
+  return moved;
 }
 
 // ── 링크 모달 ──
