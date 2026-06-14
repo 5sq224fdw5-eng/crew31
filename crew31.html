@@ -594,11 +594,7 @@ function urlBase64ToUint8Array(base64String){
   return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
 }
 
-async function sendFCMNotification(opts={}){
-  try{
-    await fetch(`${WORKER_URL}/ping`);
-  }catch(e){console.warn('FCM send error',e);}
-}
+async function sendFCMNotification(opts={}){ /* 자동 알림 중단 (비용 절감) — 푸시는 '새 버전 알리기' 버튼에서만 발송 */ }
 
 async function pollFCMQueue(){}
 const todayStr=new Date().toISOString().slice(0,10);
@@ -827,14 +823,26 @@ async function checkNoticeDot(){
   }catch(e){}
 }
 
-// (관리자) 새 버전 알리기 — 모든 사람에게 배너가 뜨도록 릴리스 시각 기록
+// (관리자) 구독한 전원에게 푸시 1번 발송. 평소엔 호출 안 됨 → 비용 0.
+async function broadcastPush(title, body){
+  try{
+    await fetch(PUSH_SERVER + '/broadcast', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ code:'narin31', title: title, body: body })
+    });
+  }catch(e){ console.warn('broadcastPush', e); }
+}
+
+// (관리자) 새 버전 알리기 — 배너 표시 + 구독한 전원에게 푸시 발송
 async function announceNewVersion(){
-  if(!confirm('지금 버전을 "새 버전"으로 알릴까요?\n앱을 연 사람들에게 업데이트 배너가 표시됩니다.\n(GitHub에 새 파일을 먼저 올렸는지 확인하세요)')) return;
+  if(!confirm('지금 버전을 "새 버전"으로 알릴까요?\n앱을 연 사람에게 배너가 뜨고, 알림 켠 전원에게 푸시가 발송됩니다.\n(GitHub에 새 파일을 먼저 올렸는지 확인하세요)')) return;
   try{
     await dbSet('appReleaseAt', Date.now());
     localStorage.setItem('seenReleaseAt', String(Date.now()));
     const banner=document.getElementById('updateBanner'); if(banner) banner.style.display='none';
-    showToast('📢 새 버전 알림 전송됨!');
+    await broadcastPush('🆕 앱 업데이트', '최신 버전이 나왔어요! 새로고침 해주세요');
+    showToast('📢 새 버전 알림 + 푸시 전송됨!');
   }catch(e){ showToast('전송 실패: '+e.message); }
 }
 
