@@ -208,6 +208,8 @@ button{cursor:pointer;}
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.linkfield::placeholder{color:#9C8090;opacity:1}
+.linkfield::-webkit-input-placeholder{color:#9C8090}
 </style>
 
 <!-- Firebase SDK -->
@@ -285,6 +287,10 @@ document.addEventListener('keydown',e=>{
       style="margin-top:16px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(255,133,193,0.4);color:#FF85C1;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer">
       🎡 오락실 바로가기
     </a>
+    <a href="https://5sq224fdw5-eng.github.io/crew31/follow31.html"
+      style="margin-top:10px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.85);border:1.5px solid rgba(167,139,250,0.4);color:#A78BFA;padding:9px 22px;border-radius:22px;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer">
+      🤝 맞팔앱 바로가기
+    </a>
   </div>
 </div>
 
@@ -305,11 +311,12 @@ document.addEventListener('keydown',e=>{
           <div id="headerWeeklyAtt" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;gap:4px;align-items:center;justify-items:end">
+      <div style="display:grid;grid-template-columns:auto auto auto;gap:4px;align-items:center;justify-items:end">
         <button onclick="goTab('noti')" style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:14px;cursor:pointer;position:relative">
           🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
         </button>
         <button onclick="goToGame()" style="height:28px;padding:0 8px;border-radius:14px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white;white-space:nowrap">🎡 오락실</button>
+        <button onclick="location.href='https://5sq224fdw5-eng.github.io/crew31/follow31.html'" style="height:28px;padding:0 8px;border-radius:14px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white;white-space:nowrap">🤝 맞팔앱</button>
         <button id="reloadBtn" onclick="forceReload()" ondblclick="hardUpdate()" title="탭: 새로고침 · 길게/더블탭: 강제 업데이트" style="width:30px;height:26px;border-radius:12px;background:rgba(255,255,255,0.2);border:none;font-size:13px;cursor:pointer;color:white">🔄</button>
         <button onclick="logout()" style="height:26px;padding:0 8px;border-radius:12px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white;white-space:nowrap">🚪 나가기</button>
       </div>
@@ -834,6 +841,57 @@ async function broadcastPush(title, body){
   }catch(e){ console.warn('broadcastPush', e); }
 }
 
+// ── 예약 공지 팝업 ──
+async function checkScheduledPopup(){
+  try{
+    const p = await dbGet('scheduledPopup');
+    if(!p || !p.id || !p.at || !p.content) return;
+    if(Date.now() < Number(p.at)) return;
+    if(localStorage.getItem('seenPopup_'+p.id)) return;
+    showScheduledPopup(p);
+  }catch(e){}
+}
+function showScheduledPopup(p){
+  let m = document.getElementById('schPopupModal');
+  if(!m){ m=document.createElement('div'); m.id='schPopupModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:24px'; document.body.appendChild(m); }
+  m.innerHTML = `<div style="background:var(--surface,#fff);border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
+    <div style="font-size:46px;margin-bottom:10px">📢</div>
+    <div style="font-size:17px;font-weight:900;margin-bottom:14px;color:var(--text)">공지사항</div>
+    <div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:22px;white-space:pre-wrap;text-align:left">${escH(p.content)}</div>
+    <button onclick="ackScheduledPopup('${p.id}')" style="width:100%;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF85C1,#A78BFA);color:white;font-size:15px;font-weight:800;cursor:pointer">확인했어요</button>
+  </div>`;
+  m.style.display='flex';
+}
+function ackScheduledPopup(id){
+  localStorage.setItem('seenPopup_'+id, '1');
+  const m=document.getElementById('schPopupModal'); if(m) m.style.display='none';
+}
+async function saveScheduledPopup(){
+  const d=document.getElementById('schPopupDate')?.value, t=document.getElementById('schPopupTime')?.value, c=(document.getElementById('schPopupContent')?.value||'').trim();
+  if(!d||!t){ showToast('날짜와 시간을 입력하세요'); return; }
+  if(!c){ showToast('내용을 입력하세요'); return; }
+  const at=new Date(d+'T'+t).getTime();
+  if(isNaN(at)){ showToast('날짜/시간 형식 오류'); return; }
+  const prev=await dbGet('scheduledPopup');
+  const id=(prev&&prev.id)?prev.id:('p'+Date.now());
+  await dbSet('scheduledPopup',{id,at,content:c});
+  showToast('✅ 예약 공지 저장됨'); loadSettings&&loadSettings();
+}
+async function newScheduledPopup(){
+  if(!confirm('새 공지로 등록할까요?\n(이전에 확인한 사람도 다시 보게 됩니다)')) return;
+  const d=document.getElementById('schPopupDate')?.value, t=document.getElementById('schPopupTime')?.value, c=(document.getElementById('schPopupContent')?.value||'').trim();
+  if(!d||!t||!c){ showToast('날짜·시간·내용을 모두 입력하세요'); return; }
+  const at=new Date(d+'T'+t).getTime();
+  if(isNaN(at)){ showToast('날짜/시간 형식 오류'); return; }
+  await dbSet('scheduledPopup',{id:'p'+Date.now(),at,content:c});
+  showToast('✅ 새 공지 등록됨 (전원 다시 표시)'); loadSettings&&loadSettings();
+}
+async function clearScheduledPopup(){
+  if(!confirm('예약 공지를 삭제할까요?')) return;
+  await dbDelete('scheduledPopup');
+  showToast('🗑️ 예약 공지 삭제됨'); loadSettings&&loadSettings();
+}
+
 // (관리자) 새 버전 알리기 — 배너 표시 + 구독한 전원에게 푸시 발송
 async function announceNewVersion(){
   if(!confirm('지금 버전을 "새 버전"으로 알릴까요?\n앱을 연 사람에게 배너가 뜨고, 알림 켠 전원에게 푸시가 발송됩니다.\n(GitHub에 새 파일을 먼저 올렸는지 확인하세요)')) return;
@@ -1154,6 +1212,7 @@ async function enterApp(){
   if(roleEl) roleEl.textContent = userRole;
   // 새 버전 배너 체크
   setTimeout(checkUpdateBanner, 1200);
+  setTimeout(checkScheduledPopup, 1600);
   // 새 공지 빨간불 체크
   setTimeout(checkNoticeDot, 1400);
 
@@ -3728,28 +3787,17 @@ async function renderVoteCard(vid,v){
   if(canSubmitLink){
     // 드랍박스 제거 — 위에서 고른 선택지로 링크칸 자동 결정 (투피드면 2칸)
     html+=`<div style="margin-top:10px">`;
-    html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-    html+=`<input id="linkId_${vid}" placeholder="@아이디" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-    html+=`</div>`;
+    html+=`<input id="linkId_${vid}" class="linkfield" placeholder="인스타그램 아이디" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     if(isTupide){
-      // 투피드 → 링크 2칸 자동 (+ 붙여넣기 버튼)
-      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-      html+=`<input id="linkUrl_${vid}_1" placeholder="링크 1" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<button onclick="pasteToLink('linkUrl_${vid}_1')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋</button>`;
-      html+=`<input id="linkNote_${vid}_1" placeholder="요청" style="width:64px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`</div>`;
-      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-      html+=`<input id="linkUrl_${vid}_2" placeholder="링크 2" style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<button onclick="pasteToLink('linkUrl_${vid}_2')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋</button>`;
-      html+=`<input id="linkNote_${vid}_2" placeholder="요청" style="width:64px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`</div>`;
+      // 투피드 → 링크 2칸
+      html+=`<input id="linkUrl_${vid}_1" class="linkfield" placeholder="참여 게시물 링크 1 · 그대로 붙여넣기 · 수정 X" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}_1" class="linkfield" placeholder="요청사항 1 (선택)" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkUrl_${vid}_2" class="linkfield" placeholder="참여 게시물 링크 2 · 그대로 붙여넣기 · 수정 X" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}_2" class="linkfield" placeholder="요청사항 2 (선택)" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     } else {
-      // 일반 → 링크 1칸 (+ 붙여넣기 버튼)
-      html+=`<div style="display:flex;gap:6px;margin-bottom:6px">`;
-      html+=`<input id="linkUrl_${vid}" placeholder="https://..." style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<button onclick="pasteToLink('linkUrl_${vid}')" style="flex-shrink:0;padding:8px 10px;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📋 붙여넣기</button>`;
-      html+=`<input id="linkNote_${vid}" placeholder="요청사항" style="width:70px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`</div>`;
+      // 일반 → 링크 1칸
+      html+=`<input id="linkUrl_${vid}" class="linkfield" placeholder="참여 게시물 링크 · 그대로 붙여넣기 · 수정 X" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<input id="linkNote_${vid}" class="linkfield" placeholder="요청사항 (선택)" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     }
     html+=`<button onclick="submitVote('${vid}')" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">✅ 투표 제출</button>`;
     html+=`</div>`;
@@ -3811,10 +3859,17 @@ async function renderVoteCard(vid,v){
           html+=`<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;${bg}">${escH(n)}${tag}</span>`;
         });
         html+=`</div></div>`;
-        // 🎴 카드 추첨 버튼 (관리자 전용)
-        const _drawCandJson = encodeURIComponent(JSON.stringify(allParticipants));
+        // 🎴 카드 추첨 버튼 (관리자 전용) — 당직·봉사(열정페이) 선택자는 후보에서 제외
+        const _opts = v.options||[];
+        const _excludedNicks = new Set();
+        Object.entries(v.responses||{}).forEach(([nm,ri])=>{
+          const ot=(_opts[ri]||'').toLowerCase();
+          if(ot.includes('당직')||ot.includes('봉사')||ot.includes('열정페이')) _excludedNicks.add(nm);
+        });
+        const _drawCandidates = allParticipants.filter(n=>!_excludedNicks.has(n));
+        const _drawCandJson = encodeURIComponent(JSON.stringify(_drawCandidates));
         html+=`<div style="padding:0 14px 12px">`;
-        html+=`<button onclick="openDrawModal('${vid}','${escH(v.group||'')}',decodeURIComponent('${_drawCandJson}'))" style="width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF85C1,#A78BFA);color:white;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 10px rgba(167,139,250,0.3)">🎴 참여자 추첨하기 (${allParticipants.length}명)</button>`;
+        html+=`<button onclick="openDrawModal('${vid}','${escH(v.group||'')}',decodeURIComponent('${_drawCandJson}'))" style="width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF85C1,#A78BFA);color:white;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 10px rgba(167,139,250,0.3)">🎴 참여자 추첨하기 (${_drawCandidates.length}명)</button>`;
         html+=`</div>`;
       }
     }catch(e){}
@@ -4026,15 +4081,38 @@ async function adminEditLink(vid, linkKey){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   const cur = await dbGet(`votes/${vid}/links/${linkKey}`);
   if(!cur){ showToast('링크를 찾을 수 없습니다'); return; }
-  const newUrl = prompt(`${cur.nick||''}님 링크 수정\n현재: ${cur.url||'(없음)'}`, cur.url||'');
-  if(newUrl===null) return; // 취소
-  const clean = (typeof cleanUrl==='function') ? cleanUrl(newUrl.trim()) : newUrl.trim();
-  // 이전 링크는 기록으로 남기고, 활성 url만 교체
-  await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur.url||'');
+  let m=document.getElementById('editLinkModal');
+  if(!m){ m=document.createElement('div'); m.id='editLinkModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:24px'; document.body.appendChild(m); }
+  m.innerHTML=`<div style="background:var(--surface,#fff);border-radius:18px;padding:22px;max-width:360px;width:100%">
+    <div style="font-size:16px;font-weight:900;margin-bottom:16px">✏️ 링크 수정</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">닉네임</div>
+    <input id="el_nick" value="${escH(cur.nick||'')}" style="width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">인스타그램 아이디</div>
+    <input id="el_id" value="${escH(cur.id||'')}" style="width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">참여 게시물 링크</div>
+    <input id="el_url" value="${escH(cur.url||'')}" style="width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:18px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)">
+    <div style="display:flex;gap:8px">
+      <button onclick="closeEditLink()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">취소</button>
+      <button onclick="saveEditLink('${vid}','${linkKey}')" style="flex:1;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer">저장</button>
+    </div>
+  </div>`;
+  m.style.display='flex';
+}
+function closeEditLink(){ const m=document.getElementById('editLinkModal'); if(m)m.style.display='none'; }
+async function saveEditLink(vid, linkKey){
+  const nick=document.getElementById('el_nick')?.value.trim()||'';
+  const id=document.getElementById('el_id')?.value.trim()||'';
+  const urlRaw=document.getElementById('el_url')?.value.trim()||'';
+  const cur = await dbGet(`votes/${vid}/links/${linkKey}`);
+  const cleanUrlVal = (typeof cleanUrl==='function') ? cleanUrl(urlRaw) : urlRaw;
+  await dbSet(`votes/${vid}/links/${linkKey}/prevUrl`, cur?.url||'');
   await dbSet(`votes/${vid}/links/${linkKey}/editedBy`, CU.name);
   await dbSet(`votes/${vid}/links/${linkKey}/editedAt`, Date.now());
-  await dbSet(`votes/${vid}/links/${linkKey}/url`, clean);
-  showToast('✅ 링크 수정됨');
+  await dbSet(`votes/${vid}/links/${linkKey}/nick`, nick);
+  await dbSet(`votes/${vid}/links/${linkKey}/id`, id);
+  await dbSet(`votes/${vid}/links/${linkKey}/url`, cleanUrlVal);
+  closeEditLink();
+  showToast('✅ 수정됨 (닉네임·아이디·링크)');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
@@ -4808,9 +4886,37 @@ async function runCardDraw(){
     rh+=`</div></div>`;
     resEl.innerHTML=rh;
   }
+  // 당첨자 기록 저장 (설정 → 당첨 기록에서 확인)
+  try{
+    const rec = { at:Date.now(), group:_drawGroup, winners, by:CU?.name||'' };
+    await dbPush('drawHistory', rec);
+  }catch(e){}
+  // 당첨자 확인 팝업 (스크롤·깜빡 방지)
+  setTimeout(()=>showWinnerPopup(_drawGroup, winners), 1200);
+}
+
+function showWinnerPopup(groupName, winners){
+  let m=document.getElementById('winnerPopup');
+  if(!m){ m=document.createElement('div'); m.id='winnerPopup'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10003;display:flex;align-items:center;justify-content:center;padding:24px'; document.body.appendChild(m); }
+  let wlist='';
+  winners.forEach(w=>{ wlist+=`<div style="background:#fff;padding:10px 16px;border-radius:14px;font-size:17px;font-weight:900;color:#FF6B9D;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">✨ ${escH(w)}</div>`; });
+  m.innerHTML=`<div style="background:linear-gradient(135deg,#FFF4D6,#FFE0EC);border-radius:22px;padding:28px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 14px 44px rgba(0,0,0,0.3)">
+    <div style="font-size:44px;margin-bottom:8px">🎉</div>
+    <div style="font-size:18px;font-weight:900;color:#FF9F43;margin-bottom:4px">${escH(groupName)} 당첨자</div>
+    <div style="font-size:12px;color:#C98A4A;margin-bottom:18px">주식 1주씩 지급해 주세요!</div>
+    <div style="margin-bottom:20px">${wlist}</div>
+    <button onclick="document.getElementById('winnerPopup').style.display='none'" style="width:100%;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF9F43,#FF6B9D);color:white;font-size:15px;font-weight:800;cursor:pointer">확인</button>
+  </div>`;
+  m.style.display='flex';
 }
 
 function closeDrawModal(){ const m=document.getElementById('drawModal'); if(m)m.style.display='none'; }
+async function clearDrawHistory(){
+  if(!confirm('추첨 당첨 기록을 전부 삭제할까요?')) return;
+  await dbDelete('drawHistory');
+  showToast('🗑️ 추첨 기록 삭제됨');
+  loadSettings && loadSettings();
+}
 
 async function castVote(vid,optIdx){
   // 이전 호출이 에러로 안 풀렸어도 3초 지나면 무시 (영구 잠김 방지)
@@ -5442,12 +5548,14 @@ async function loadStatusGroup(gid) {
       });
 
 
+    const _fullMembers = []; // 이 그룹 개근자 (그룹+닉네임)
     sortedMembers.forEach(([mname, mdates]) => {
       const fullCount = dates.filter(d => {
         const r = mdates[d];
         return ['완료','당직','공게','투피드','노피드','프패','확인증'].includes(r);
       }).length;
       const isFull = fullCount >= 7;
+      if(isFull && !ADMIN_NAMES.includes(mname)) _fullMembers.push(mname);
       const isAdminM = ADMIN_NAMES.includes(mname);
       html += `<tr style="border-top:1px solid var(--border);${isAdminM?'background:#fff8f5':''}">`;
       html += `<td style="padding:5px 3px;font-weight:${isAdminM?'800':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isAdminM?'var(--accent)':'inherit'}">${escH(mname)}</td>`;
@@ -5466,10 +5574,96 @@ async function loadStatusGroup(gid) {
       html += `<td style="padding:5px 2px;text-align:center;font-weight:800;font-size:10px;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':(fullCount+'/7')}</td>`;
       html += `</tr>`;
     });
-    html += `</table></div></div>`;
+    html += `</table></div>`;
+    // 개근 주식 지급 명단 버튼 (관리자 전용, 개근자 있을 때만)
+    if(CU?.role==='admin' && _fullMembers.length>0){
+      const _wkLabel = wLabel.replace(/\s/g,'');
+      const _fmJson = encodeURIComponent(JSON.stringify(_fullMembers));
+      html += `<div style="padding:10px 14px;border-top:1px solid var(--border)">`;
+      html += `<button onclick="openFullAttPayout('${gid}','${mondayStr}','${escH(wLabel)}',decodeURIComponent('${_fmJson}'))" style="width:100%;padding:11px;border:none;border-radius:10px;background:linear-gradient(135deg,#FFD86E,#FF9F43);color:#5a3a00;font-size:13px;font-weight:800;cursor:pointer">🎰 ${escH(wLabel)} 개근 주식 지급 명단 (${_fullMembers.length}명)</button>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
   }
 
   el.innerHTML = html || '<div class="empty">데이터 없음</div>';
+}
+
+// ── 개근 주식 지급 ──
+let _payoutData = null; // {gid, mondayStr, label, members[]}
+async function openFullAttPayout(gid, mondayStr, label, membersJson){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  let members=[]; try{ members=JSON.parse(membersJson)||[]; }catch(e){}
+  _payoutData = { gid, mondayStr, label, members };
+  // 이미 지급된 사람 확인 (그룹+주차+이름 단위)
+  const paidRec = await dbGet(`stockPayout/${gid}/${mondayStr}`) || {};
+  let m=document.getElementById('payoutModal');
+  if(!m){ m=document.createElement('div'); m.id='payoutModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto'; document.body.appendChild(m); }
+  const listText = members.join('\n');
+  let h=`<div style="background:var(--surface,#fff);border-radius:18px;max-width:380px;width:100%;padding:22px;margin:auto">`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:16px;font-weight:900">🎰 ${escH(label)} 개근자</div><button onclick="closePayoutModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3)">✕</button></div>`;
+  h+=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">개근 ${members.length}명</div>`;
+  h+=`<div style="background:var(--surface2,#f5f5f7);border-radius:10px;padding:12px;margin-bottom:6px;max-height:200px;overflow-y:auto">`;
+  members.forEach(nm=>{
+    const paid = paidRec[nm];
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;font-weight:600">${escH(nm)} ${paid?'<span style="font-size:11px;color:var(--green);font-weight:700">✓ 지급됨</span>':''}</div>`;
+  });
+  h+=`</div>`;
+  h+=`<button onclick="copyPayoutList()" style="width:100%;padding:9px;border:none;border-radius:8px;background:var(--surface2);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;margin-bottom:14px">📋 명단 복사</button>`;
+  const unpaidCount = members.filter(nm=>!paidRec[nm]).length;
+  h+=`<div style="font-size:11px;color:#FF9F43;margin-bottom:8px">⚠️ 아래 버튼을 누르면 오락실에서 아직 안 받은 ${unpaidCount}명에게 주식 1주씩 지급됩니다.</div>`;
+  h+=`<button onclick="runStockPayout()" ${unpaidCount>0?'':'disabled'} style="width:100%;padding:13px;border:none;border-radius:12px;background:${unpaidCount>0?'linear-gradient(135deg,#FFD86E,#FF9F43)':'#ccc'};color:#5a3a00;font-size:15px;font-weight:900;cursor:${unpaidCount>0?'pointer':'not-allowed'}">✅ 주식 1주씩 지급하기 (${unpaidCount}명)</button>`;
+  h+=`<div id="payoutResult" style="margin-top:12px"></div>`;
+  h+=`</div>`;
+  m.innerHTML=h;
+  m.style.display='flex';
+}
+function closePayoutModal(){ const m=document.getElementById('payoutModal'); if(m)m.style.display='none'; }
+function copyPayoutList(){
+  if(!_payoutData) return;
+  navigator.clipboard.writeText(_payoutData.members.join('\n')).then(()=>showToast('📋 명단 복사됨'));
+}
+async function runStockPayout(){
+  if(!_payoutData){ return; }
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const { gid, mondayStr, members } = _payoutData;
+  const resEl=document.getElementById('payoutResult');
+  if(resEl) resEl.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px">지급 중...</div>';
+  try{
+    const gameMembers = await gameGet('members');
+    if(!gameMembers){ showToast('오락실 멤버를 불러올 수 없어요'); return; }
+    const paidRec = await dbGet(`stockPayout/${gid}/${mondayStr}`) || {};
+    let done=0, fail=[];
+    const gName = groups[gid]?.name || '';
+    for(const nm of members){
+      if(paidRec[nm]) continue; // 이미 지급
+      // 연차/투피드와 동일한 검증된 매칭: 그룹명+닉네임 우선, 안 되면 닉네임만
+      const entries = Object.entries(gameMembers);
+      let hit = entries.find(([k,m])=>{
+        const clean=(m.name||'').replace(/^\*/,'');
+        return clean===(gName+nm);
+      });
+      if(!hit) hit = entries.find(([k,m])=>{
+        const clean=(m.name||'').replace(/^\*/,'');
+        return clean===nm;
+      });
+      if(!hit){ fail.push(nm); continue; }
+      const [gKey, gM] = hit;
+      const cur = Number(gM.stock)||0;
+      await gameSet(`members/${gKey}/stock`, cur+1);
+      await dbSet(`stockPayout/${gid}/${mondayStr}/${nm}`, { at:Date.now(), by:CU.name });
+      done++;
+    }
+    let rh=`<div style="background:#E8F8EE;border-radius:10px;padding:12px;text-align:center"><div style="font-size:14px;font-weight:800;color:var(--green)">✅ ${done}명에게 주식 1주씩 지급 완료</div>`;
+    if(fail.length>0) rh+=`<div style="font-size:11px;color:#E8927C;margin-top:6px">⚠️ 매칭 실패(오락실에 없음): ${fail.map(escH).join(', ')}</div>`;
+    rh+=`</div>`;
+    if(resEl) resEl.innerHTML=rh;
+    showToast(`✅ ${done}명 지급 완료`);
+    // 버튼 갱신 위해 모달 다시 그림
+    setTimeout(()=>openFullAttPayout(gid, mondayStr, _payoutData.label, encodeURIComponent(JSON.stringify(members))),1500);
+  }catch(e){
+    if(resEl) resEl.innerHTML='<div style="color:#E8927C;text-align:center">지급 실패: '+escH(e.message)+'</div>';
+  }
 }
 
 // ── 출석 자동 기록 (castVote 후 호출) ──
@@ -6080,6 +6274,53 @@ async function loadSettings(){
     quotaHtml += `</div></div>`;
   });
 
+  // 예약 공지 팝업 HTML
+  let _popupHtml = '';
+  {
+    const _sp = await dbGet('scheduledPopup');
+    let _dVal='', _tVal='', _cVal='', _status='등록된 예약 공지가 없어요';
+    if(_sp && _sp.at){
+      const _dt=new Date(Number(_sp.at)), _pad=n=>String(n).padStart(2,'0'), _wd=['일','월','화','수','목','금','토'];
+      _dVal=`${_dt.getFullYear()}-${_pad(_dt.getMonth()+1)}-${_pad(_dt.getDate())}`;
+      _tVal=`${_pad(_dt.getHours())}:${_pad(_dt.getMinutes())}`;
+      _cVal=_sp.content||'';
+      _status=`현재 예약: ${_dVal} ${_wd[_dt.getDay()]}요일 ${_tVal}`;
+    }
+    _popupHtml=`
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">설정한 시간 이후 앱을 연 사람 전원에게 팝업이 떠요. 확인을 누를 때까지 계속 표시됩니다.</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input type="date" id="schPopupDate" value="${_dVal}" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);font-size:13px">
+        <input type="time" id="schPopupTime" value="${_tVal}" style="width:110px;padding:8px;border-radius:8px;border:1px solid var(--border);font-size:13px">
+      </div>
+      <textarea id="schPopupContent" placeholder="공지 내용을 입력하세요" style="width:100%;box-sizing:border-box;min-height:90px;padding:10px;border-radius:8px;border:1px solid var(--border);font-size:13px;margin-bottom:8px;resize:vertical">${escH(_cVal)}</textarea>
+      <div style="font-size:11px;color:var(--accent);margin-bottom:8px">${_status}</div>
+      <button onclick="saveScheduledPopup()" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px">💾 저장 (내용 수정 — 확인한 사람은 안 뜸)</button>
+      <button onclick="newScheduledPopup()" style="width:100%;padding:11px;background:#5DB88A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px">🆕 새 공지로 등록 (전원 다시 표시)</button>
+      <button onclick="clearScheduledPopup()" style="width:100%;padding:10px;background:var(--surface2);color:var(--red);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">🗑️ 예약 공지 삭제</button>`;
+  }
+
+  // 추첨 당첨 기록 HTML
+  let _drawHistHtml = '';
+  {
+    const _dh = await dbGet('drawHistory') || {};
+    const _list = Object.values(_dh).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,50);
+    if(_list.length===0){
+      _drawHistHtml = `<div style="font-size:12px;color:var(--text3);text-align:center;padding:14px">아직 추첨 기록이 없어요</div>`;
+    } else {
+      const _wd=['일','월','화','수','목','금','토'];
+      _drawHistHtml = `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">최근 추첨 당첨자 (주식 지급용)</div>`;
+      _list.forEach(r=>{
+        const dt=new Date(r.at||0), pad=n=>String(n).padStart(2,'0');
+        const dstr=`${dt.getMonth()+1}/${dt.getDate()}(${_wd[dt.getDay()]}) ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        _drawHistHtml += `<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:6px">`;
+        _drawHistHtml += `<div style="font-size:11px;color:var(--text3);margin-bottom:4px">${escH(r.group||'')} · ${dstr}</div>`;
+        _drawHistHtml += `<div style="font-size:13px;font-weight:700;color:var(--text)">🎉 ${(r.winners||[]).map(escH).join(', ')}</div>`;
+        _drawHistHtml += `</div>`;
+      });
+      _drawHistHtml += `<button onclick="clearDrawHistory()" style="width:100%;padding:9px;background:var(--surface2);color:var(--red);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;margin-top:4px">🗑️ 기록 전체 삭제</button>`;
+    }
+  }
+
   mb.innerHTML = `<div style="padding-bottom:60px">
     <div style="margin-bottom:10px;background:white;border-radius:14px;padding:12px 14px">
       <div style="font-size:13px;font-weight:800;color:var(--text2);margin-bottom:6px">📲 앱 업데이트</div>
@@ -6091,6 +6332,8 @@ async function loadSettings(){
     </div>
     ${settingAccordion('grp','🏢 그룹 관리',grpHtml)}
     ${settingAccordion('quota','🏖️ 연차 정원',quotaHtml)}
+    ${settingAccordion('popup','📢 예약 공지 팝업',_popupHtml)}
+    ${settingAccordion('drawhist','🎴 추첨 당첨 기록',_drawHistHtml)}
     ${settingAccordion('lock','🔐 잠금 설정',lockHtml)}
     ${settingAccordion('member','👥 멤버 관리',memberHtml)}
     ${settingAccordion('auto','🤖 자동화',autoHtml)}
@@ -6720,7 +6963,9 @@ async function startNotiPolling(){
     updateNotiBadge();
   };
   poll();
-  _notiPollInterval=setInterval(poll,120000);
+  // 2분 반복 폴링 제거 (비용 절감). 앱 열 때 위에서 1번만 체크함.
+  // 자동 알림은 사용자 요청으로 중단 — 푸시는 '새 버전 알리기' 버튼에서만 발송.
+  // _notiPollInterval=setInterval(poll,120000);
 }
 
 async function _initSeenIfEmpty(){
