@@ -5547,10 +5547,24 @@ async function loadStatusGroup(gid) {
     }
     const memberResults = wdata.members;
 
+    // 개근자(풀참) 미리 계산 — 헤더의 주식지급 버튼에서 쓰기 위해 멤버 루프보다 먼저 구함
+    const _fullMembers = [];
+    Object.entries(memberResults).forEach(([mname, mdates])=>{
+      if(mname==='관리자' || ADMIN_NAMES.includes(mname)) return;
+      const fc = dates.filter(d=>['완료','당직','공게','투피드','노피드','프패','확인증'].includes(mdates[d])).length;
+      if(fc>=7) _fullMembers.push(mname);
+    });
+    const _fmJson = encodeURIComponent(JSON.stringify(_fullMembers));
+
     html += `<div style="background:white;border-radius:16px;margin:8px 14px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,0.06)">`;
-    html += `<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">`;
+    html += `<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap">`;
     html += `<div style="font-size:14px;font-weight:800">${wLabel}</div>`;
-    html += `<div style="display:flex;gap:6px">`;
+    // 가운데: 풀참 주식지급 버튼 (관리자 + 개근자 있을 때만)
+    html += `<div style="flex:1;display:flex;justify-content:center;min-width:140px">`;
+    if(CU?.role==='admin' && _fullMembers.length>0) html += `<button onclick="openFullAttPayout('${gid}','${mondayStr}','${escH(wLabel)}',decodeURIComponent('${_fmJson}'))" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:#FFE066;color:#7a5a00;font-weight:800;white-space:nowrap">🎰 풀참 주식 지급(${_fullMembers.length}명)</button>`;
+    html += `</div>`;
+    // 오른쪽: 엑셀 / 수정
+    html += `<div style="display:flex;gap:6px;align-items:center">`;
     html += `<button onclick="downloadWeekExcel('${gid}','${mondayStr}')" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:var(--green);color:white;font-weight:700">⬇️ 엑셀</button>`;
     if(CU?.role==='admin') html += `<button onclick="openAttendanceEdit('${gid}','${mondayStr}')" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:var(--surface2);color:var(--text2);font-weight:700">✏️ 수정</button>`;
     html += `</div></div>`;
@@ -5576,14 +5590,12 @@ async function loadStatusGroup(gid) {
       });
 
 
-    const _fullMembers = []; // 이 그룹 개근자 (그룹+닉네임)
     sortedMembers.forEach(([mname, mdates]) => {
       const fullCount = dates.filter(d => {
         const r = mdates[d];
         return ['완료','당직','공게','투피드','노피드','프패','확인증'].includes(r);
       }).length;
       const isFull = fullCount >= 7;
-      if(isFull && !ADMIN_NAMES.includes(mname)) _fullMembers.push(mname);
       const isAdminM = ADMIN_NAMES.includes(mname);
       html += `<tr style="border-top:1px solid var(--border);${isAdminM?'background:#fff8f5':''}">`;
       html += `<td style="padding:5px 3px;font-weight:${isAdminM?'800':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isAdminM?'var(--accent)':'inherit'}">${escH(mname)}</td>`;
@@ -5603,14 +5615,6 @@ async function loadStatusGroup(gid) {
       html += `</tr>`;
     });
     html += `</table></div>`;
-    // 개근 주식 지급 명단 버튼 (관리자 전용, 개근자 있을 때만)
-    if(CU?.role==='admin' && _fullMembers.length>0){
-      const _wkLabel = wLabel.replace(/\s/g,'');
-      const _fmJson = encodeURIComponent(JSON.stringify(_fullMembers));
-      html += `<div style="padding:10px 14px;border-top:1px solid var(--border)">`;
-      html += `<button onclick="openFullAttPayout('${gid}','${mondayStr}','${escH(wLabel)}',decodeURIComponent('${_fmJson}'))" style="width:100%;padding:11px;border:none;border-radius:10px;background:linear-gradient(135deg,#FFD86E,#FF9F43);color:#5a3a00;font-size:13px;font-weight:800;cursor:pointer">🎰 ${escH(wLabel)} 개근 주식 지급 명단 (${_fullMembers.length}명)</button>`;
-      html += `</div>`;
-    }
     html += `</div>`;
   }
 
