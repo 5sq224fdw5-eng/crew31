@@ -5631,19 +5631,29 @@ async function openFullAttPayout(gid, mondayStr, label, membersJson){
   const paidRec = await dbGet(`stockPayout/${gid}/${mondayStr}`) || {};
   let m=document.getElementById('payoutModal');
   if(!m){ m=document.createElement('div'); m.id='payoutModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto'; document.body.appendChild(m); }
-  const listText = members.join('\n');
-  let h=`<div style="background:var(--surface,#fff);border-radius:18px;max-width:380px;width:100%;padding:22px;margin:auto">`;
-  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:16px;font-weight:900">🎰 ${escH(label)} 개근자</div><button onclick="closePayoutModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3)">✕</button></div>`;
-  h+=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">개근 ${members.length}명</div>`;
-  h+=`<div style="background:var(--surface2,#f5f5f7);border-radius:10px;padding:12px;margin-bottom:6px;max-height:200px;overflow-y:auto">`;
+  const unpaidCount = members.filter(nm=>!paidRec[nm]).length;
+  // 카톡 공지문 기본값: 개근자 전원 (관리자가 직접 수정 가능). 지급은 중복 안 되므로 안전.
+  const noticeText = `${label} 개근주식 안내\n\n` + members.map(n=>'@'+n).join('\n') + `\n\n10분 내 주식 지급 예정`;
+  _payoutData.noticeText = noticeText;
+
+  let h=`<div style="background:var(--surface,#fff);border-radius:18px;max-width:380px;width:100%;padding:20px;margin:auto;max-height:88vh;overflow-y:auto">`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:16px;font-weight:900">🎰 ${escH(label)} 개근자 (${members.length}명)</div><button onclick="closePayoutModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3)">✕</button></div>`;
+
+  // ── 위 영역: 카톡 공지문 (직접 수정 가능 · 복붙 가능) ──
+  h+=`<div style="font-size:12px;font-weight:800;color:var(--text2);margin:10px 0 6px">📢 카톡 공지문 <span style="font-weight:600;color:var(--text3)">(직접 수정 가능)</span></div>`;
+  h+=`<textarea id="payoutNotice" style="width:100%;box-sizing:border-box;height:170px;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;line-height:1.7;color:var(--text);background:var(--surface2);resize:vertical;outline:none">${escH(noticeText)}</textarea>`;
+  h+=`<button onclick="copyPayoutNotice()" style="width:100%;padding:11px;border:none;border-radius:10px;background:#FAE100;color:#3C1E00;font-size:13px;font-weight:800;cursor:pointer;margin:8px 0 4px">📋 공지문 복사하기</button>`;
+
+  // ── 아래 영역: 지급 대상 닉네임 + 자동 지급 ──
+  h+=`<div style="border-top:1px solid var(--border);margin:14px 0 0;padding-top:12px"></div>`;
+  h+=`<div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">💰 지급 대상</div>`;
+  h+=`<div style="background:var(--surface2,#f5f5f7);border-radius:10px;padding:12px;margin-bottom:10px;max-height:150px;overflow-y:auto">`;
   members.forEach(nm=>{
     const paid = paidRec[nm];
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;font-weight:600">${escH(nm)} ${paid?'<span style="font-size:11px;color:var(--green);font-weight:700">✓ 지급됨</span>':''}</div>`;
   });
   h+=`</div>`;
-  h+=`<button onclick="copyPayoutList()" style="width:100%;padding:9px;border:none;border-radius:8px;background:var(--surface2);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;margin-bottom:14px">📋 명단 복사</button>`;
-  const unpaidCount = members.filter(nm=>!paidRec[nm]).length;
-  h+=`<div style="font-size:11px;color:#FF9F43;margin-bottom:8px">⚠️ 아래 버튼을 누르면 오락실에서 아직 안 받은 ${unpaidCount}명에게 주식 1주씩 지급됩니다.</div>`;
+  h+=`<div style="font-size:11px;color:#FF9F43;margin-bottom:8px">⚠️ 누르면 오락실에서 아직 안 받은 ${unpaidCount}명에게 주식 1주씩 지급됩니다. (이미 받은 사람은 건너뜀)</div>`;
   h+=`<button onclick="runStockPayout()" ${unpaidCount>0?'':'disabled'} style="width:100%;padding:13px;border:none;border-radius:12px;background:${unpaidCount>0?'linear-gradient(135deg,#FFD86E,#FF9F43)':'#ccc'};color:#5a3a00;font-size:15px;font-weight:900;cursor:${unpaidCount>0?'pointer':'not-allowed'}">✅ 주식 1주씩 지급하기 (${unpaidCount}명)</button>`;
   h+=`<div id="payoutResult" style="margin-top:12px"></div>`;
   h+=`</div>`;
@@ -5651,6 +5661,14 @@ async function openFullAttPayout(gid, mondayStr, label, membersJson){
   m.style.display='flex';
 }
 function closePayoutModal(){ const m=document.getElementById('payoutModal'); if(m)m.style.display='none'; }
+function copyPayoutNotice(){
+  // 관리자가 수정한 최신 내용을 복사
+  const ta=document.getElementById('payoutNotice');
+  const txt = ta ? ta.value : (_payoutData?.noticeText||'');
+  navigator.clipboard.writeText(txt).then(()=>showToast('📋 공지문 복사됨')).catch(()=>{
+    if(ta){ ta.focus(); ta.select(); try{document.execCommand('copy');showToast('📋 공지문 복사됨');}catch(e){showToast('칸을 길게 눌러 복사하세요');} }
+  });
+}
 function copyPayoutList(){
   if(!_payoutData) return;
   navigator.clipboard.writeText(_payoutData.members.join('\n')).then(()=>showToast('📋 명단 복사됨'));
