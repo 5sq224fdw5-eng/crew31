@@ -4047,8 +4047,101 @@ async function toggleNickBtn(vid, collapseId, nick){
     });
     html+=`</div>`;
   }
+  // 본인 또는 관리자: 캡쳐 OCR로 내가 아직 안 올린(안 뜬) 리포 찾기
+  if((isMe || CU?.role==='admin') && realImgs.length>0){
+    const btnLabel = isMe ? '🔍 내 누락 확인 (안 올린 게시물 찾기)' : '🔍 누락 확인 (캡쳐 OCR)';
+    html+=`<button onclick="runRepostCheck('${vid}','${nick.replace(/'/g,"\\'")}')" style="width:100%;margin-top:6px;background:#E8F0FE;color:#3B6FD4;border:1.5px solid #B9D0F5;border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">${btnLabel}</button>`;
+  }
   el.innerHTML = html;
 }
+
+// 캡쳐 OCR → 시작투표 링크(아이디) 대조 → 누락(안 뜬 리포) URL 표시
+async function runRepostCheck(vid, nick){
+  const sanitized = nick.replace(/[\.#$\/\[\]\s]/g,'_');
+  const myKey2 = (CU?.name||'').replace(/[\.#$\/\[\]\s]/g,'_');
+  const isMine = (nick===(CU?.name||'') || sanitized===myKey2);
+  let m = document.getElementById('repostModal');
+  if(!m){ m=document.createElement('div'); m.id='repostModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10050;display:flex;align-items:center;justify-content:center;padding:20px'; document.body.appendChild(m); }
+  const card = (inner)=>`<div style="background:#fff;border-radius:18px;max-width:380px;width:100%;padding:20px;margin:auto;max-height:88vh;overflow-y:auto">${inner}</div>`;
+  const titleTxt = isMine ? '🔍 내 누락 확인' : `🔍 ${escH(nick)} 누락 확인`;
+  const header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:16px;font-weight:900">${titleTxt}</div><button onclick="closeRepostModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3)">✕</button></div>`;
+  const setBody = (h)=>{ const b=document.getElementById('repostBody'); if(b) b.innerHTML=h; };
+  m.innerHTML = card(header + `<div id="repostBody" style="font-size:13px;color:var(--text2);text-align:center;padding:20px 0">캡쳐를 읽는 중… <span id="repostProg"></span><div style="font-size:11px;color:var(--text3);margin-top:8px">처음엔 인식기를 받느라 조금 걸려요</div></div>`);
+  m.style.display='flex';
+
+  try{
+    const [v, allVotes] = await Promise.all([ dbGet(`votes/${vid}`), dbGet('votes') ]);
+    if(!v){ setBody('투표를 불러오지 못했어요.'); return; }
+    // 같은 그룹·같은 날짜의 시작 투표 링크(아이디+URL)를 기준으로
+    let refLinks = [];
+    if(allVotes && v.group){
+      const startV = Object.values(allVotes).find(sv=>{
+        if(sv.deleted||sv.group!==v.group) return false;
+        if(!(sv.title||'').includes('시작')&&!(sv.title||'').includes('참여')) return false;
+        const t1=(sv.title||'').match(/(\d+)월\s*(\d+)일/);
+        const t2=(v.title||'').match(/(\d+)월\s*(\d+)일/);
+        if(t1&&t2) return t1[1]===t2[1]&&t1[2]===t2[2];
+        return getTitleDate(sv)===getTitleDate(v);
+      });
+      if(startV && startV.links) refLinks = Object.values(startV.links).filter(l=>l && (l.id||l.url));
+    }
+    if(refLinks.length===0){ setBody('시작 투표의 제출 링크(아이디)를 찾지 못했어요.<br>링크 제출 시 <b>아이디</b>를 같이 적어야 검사할 수 있어요.'); return; }
+
+    const imgsSan = await dbGet(`votes/${vid}/images/${sanitized}`);
+    const imgsRaw = imgsSan || await dbGet(`votes/${vid}/images/${nick}`);
+    const imgs = (imgsRaw||[]).filter(x=>x?.url && x.url!=='연차');
+    if(imgs.length===0){ setBody('이 사람이 올린 캡쳐가 없어요.'); return; }
+
+    const { default: Tesseract } = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5/+esm');
+    const worker = await Tesseract.createWorker('eng');
+    let ocrText='', unreadable=0;
+    for(let i=0;i<imgs.length;i++){
+      const prog=document.getElementById('repostProg'); if(prog) prog.textContent=`(${i+1}/${imgs.length})`;
+      const url = imgs[i].url.includes('/upload/') ? imgs[i].url.replace('/upload/','/upload/q_auto,f_auto,w_1000/') : imgs[i].url;
+      try{
+        const { data:{ text } } = await worker.recognize(url);
+        const norm=(text||'').toLowerCase();
+        if(norm.replace(/[^a-z0-9]/g,'').length < 3) unreadable++;
+        ocrText += '\n'+norm;
+      }catch(e){ unreadable++; }
+    }
+    await worker.terminate();
+
+    const textNorm = ocrText.replace(/[^a-z0-9]/g,'');
+    const found=[], missing=[];
+    refLinks.forEach(l=>{
+      const idRaw=(l.id||'').replace(/^@/,'');
+      const refNorm=idRaw.toLowerCase().replace(/[^a-z0-9]/g,'');
+      const ok = refNorm.length>=3 && textNorm.includes(refNorm);
+      (ok?found:missing).push(l);
+    });
+
+    let body='';
+    body+=`<div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">인사팀 리포 ${refLinks.length}개 · 내 캡쳐 ${imgs.length}장<br>⚠️ 자동판독은 100%가 아니에요. 아래 목록을 <b>한 번 더 직접 확인</b>하세요.</div>`;
+    const missTitle = isMine ? '📌 아직 안 올린 게시물 — 캡쳐해서 추가하세요' : '❌ 누락/안 뜸';
+    body+=`<div style="font-weight:800;color:#E5484D;font-size:13px;margin:6px 0">${missTitle} (${missing.length})</div>`;
+    if(missing.length===0){ body+=`<div style="font-size:12px;color:#2E9E5B;font-weight:700;margin-bottom:8px">${isMine?'다 올렸어요! 👍':'없음 👍'}</div>`; }
+    else {
+      missing.forEach(l=>{
+        const idTxt = l.id ? ('@'+String(l.id).replace(/^@/,'')) : '(아이디 없음)';
+        body+=`<div style="background:#FFF0F0;border:1px solid #FFD0D0;border-radius:10px;padding:10px;margin-bottom:6px">`;
+        body+=`<div style="font-weight:700;font-size:13px">${escH(l.nick||'')} <span style="color:var(--text3);font-weight:500">${escH(idTxt)}</span></div>`;
+        if(l.url) body+=`<div style="font-size:11px;color:#3B6FD4;word-break:break-all;margin-top:3px"><a href="${escH(l.url)}" target="_blank" style="color:#3B6FD4">${escH(l.url)}</a></div>`;
+        body+=`</div>`;
+      });
+      window._repostMissUrls = missing.map(l=>l.url).filter(Boolean).join('\n');
+      if(window._repostMissUrls) body+=`<button onclick="copyRepostMissing()" style="width:100%;background:#FFE0E0;color:#E5484D;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:10px">📋 안 올린 게시물 URL 복사</button>`;
+    }
+    body+=`<div style="font-weight:800;color:#2E9E5B;font-size:13px;margin:10px 0 6px">✅ 이미 올린 것 (${found.length})</div>`;
+    body+=`<div style="font-size:12px;color:var(--text2);line-height:1.7;word-break:break-all">${found.map(l=>escH('@'+String(l.id||'').replace(/^@/,''))).join(', ')||'없음'}</div>`;
+    if(unreadable>0) body+=`<div style="font-size:11px;color:#C98A00;margin-top:10px">❓ 아이디를 못 읽은 캡쳐 ${unreadable}장 있음 → 그만큼 잘못 잡혔을 수 있으니 직접 확인하세요.</div>`;
+    setBody(body);
+  }catch(e){
+    setBody('검사 중 오류가 났어요. 인터넷 연결을 확인하고 다시 시도해 주세요.<br><span style="font-size:11px;color:#aaa">'+escH(String(e&&e.message||e))+'</span>');
+  }
+}
+function closeRepostModal(){ const m=document.getElementById('repostModal'); if(m) m.style.display='none'; }
+function copyRepostMissing(){ navigator.clipboard.writeText(window._repostMissUrls||'').then(()=>showToast('📋 누락 URL 복사됨')).catch(()=>showToast('복사 실패 — 직접 선택해 주세요')); }
 
 
 function toggleImgCollapse(id){
@@ -5630,7 +5723,7 @@ async function openFullAttPayout(gid, mondayStr, label, membersJson){
   // 이미 지급된 사람 확인 (그룹+주차+이름 단위)
   const paidRec = await dbGet(`stockPayout/${gid}/${mondayStr}`) || {};
   let m=document.getElementById('payoutModal');
-  if(!m){ m=document.createElement('div'); m.id='payoutModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto'; document.body.appendChild(m); }
+  if(!m){ m=document.createElement('div'); m.id='payoutModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px'; document.body.appendChild(m); }
   const unpaidCount = members.filter(nm=>!paidRec[nm]).length;
   // 카톡 공지문 기본값: 개근자 전원 (관리자가 직접 수정 가능). 지급은 중복 안 되므로 안전.
   const noticeText = `${label} 개근주식 안내\n\n` + members.map(n=>'@'+n).join('\n') + `\n\n10분 내 주식 지급 예정`;
