@@ -3811,7 +3811,12 @@ async function renderVoteCard(vid,v){
   }else if(bonusVoters.length===0 && sortedLinks.length===0){
     html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:6px">아직 제출된 링크가 없습니다</div>`;
   }
-  if(canSubmitLink){
+  // 사원은 링크를 한 번 제출하면 수정 불가 (관리자만 ✏️수정 가능)
+  const _myLinkKey = CU?.key||'admin';
+  const _alreadySubmittedLink = !!(v.links && (v.links[_myLinkKey] || v.links[_myLinkKey+'_1'] || v.links[_myLinkKey+'_2']));
+  if(canSubmitLink && _alreadySubmittedLink && !isAdmin){
+    html+=`<div style="margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:12px;color:var(--text2);font-weight:700;line-height:1.5">🔒 링크를 제출했어요 · 수정 불가<div style="font-weight:500;color:var(--text3);font-size:11px;margin-top:3px">잘못 냈으면 관리자에게 요청해 주세요</div></div>`;
+  } else if(canSubmitLink){
     // 드랍박스 제거 — 위에서 고른 선택지로 링크칸 자동 결정 (투피드면 2칸)
     html+=`<div style="margin-top:10px">`;
     html+=`<input id="linkId_${vid}" class="linkfield" placeholder="인스타그램 아이디" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
