@@ -4319,8 +4319,8 @@ async function uploadImages(vid, input){
     await recordAttendance(vid, (myIdx!==undefined?myIdx:0), myKey);
   }
 
-  showToast(`✅ ${uploaded.length}장 업로드 완료!`);
   input.value = '';
+  showSubmitDonePopup(groups[v?.group]?.name||'', _voteKindOf(v), uploaded.length);
 
   // 화면 새로고침
   if(_currentTab==='home') loadHome();
@@ -4645,6 +4645,9 @@ async function pickVoteOption(vid, optIdx){
     // 링크 불필요 → 바로 저장
     await castVote(vid, optIdx);
     if(window._pendingVote) delete window._pendingVote[vid];
+    if(window._castVoteOK !== false){
+      showSubmitDonePopup(groups[v?.group]?.name||'', _voteKindOf(v), 0);
+    }
     return;
   }
   // 임시 선택만 (화면 표시). [투표 제출] 눌러야 실제 저장
@@ -4716,8 +4719,33 @@ async function submitVote(vid){
     await submitVoteLinkNew(vid, true, preData);
   }
   const _gn = groups[v?.group]?.name || '';
-  showToast(_gn ? `✅ ${_gn} 그룹 투표 제출 완료!` : '✅ 투표 제출 완료!');
+  showSubmitDonePopup(_gn, _voteKindOf(v), 0);
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+// ── 제출 완료 팝업 (출근/퇴근·그룹·사진장수 자동) ──
+function _voteKindOf(v){
+  const t=(v&&v.title)||'';
+  if(t.includes('시작')||t.includes('출근')) return 'start';
+  if(t.includes('완료')||t.includes('마감')||t.includes('퇴근')) return 'end';
+  if(v&&v.imageUpload) return 'end';
+  return null;
+}
+function showSubmitDonePopup(groupName, kind, photoCount){
+  let emoji, line2;
+  if(kind==='start'){ emoji='🌅'; line2='출근 투표 제출 완료!'; }
+  else if(kind==='end'){ emoji='🌙'; line2='퇴근 투표 제출 완료!'; }
+  else { emoji='✅'; line2='투표 제출 완료!'; }
+  let m=document.getElementById('submitDoneModal');
+  if(!m){ m=document.createElement('div'); m.id='submitDoneModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10004;display:flex;align-items:center;justify-content:center;padding:24px'; document.body.appendChild(m); }
+  let body = `${escH(groupName||'')} 그룹<br>${line2}`;
+  if(photoCount>0) body += `<br>사진 <b>${photoCount}</b>장`;
+  m.innerHTML=`<div style="background:#fff;border-radius:22px;padding:30px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 14px 44px rgba(0,0,0,0.25)">
+    <div style="font-size:54px;margin-bottom:14px;line-height:1">${emoji}</div>
+    <div style="font-size:20px;font-weight:900;color:#FF5C9D;line-height:1.5;margin-bottom:22px">${body}</div>
+    <button onclick="document.getElementById('submitDoneModal').style.display='none'" style="width:100%;padding:15px;border:none;border-radius:14px;background:linear-gradient(135deg,#FF85C1,#f87286);color:#fff;font-size:16px;font-weight:800;cursor:pointer">확인</button>
+  </div>`;
+  m.style.display='flex';
 }
 
 // ═══════ 🎴 카드 뒤집기 추첨 ═══════
