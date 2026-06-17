@@ -3614,6 +3614,11 @@ async function renderVoteCard(vid,v){
         _quotaReady = true;
       }
     }catch(e){}
+    // 취소 기록 있으면 노피드(재능기부)만 선택 가능 (비관리자)
+    const _canceledMe = (CU?.role!=='admin') && !!(v.canceled && v.canceled[myKey] && (v.canceled[myKey].count||0)>0);
+    if(_canceledMe){
+      html+=`<div style="background:#FFF0F0;border:1px solid #FFD0D0;border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:#E5484D;font-weight:700">🚫 취소한 투표예요 · 재능기부(노피드)만 다시 선택할 수 있어요</div>`;
+    }
     opts.forEach((opt,i)=>{
       const cnt=Object.values(responses).filter(r=>r===i).length;
       const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
@@ -3622,10 +3627,12 @@ async function renderVoteCard(vid,v){
       const _optLow=(opt||'').toLowerCase();
       const _isLeaveOpt=_optLow.includes('프패')||_optLow.includes('연차')||_optLow.includes('프리패스');
       const _leaveFull = _quotaReady && _isLeaveOpt && !isMe && _leaveUsed>=_leaveQuota;
-      const canVote=!isClosed && !_leaveFull;
+      const _optIsNopid = _optLow.includes('노피드')||_optLow.includes('재능기부');
+      const _lockedByCancel = _canceledMe && !_optIsNopid;
+      const canVote=!isClosed && !_leaveFull && !_lockedByCancel;
       const onclickAttr=canVote?`onclick="pickVoteOption('${vid}',${i})"`:'';
       const isPending = (window._pendingVote && window._pendingVote[vid]===i);
-      html+=`<div class="vopt${isMe||isPending?' selected':''}${isClosed?' closed':''}" ${onclickAttr} style="${_leaveFull?'opacity:0.5;background:var(--surface2);cursor:not-allowed;':''}">`;
+      html+=`<div class="vopt${isMe||isPending?' selected':''}${isClosed?' closed':''}" ${onclickAttr} style="${(_leaveFull||_lockedByCancel)?'opacity:0.45;cursor:not-allowed;':''}">`;
       html+=`<div class="vbar" style="width:${pct}%"></div>`;
       html+=`<div class="vopt-chk">${isMe||isPending?'✓':''}</div>`;
       html+=`<div class="vopt-label">${escH(opt)}${_leaveFull?` <span style="color:#E8927C;font-size:11px;font-weight:800">· 연차 마감 (${_leaveUsed}/${_leaveQuota})</span>`:''}</div>`;
@@ -4496,6 +4503,8 @@ async function cancelVoteFor(vid, myKey, linkKey){
   }
 
   await dbDelete(`votes/${vid}/responses/${myKey}`);
+  // 취소 기록 — 이 투표 재선택은 노피드만 허용 (연차 차감/복구와 무관, 비관리자만)
+  if(CU?.role!=='admin'){ try{ const _pc=v.canceled?.[myKey]; await dbSet(`votes/${vid}/canceled/${myKey}`, { count:((_pc&&_pc.count)||0)+1, at:Date.now() }); }catch(e){} }
   await dbDelete(`votes/${vid}/links/${key}`);
   await dbDelete(`votes/${vid}/links/${key}_1`);
   await dbDelete(`votes/${vid}/links/${key}_2`);
@@ -5090,6 +5099,16 @@ async function castVote(vid,optIdx){
   const wasBonus = prevOptText.includes('봉사')||prevOptText.includes('열정페이');
   const wasDuty = prevOptText.includes('당직');
   const usedDate = getTitleDate(v) || todayStr;
+
+  // 취소 후 재투표 제한: 취소 기록이 있으면 노피드(재능기부)만 가능 (비관리자). 연차 차감 전에 막아 영향 0.
+  if(CU?.role!=='admin'){
+    const _cRec = v.canceled?.[myKey];
+    const _newIsNopid = newOptText.includes('노피드')||newOptText.includes('재능기부');
+    if(_cRec && (_cRec.count||0)>0 && !_newIsNopid){
+      showBigAlert('🚫','노피드만 가능','한 번 취소한 투표는\n재능기부(노피드)로만\n다시 선택할 수 있어요.');
+      window._castVoteOK=false; window._castVoting=false; return;
+    }
+  }
 
   // 재선택 제한(원복): 이미 투표한 사람이 다른 선택지로 바꾸려 하면 → 노피드(재능기부)·당직으로만 가능.
   // 단, 이전 선택이 연차(프패)·봉사(열정페이)·당직이었으면 제한 없음.
