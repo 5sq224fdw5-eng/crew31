@@ -5306,6 +5306,24 @@ async function castVote(vid,optIdx){
     }catch(e){}
   }
 
+  // ── (맨 끝) 봉사·노피드로 선택 시 제출했던 링크 자동 삭제 ──
+  // 연차/투피드/응답/출석 처리가 모두 끝난 뒤 실행 → 그 로직들과 절대 안 섞임. 링크만 건드림.
+  {
+    const _isBonusOrNopid = newOptText.includes('봉사')||newOptText.includes('열정페이')||newOptText.includes('노피드')||newOptText.includes('재능기부');
+    if(_isBonusOrNopid){
+      try{
+        const _lk = CU?.key||'admin';
+        const _had = (await dbGet(`votes/${vid}/links/${_lk}`)) || (await dbGet(`votes/${vid}/links/${_lk}_1`)) || (await dbGet(`votes/${vid}/links/${_lk}_2`));
+        if(_had){
+          await dbDelete(`votes/${vid}/links/${_lk}`);
+          await dbDelete(`votes/${vid}/links/${_lk}_1`);
+          await dbDelete(`votes/${vid}/links/${_lk}_2`);
+          showToast('링크가 자동 삭제됐어요');
+        }
+      }catch(e){}
+    }
+  }
+
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
   window._castVoting = false;
@@ -7152,8 +7170,8 @@ async function startNotiPolling(){
     ]);
     updateNotiBadge();
   };
-  poll();
-  // 2분 반복 폴링 제거 (비용 절감). 앱 열 때 위에서 1번만 체크함.
+  // poll();  ← 앱 열 때 자동 알림 체크도 제거 (자동 알림 완전 중단). 헤더 '새 버전 알리기' 버튼은 별개로 동작.
+  // 2분 반복 폴링 제거 (비용 절감).
   // 자동 알림은 사용자 요청으로 중단 — 푸시는 '새 버전 알리기' 버튼에서만 발송.
   // _notiPollInterval=setInterval(poll,120000);
 }
