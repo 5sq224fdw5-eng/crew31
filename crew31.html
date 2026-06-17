@@ -3614,11 +3614,6 @@ async function renderVoteCard(vid,v){
         _quotaReady = true;
       }
     }catch(e){}
-    // 취소 이력 있으면 노피드(재능기부)만 선택 가능 (관리자 예외)
-    const _canceledMe = (CU?.role!=='admin') && !!(v.canceled && v.canceled[myKey] && (v.canceled[myKey].count||0)>0);
-    if(_canceledMe){
-      html+=`<div style="background:#FFF0F0;border:1px solid #FFD0D0;border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:#E5484D;font-weight:700">🚫 취소한 투표예요 · 재능기부(노피드)만 다시 선택할 수 있어요</div>`;
-    }
     opts.forEach((opt,i)=>{
       const cnt=Object.values(responses).filter(r=>r===i).length;
       const pct=totalVotes?Math.round(cnt/totalVotes*100):0;
@@ -3627,12 +3622,10 @@ async function renderVoteCard(vid,v){
       const _optLow=(opt||'').toLowerCase();
       const _isLeaveOpt=_optLow.includes('프패')||_optLow.includes('연차')||_optLow.includes('프리패스');
       const _leaveFull = _quotaReady && _isLeaveOpt && !isMe && _leaveUsed>=_leaveQuota;
-      const _optIsNopid = _optLow.includes('노피드')||_optLow.includes('재능기부');
-      const _lockedByCancel = _canceledMe && !_optIsNopid;
-      const canVote=!isClosed && !_leaveFull && !_lockedByCancel;
+      const canVote=!isClosed && !_leaveFull;
       const onclickAttr=canVote?`onclick="pickVoteOption('${vid}',${i})"`:'';
       const isPending = (window._pendingVote && window._pendingVote[vid]===i);
-      html+=`<div class="vopt${isMe||isPending?' selected':''}${isClosed?' closed':''}" ${onclickAttr} style="${(_leaveFull||_lockedByCancel)?'opacity:0.45;cursor:not-allowed;':''}">`;
+      html+=`<div class="vopt${isMe||isPending?' selected':''}${isClosed?' closed':''}" ${onclickAttr} style="${_leaveFull?'opacity:0.5;background:var(--surface2);cursor:not-allowed;':''}">`;
       html+=`<div class="vbar" style="width:${pct}%"></div>`;
       html+=`<div class="vopt-chk">${isMe||isPending?'✓':''}</div>`;
       html+=`<div class="vopt-label">${escH(opt)}${_leaveFull?` <span style="color:#E8927C;font-size:11px;font-weight:800">· 연차 마감 (${_leaveUsed}/${_leaveQuota})</span>`:''}</div>`;
@@ -3647,8 +3640,7 @@ async function renderVoteCard(vid,v){
       }
     });
     if(hasVoted&&!isClosed){
-      const _cancelBtn = (isAdmin) ? `<button onclick="cancelVote('${vid}')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid #ddd;background:white;color:var(--text3);cursor:pointer">취소</button>` : '';
-      html+=`<div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center;align-items:center"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span>${_cancelBtn}</div>`;
+      html+=`<div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span><button onclick="cancelVote('${vid}')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid #ddd;background:white;color:var(--text3);cursor:pointer">취소</button></div>`;
     }
     if(isClosed){
       html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${totalVotes}명 참여</span></div>`;
@@ -3811,12 +3803,7 @@ async function renderVoteCard(vid,v){
   }else if(bonusVoters.length===0 && sortedLinks.length===0){
     html+=`<div style="font-size:12px;color:var(--text3);margin-bottom:6px">아직 제출된 링크가 없습니다</div>`;
   }
-  // 사원은 링크를 한 번 제출하면 수정 불가 (관리자만 ✏️수정 가능)
-  const _myLinkKey = CU?.key||'admin';
-  const _alreadySubmittedLink = !!(v.links && (v.links[_myLinkKey] || v.links[_myLinkKey+'_1'] || v.links[_myLinkKey+'_2']));
-  if(canSubmitLink && _alreadySubmittedLink && !isAdmin){
-    html+=`<div style="margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:12px;color:var(--text2);font-weight:700;line-height:1.5">🔒 링크를 제출했어요 · 수정 불가<div style="font-weight:500;color:var(--text3);font-size:11px;margin-top:3px">잘못 냈으면 관리자에게 요청해 주세요</div></div>`;
-  } else if(canSubmitLink){
+  if(canSubmitLink){
     // 드랍박스 제거 — 위에서 고른 선택지로 링크칸 자동 결정 (투피드면 2칸)
     html+=`<div style="margin-top:10px">`;
     html+=`<input id="linkId_${vid}" class="linkfield" placeholder="인스타그램 아이디" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
@@ -4504,8 +4491,6 @@ async function cancelVoteFor(vid, myKey, linkKey){
   }
 
   await dbDelete(`votes/${vid}/responses/${myKey}`);
-  // 취소 이력 기록 — 이 투표에서 이후 재선택은 노피드(재능기부)만 허용
-  try{ const _pc=v.canceled?.[myKey]; await dbSet(`votes/${vid}/canceled/${myKey}`, { count:((_pc&&_pc.count)||0)+1, at:Date.now() }); }catch(e){}
   await dbDelete(`votes/${vid}/links/${key}`);
   await dbDelete(`votes/${vid}/links/${key}_1`);
   await dbDelete(`votes/${vid}/links/${key}_2`);
@@ -5101,30 +5086,14 @@ async function castVote(vid,optIdx){
   const wasDuty = prevOptText.includes('당직');
   const usedDate = getTitleDate(v) || todayStr;
 
-  // 취소 이력이 있으면(취소 후 재투표) → 노피드(재능기부)로만 가능 (관리자 예외). 그 외 선택지 변경은 자유.
-  if(CU?.role!=='admin'){
-    const _cRec = v.canceled?.[myKey];
-    const _newIsNopid = newOptText.includes('노피드')||newOptText.includes('재능기부');
-    if(_cRec && (_cRec.count||0)>0 && !_newIsNopid){
-      showBigAlert('🚫','노피드만 가능','한 번 취소한 투표는\n재능기부(노피드)로만\n다시 선택할 수 있어요.');
+  // 재선택 제한(원복): 이미 투표한 사람이 다른 선택지로 바꾸려 하면 → 노피드(재능기부)·당직으로만 가능.
+  // 단, 이전 선택이 연차(프패)·봉사(열정페이)·당직이었으면 제한 없음.
+  if(prevOptIdx!==undefined && prevOptIdx!==optIdx && !wasLeave && !wasBonus && !wasDuty){
+    const newIsNopid = newOptText.includes('노피드')||newOptText.includes('재능기부');
+    const newIsDuty = newOptText.includes('당직');
+    if(!newIsNopid && !newIsDuty){
+      showToast('⚠️ 한번 투표하면 재능기부(노피드)·당직으로만 변경할 수 있어요');
       window._castVoteOK=false; window._castVoting=false; return;
-    }
-  }
-  // 봉사(열정페이)·노피드(재능기부)로 변경하면 → 제출한 링크 자동 삭제 (조용히, 토스트만)
-  {
-    const _toBonus = newOptText.includes('봉사')||newOptText.includes('열정페이');
-    const _toNopid = newOptText.includes('노피드')||newOptText.includes('재능기부');
-    if(_toBonus || _toNopid){
-      try{
-        const _lk = CU?.key||'admin';
-        const _had = (await dbGet(`votes/${vid}/links/${_lk}`)) || (await dbGet(`votes/${vid}/links/${_lk}_1`)) || (await dbGet(`votes/${vid}/links/${_lk}_2`));
-        if(_had){
-          await dbDelete(`votes/${vid}/links/${_lk}`);
-          await dbDelete(`votes/${vid}/links/${_lk}_1`);
-          await dbDelete(`votes/${vid}/links/${_lk}_2`);
-          showToast('링크가 자동 삭제됐어요');
-        }
-      }catch(e){}
     }
   }
 
