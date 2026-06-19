@@ -3588,9 +3588,12 @@ async function renderVoteCard(vid,v){
       if(imgs.length>0){
         const sorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
         html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
-        window._imgGallery_v = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url); sorted.forEach((img,imgIdx)=>{
+        window._imgGalleries = window._imgGalleries || {};
+        const _galKey1 = 'gal'+(window._galSeq=(window._galSeq||0)+1);
+        window._imgGalleries[_galKey1] = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url);
+        sorted.forEach((img,imgIdx)=>{
           const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
-          html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+          html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewerKey('${_galKey1}',${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
         });
         html+=`</div>`;
       }
@@ -3746,6 +3749,8 @@ async function renderVoteCard(vid,v){
         bonusVoters.push({nick:k, type:'재능기부', time:t});
       }else if(optText.includes('프패')||optText.includes('연차')||optText.includes('프리패스')){
         bonusVoters.push({nick:k, type:'연차', time:t});
+      }else if(optText.includes('당직')){
+        bonusVoters.push({nick:k, type:'당직', time:t});
       }
     });
   }
@@ -3785,14 +3790,14 @@ async function renderVoteCard(vid,v){
         // 첫 번째 링크에서 닉네임/아이디/배지
         const firstLink = entry.links[0];
         const linkType = firstLink.type||'normal';
-        const badgeText = linkType==='tupide'?'투피드':linkType==='bonus'?'열정페이':linkType==='leave'?'연차':'';
+        const badgeText = linkType==='tupide'?'투피드':linkType==='bonus'?'열정페이':linkType==='leave'?'연차':linkType==='duty'?'당직':'';
         html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">`;
         html+=`<div style="display:flex;align-items:center;gap:4px">`;
         html+=`<span style="font-size:11px;color:var(--text3)">${num++}.</span>`;
         html+=`<span style="font-size:13px;font-weight:700">${escH(firstLink.nick||'')}</span>`;
         if(firstLink.id) html+=`<span style="font-size:12px;color:var(--text3)">@${escH(firstLink.id)}</span>`;
         html+=`</div>`;
-        if(badgeText) html+=`<span style="background:${linkType==='tupide'?'#FF85C1':linkType==='leave'?'#FFB347':'#94a3b8'};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${badgeText}</span>`;
+        if(badgeText) html+=`<span style="background:${linkType==='tupide'?'#FF85C1':linkType==='leave'?'#FFB347':linkType==='duty'?'#7EC8E3':'#94a3b8'};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${badgeText}</span>`;
         html+=`</div>`;
         entry.links.forEach(l=>{
           html+=`<div style="margin-bottom:2px;display:flex;align-items:center;gap:6px">`;
@@ -4068,10 +4073,12 @@ async function toggleNickBtn(vid, collapseId, nick){
   if(realImgs.length>0){
     const sorted = [...realImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
-    window._imgGallery_v = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url);
+    window._imgGalleries = window._imgGalleries || {};
+    const _galKey2 = 'gal'+(window._galSeq=(window._galSeq||0)+1);
+    window._imgGalleries[_galKey2] = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url);
     sorted.forEach((img,imgIdx)=>{
       const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
-      html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewer(_imgGallery_v,${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+      html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewerKey('${_galKey2}',${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
     });
     html+=`</div>`;
   }
@@ -4263,6 +4270,8 @@ async function copyAllLinks(vid){
         bonusVoters.push({nick:k, type:'재능기부', time:t});
       }else if(optText.includes('프패')||optText.includes('연차')||optText.includes('프리패스')){
         bonusVoters.push({nick:k, type:'연차', time:t});
+      }else if(optText.includes('당직')){
+        bonusVoters.push({nick:k, type:'당직', time:t});
       }
     });
   }
@@ -4812,6 +4821,7 @@ async function submitVote(vid){
     if(optText.includes('투피드')||optText.includes('두배')) type='tupide';
     else if(optText.includes('연차')||optText.includes('프패')||optText.includes('프리패스')) type='leave';
     else if(optText.includes('봉사')||optText.includes('열정페이')) type='bonus';
+    else if(optText.includes('당직')) type='duty';
     const isTup = type==='tupide';
     if(isTup){
       const u1=document.getElementById(`linkUrl_${vid}_1`)?.value.trim()||'';
@@ -7245,6 +7255,10 @@ let _imgViewerUrls = [];
 let _imgViewerIdx = 0;
 let _touchStartX = 0;
 
+function openImgViewerKey(k, idx){
+  const urls = (window._imgGalleries && window._imgGalleries[k]) || [];
+  openImgViewer(urls, idx);
+}
 function openImgViewer(urls, idx){
   _imgViewerUrls = urls;
   _imgViewerIdx = idx||0;
