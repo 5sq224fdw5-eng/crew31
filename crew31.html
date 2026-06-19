@@ -1201,7 +1201,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.당직-OK' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.탭복원2' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -1231,19 +1231,20 @@ async function enterApp(){
     if(['settings','status'].includes(lastTab)) lastTab='notice';
     if(['settings','status'].includes(savedTab)) savedTab='notice';
   }
+  const _standaloneTabs=['calendar','leave','status','settings'];
   if(savedGroup==='all'){
     // 마지막이 "전체"였으면 전체로 복원 (첫 그룹으로 튀지 않게)
+    _currentDept = null;
     renderGroupSelectBar();
-    selectGroup('all');
-    const _standaloneRestore0=['calendar','leave','status','settings'];
-    if(_standaloneRestore0.includes(lastTab)){ try{ goTab(lastTab); }catch(e){} }
+    if(_standaloneTabs.includes(lastTab)){ try{ goTab(lastTab); }catch(e){ selectGroup('all'); } }
+    else selectGroup('all');
   } else if(savedGroup && groups[savedGroup]){
     _currentDept = savedGroup;
     renderGroupSelectBar();
-    selectGroup(savedGroup); // 그룹 진입 = 투표(home) 첫 화면
-    // 마지막에 보던 독립 탭(달력/연차/현황/설정)이었으면 그 탭으로 복원 (그룹 투표화면으로 튀지 않게)
-    const _standaloneRestore=['calendar','leave','status','settings'];
-    if(_standaloneRestore.includes(savedTab)){ try{ goTab(savedTab); }catch(e){} }
+    // 마지막에 보던 독립 탭(달력/연차/현황/설정)이면 그룹 home은 그리지 않고 그 탭만 복원
+    // (selectGroup이 loadHome을 호출해 화면을 덮어쓰는 경합 방지)
+    if(_standaloneTabs.includes(savedTab)){ try{ goTab(savedTab); }catch(e){ selectGroup(savedGroup); } }
+    else selectGroup(savedGroup); // 그룹 진입 = 투표(home) 첫 화면
   } else {
     // 저장된 그룹 없으면 첫 번째 그룹(좋아요) 자동 선택 → 투표 첫 화면
     const firstGid = Object.keys(groups)[0];
