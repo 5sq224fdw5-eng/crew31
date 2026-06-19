@@ -3780,10 +3780,12 @@ async function renderVoteCard(vid,v){
     let num=1;
     allEntries.forEach(entry=>{
       if(entry.type==='bonus'){
+        const _bl=entry.label||'';
+        const _bc = _bl==='당직'?'#7EC8E3':_bl==='연차'?'#FFB347':_bl==='열정페이'?'#A78BFA':_bl==='재능기부'?'#94a3b8':'#94a3b8';
         html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">`;
         html+=`<span style="font-size:11px;color:var(--text3);min-width:20px">${num++}.</span>`;
-        html+=`<span style="font-size:12px;font-weight:700;min-width:60px;flex-shrink:0">${escH(entry.nick)}</span>`;
-        html+=`<span style="font-size:12px;color:var(--text3)">${escH(entry.label)}</span>`;
+        html+=`<span style="font-size:13px;font-weight:700;flex:1">${escH(entry.nick)}</span>`;
+        html+=`<span style="background:${_bc};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${escH(_bl)}</span>`;
         html+=`</div>`;
       } else {
         html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)">`;
@@ -3823,7 +3825,8 @@ async function renderVoteCard(vid,v){
   } else if(canSubmitLink){
     // 드랍박스 제거 — 위에서 고른 선택지로 링크칸 자동 결정 (투피드면 2칸)
     html+=`<div style="margin-top:10px">`;
-    html+=`<input id="linkId_${vid}" class="linkfield" placeholder="인스타그램 아이디" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<input id="linkId_${vid}" class="linkfield" placeholder="인스타그램 아이디 (예: narin_a.to)" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:2px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+    html+=`<div style="font-size:10px;color:var(--text3);margin:0 2px 8px;line-height:1.4">※ 한글 닉네임 ❌ · 인스타 아이디(영문)만 입력해 주세요</div>`;
     if(isTupide){
       // 투피드 → 링크 2칸
       html+=`<input id="linkUrl_${vid}_1" class="linkfield" placeholder="참여 게시물 링크 1 · 그대로 붙여넣기 · 수정 X" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
@@ -3943,6 +3946,20 @@ function onLinkTypeChange(vid){
   }
 }
 
+// 인스타 아이디 정규화·검사: @ 제거, 한글/이상문자 차단 (영문·숫자·밑줄·마침표만)
+function normalizeIgId(raw){
+  let s=(raw||'').trim();
+  if(!s) return {ok:false, err:'empty'};
+  s=s.replace(/^@+/,'').trim();
+  if(/[\u3131-\u318E\uAC00-\uD7A3]/.test(s)) return {ok:false, err:'korean'};
+  if(!/^[A-Za-z0-9._]+$/.test(s)) return {ok:false, err:'format'};
+  return {ok:true, id:s};
+}
+function showIgIdError(err){
+  if(err==='empty') showBigAlert('✍️','아이디를 입력해 주세요','링크와 함께 인스타그램 아이디를\n꼭 입력해 주세요.\n(예: narin_a.to)');
+  else if(err==='korean') showBigAlert('🚫','아이디를 확인해 주세요','한글 닉네임이 아니라\n인스타그램 아이디(영문)를\n입력해 주세요. (예: narin_a.to)');
+  else showBigAlert('🚫','아이디 형식 오류','인스타그램 아이디는 영문·숫자·\n밑줄(_)·마침표(.)만 가능해요.\n(예: narin_a.to)');
+}
 async function submitVoteLinkNew(vid, silent, preData){
   const nick=CU?.name||'익명';
   const key=CU?.key||'admin';
@@ -4844,6 +4861,13 @@ async function submitVote(vid){
     }
   }
 
+  // 아이디 검사 (저장 전) — 비었거나 한글/이상문자면 막고 안내, @는 떼고 저장
+  if(!isBonusOnly && preData){
+    const _idChk = normalizeIgId(preData.id);
+    if(!_idChk.ok){ showIgIdError(_idChk.err); return; }
+    preData.id = _idChk.id;
+  }
+
   // 1) 선택지 저장 (임시선택이 있을 때만)
   if(pending!==undefined){
     await castVote(vid, optIdx);
@@ -5478,6 +5502,7 @@ function closeVoteModal(){
 // ══════════════════════════════════════════════
 const VOTE_RESULT_MAP = {
   '완료': '완료', '퇴근': '완료', '출근': '완료',
+  '당직': '당직',
   '공게': '공게', '2인': '공게', '공개': '공게',
   '프패': '프패', '연차': '프패', '프리패스': '프패',
   '봉사': '봉사', '열정페이': '봉사',
@@ -5934,6 +5959,8 @@ async function recordAttendance(vid, optIdx, voterKey) {
     let finalResult;
     if(startResult==='프패' || endResult==='프패'){
       finalResult='프패';                       // 연차는 즉시 확정
+    } else if(startResult==='당직' || endResult==='당직'){
+      finalResult='당직';                       // 당직도 즉시 확정 (완료투표 안 해도 출근 인정)
     } else if(startResult && endResult){
       const special=['봉사','노피드','투피드'].find(s=>s===endResult||s===startResult);
       finalResult = special || '완료';          // 둘 다 함 → 완료(또는 특수)
