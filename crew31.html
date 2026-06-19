@@ -1201,7 +1201,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = CU.role==='admin' ? '(주) 떠리원 인사팀' : '(주) 떠리원 사원';
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.당직-OK' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3683,7 +3683,9 @@ async function renderVoteCard(vid,v){
               });
               if(startVote){
                 const startedNames = Object.keys(startVote.responses||{});
-                const mismatch = startedNames.filter(n=>!votedNames.includes(n));
+                // 시작투표에서 연차(프패)/당직 고른 사람은 완료 안 해도 완료 간주 → 미제출에서 제외
+                const _autoDone = (nm)=>{ const o=((startVote.options||[])[startVote.responses[nm]]||'').toLowerCase(); return o.includes('연차')||o.includes('프패')||o.includes('프리패스')||o.includes('당직'); };
+                const mismatch = startedNames.filter(n=>!votedNames.includes(n) && !_autoDone(n));
                 if(mismatch.length>0){
                   html+=`<div style="padding:10px 12px;background:#FFF8E1;border-radius:12px;border:1px solid #FFE082">`;
                   html+=`<div style="font-size:11px;font-weight:700;color:#F9A825;margin-bottom:6px">🔔 완료 미제출 ${mismatch.length}명</div>`;
@@ -3791,7 +3793,11 @@ async function renderVoteCard(vid,v){
         html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)">`;
         // 첫 번째 링크에서 닉네임/아이디/배지
         const firstLink = entry.links[0];
-        const linkType = firstLink.type||'normal';
+        let linkType = firstLink.type||'normal';
+        // 옛 데이터 보정: 시작투표에서 당직/연차를 고른 사람은 저장 타입과 무관하게 배지 표시
+        const _voterOpt = (v.responses && v.options && v.responses[firstLink.nick]!==undefined) ? (v.options[v.responses[firstLink.nick]]||'').toLowerCase() : '';
+        if(_voterOpt.includes('당직')) linkType='duty';
+        else if(_voterOpt.includes('연차')||_voterOpt.includes('프패')||_voterOpt.includes('프리패스')) linkType='leave';
         const badgeText = linkType==='tupide'?'투피드':linkType==='bonus'?'열정페이':linkType==='leave'?'연차':linkType==='duty'?'당직':'';
         html+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">`;
         html+=`<div style="display:flex;align-items:center;gap:4px">`;
@@ -5644,7 +5650,7 @@ async function loadStatusGroup(gid) {
           const result = mapVoteResult(opts[optIdx] || '');
           const cur = weeks[mondayStr].members[mname][v.date];
           if(cur) return; // attendance 값 우선
-          if(['프패','공게','확인증'].includes(result)){
+          if(['프패','당직','공게','확인증'].includes(result)){
             weeks[mondayStr].members[mname][v.date] = result;
           } else {
             weeks[mondayStr].members[mname][v.date] = '참여';
@@ -5681,12 +5687,17 @@ async function loadStatusGroup(gid) {
       });
     }
     const didStartV = {};      // 시작투표 참여
+    const dutyStartV = {};     // 시작투표에서 당직 선택 (과거 데이터 '참여' 보정용)
     if(votes){
       Object.values(votes).forEach(v=>{
         if(!v || v.deleted || v.group!==gid || !v.date) return;
         const dd = getTitleDate(v) || v.date;
         if(!(v.title||'').includes('시작')) return;
-        Object.keys(v.responses||{}).forEach(mkey=>{ didStartV[`${dd}__${keyToName[mkey]||mkey}`]=true; });
+        Object.entries(v.responses||{}).forEach(([mkey,idx])=>{
+          const nm=keyToName[mkey]||mkey;
+          didStartV[`${dd}__${nm}`]=true;
+          if(((v.options||[])[idx]||'').toLowerCase().includes('당직')) dutyStartV[`${dd}__${nm}`]=true;
+        });
       });
     }
     Object.entries(weeks).forEach(([mondayStr, wk])=>{
@@ -5696,6 +5707,8 @@ async function loadStatusGroup(gid) {
           if(attManual?.[mondayStr]?.[mname]?.[date]) return;
           const val=dmap[date];
           const k=`${date}__${mname}`;
+          // 당직은 무조건 당직 (과거 '참여'로 저장된 데이터 보정) — 출근으로 집계
+          if(dutyStartV[k]){ dmap[date]='당직'; return; }
           const noEndVote = !endExistsByDate[date]; // 그날 완료투표가 아예 없음
           if((val==='참여'||val==='시작')){
             if(!hasResp[k]){ delete dmap[date]; return; } // 취소 유령 → 빈칸
