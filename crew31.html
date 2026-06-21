@@ -328,6 +328,7 @@ document.addEventListener('keydown',e=>{
         <div id="groupSelectInner" style="display:contents"></div>
         <button class="tab-item" data-tab="calendar" onclick="goTab('calendar')" style="padding:6px 12px;font-size:11px">달력</button>
         <button class="tab-item" data-tab="leave" onclick="goTab('leave')" style="padding:6px 12px;font-size:11px">연차</button>
+        <button class="tab-item" data-tab="warn" onclick="goTab('warn')" style="padding:6px 12px;font-size:11px">경고</button>
         <button class="tab-item admin-tab" data-tab="status" onclick="goTab('status')" style="padding:6px 12px;font-size:11px;display:none">현황</button>
         <button class="tab-item admin-tab" data-tab="settings" onclick="goTab('settings')" style="padding:6px 12px;font-size:11px;display:none">설정</button>
       </div>
@@ -1253,33 +1254,29 @@ async function enterApp(){
     if(['settings','status'].includes(lastTab)) lastTab='notice';
     if(['settings','status'].includes(savedTab)) savedTab='notice';
   }
-  const _standaloneTabs=['calendar','leave','status','settings'];
-  if(savedGroup==='all'){
-    // 마지막이 "전체"였으면 전체로 복원 (첫 그룹으로 튀지 않게)
-    _currentDept = null;
+  const _standaloneTabs=['calendar','leave','status','warn','settings','noti'];
+  let savedGroup2 = (savedGroup==='all') ? null : savedGroup; // 전체 탭 제거 → 그룹으로 진입
+  if(savedGroup2 && groups[savedGroup2]){
+    _currentDept = savedGroup2;
     renderGroupSelectBar();
-    if(_standaloneTabs.includes(lastTab)){ try{ goTab(lastTab); }catch(e){ selectGroup('all'); } }
-    else selectGroup('all');
-  } else if(savedGroup && groups[savedGroup]){
-    _currentDept = savedGroup;
-    renderGroupSelectBar();
-    // 마지막에 보던 독립 탭(달력/연차/현황/설정)이면 그룹 home은 그리지 않고 그 탭만 복원
-    // (selectGroup이 loadHome을 호출해 화면을 덮어쓰는 경합 방지)
-    if(_standaloneTabs.includes(savedTab)){ try{ goTab(savedTab); }catch(e){ selectGroup(savedGroup); } }
-    else selectGroup(savedGroup); // 그룹 진입 = 투표(home) 첫 화면
+    // 마지막에 보던 독립 탭(달력/연차/현황/경고/설정)이면 그룹 home은 그리지 않고 그 탭만 복원
+    if(_standaloneTabs.includes(savedTab)){ try{ goTab(savedTab); }catch(e){ selectGroup(savedGroup2); } }
+    else selectGroup(savedGroup2); // 그룹 진입 = 투표(home) 첫 화면
   } else {
     // 저장된 그룹 없으면 첫 번째 그룹(좋아요) 자동 선택 → 투표 첫 화면
     const firstGid = Object.keys(groups)[0];
     if(firstGid){
       _currentDept = firstGid;
       renderGroupSelectBar();
-      selectGroup(firstGid);
+      if(_standaloneTabs.includes(savedTab)){ try{ goTab(savedTab); }catch(e){ selectGroup(firstGid); } }
+      else selectGroup(firstGid);
     } else {
       try{goTab(lastTab);}catch(e){console.error('goTab error',e);}
       renderGroupSelectBar();
     }
   }
   setTimeout(()=>startNotiPolling(),2000);
+  setTimeout(()=>checkWarnPopup(),1800);
   setTimeout(()=>startAutoVoteScheduler(),3000);
   setTimeout(()=>checkExistingPushSub(),3000);
 }
@@ -1425,15 +1422,13 @@ function renderGroupSelectBar(){
   document.documentElement.style.setProperty('--group-color', groupColor);
 
   let html = '';
-  const allActive = !_currentDept;
-  html += `<button onclick="selectGroup('all')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:${allActive?'#FF85C1':'#f8f0f5'};color:${allActive?'white':'#999'}">전체</button>`;
-  // order 필드 기준 정렬, 없으면 키 순
+  // 'order 필드 기준 정렬, 없으면 키 순
   const sortedGroups = Object.entries(groups).sort((a,b)=>{
     const oa = a[1].order ?? 999;
     const ob = b[1].order ?? 999;
     return oa - ob;
   });
-  const standalone = ['calendar','leave','status','settings','noti'];
+  const standalone = ['calendar','leave','status','warn','settings','noti'];
   const isStandalone = standalone.includes(_currentTab);
   sortedGroups.forEach(([gid,g])=>{
     const active = !isStandalone && _currentDept===gid;
@@ -1528,7 +1523,7 @@ function goTab(tab){
   renderDeptSubMenu();
 
   // 그룹 내 탭바 - 그룹 선택됐고 독립메뉴(달력/연차/현황/설정) 아닐때만 표시
-  const standalone = ['calendar','leave','status','settings','noti'];
+  const standalone = ['calendar','leave','status','warn','settings','noti'];
   const mainTabBar = document.getElementById('mainTabBar');
   if(mainTabBar) mainTabBar.style.display = (_currentDept && !standalone.includes(tab)) ? '' : 'none';
 
@@ -1544,6 +1539,7 @@ function goTab(tab){
     leave:['🏖️ 연차·경품','오락실 연차 및 경품 현황'],
     members:['👥 멤버 목록','부서별 사원 현황'],
     status:['📋 현황','제출 현황 확인'],
+    warn:['⚠️ 경고','그룹별 경고 관리'],
     settings:['⚙️ 설정','인사팀 전용 관리'],
     noti:['🔔 알림','채팅·공지·투표 알림 내역'],
   };
@@ -1556,6 +1552,7 @@ function goTab(tab){
   if(tab==='leave')loadLeave();
   if(tab==='members')loadMembersPage();
   if(tab==='status')loadStatus();
+  if(tab==='warn')loadWarn();
   if(tab==='settings')loadSettings();
   if(tab==='noti')loadNotiPage();
 }
@@ -2489,6 +2486,241 @@ function filterLeaveList(q){
     card.style.display=(!kw||name.includes(kw))?'':'none';
   });
 }
+
+// ══════════════════════════════════════════════
+// ── 경고(WARNING) — 그룹별 경고 적립(+사유), 매월 25일 자정 리셋 ──
+//   저장: crew31  warnReasons/{게임멤버키}=[{date,reason,by,t}] (그룹마다 키가 달라 자동 분리)
+//   경고 횟수 = 사유 배열 길이.  warnMeta/cycle 로 25일 리셋.
+// ══════════════════════════════════════════════
+function getWarnCycle(d){
+  d = d || new Date();
+  let y=d.getFullYear(), m=d.getMonth();
+  if(d.getDate()<25){ m-=1; if(m<0){m=11;y-=1;} }
+  return `${y}-${String(m+1).padStart(2,'0')}`;
+}
+function warnArr(v){ return Array.isArray(v)?v:(v?Object.values(v):[]); } // Firebase가 객체로 줄 때 대비
+// 경고 횟수 = 경고 이벤트 수 - 차감 이벤트 수 (0 미만이면 0)
+function warnCount(events){
+  const arr=warnArr(events);
+  let add=0, sub=0;
+  arr.forEach(e=>{ if(e&&e.type==='차감') sub++; else add++; });
+  return Math.max(0, add-sub);
+}
+async function checkWarnReset(){
+  try{
+    const cur=getWarnCycle();
+    const meta=await dbGet('warnMeta');
+    if(!meta || meta.cycle!==cur){
+      await dbSet('warnReasons', null);
+      await dbSet('warnings', null);   // 구버전 정리
+      await dbSet('warnLog', null);    // 구버전 정리
+      await dbSet('warnMeta', {cycle:cur, resetAt:Date.now()});
+      return true;
+    }
+  }catch(e){ console.warn('checkWarnReset',e); }
+  return false;
+}
+async function loadWarn(){
+  const mb=document.getElementById('mainBody');
+  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const isAdmin = CU?.role==='admin';
+  await checkWarnReset();
+  const [gameMembers, reasonsRaw] = await Promise.all([ gameGet('members'), dbGet('warnReasons') ]);
+  if(!gameMembers){ mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>'; return; }
+  const reasonsMap = reasonsRaw||{};
+
+  const GAME_GROUPS=Array.from(new Set(['좋아요','댓글','시크릿',...Object.values(groups).map(g=>g.name).filter(Boolean)]));
+  const byGroup={}; GAME_GROUPS.forEach(g=>{byGroup[g]=[];}); byGroup['기타']=[];
+  Object.entries(gameMembers).forEach(([k,m])=>{
+    if(!m.name)return;
+    const cleanName=m.name.replace(/^\*/,'');
+    const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
+    const realName=group?cleanName.replace(group,''):cleanName;
+    if(!isAdmin && realName!==CU?.name) return;   // 사원: 본인 것만
+    const events=warnArr(reasonsMap[k]).slice().sort((a,b)=>(a.t||0)-(b.t||0));
+    (byGroup[group||'기타']).push({key:k,realName:realName||cleanName,events,cnt:warnCount(events)});
+  });
+
+  const cycle=getWarnCycle();
+  const ADMIN_NAMES=['고인물','에이스','경력직','불주먹','김월루','퇴사각','알잘딱'];
+  let html='<div style="padding-bottom:60px">';
+  html+=`<div style="padding:10px 14px 2px;font-size:11px;color:var(--text3)">⚠️ 경고 주기 <b>${cycle}</b> · 매월 25일 자정 리셋</div>`;
+  if(isAdmin) html+=`<div style="padding:4px 14px 4px"><input id="warnSearchInput" oninput="filterWarnList(this.value)" placeholder="🔍 이름 검색" autocomplete="off" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:12px;font-size:13px;outline:none;box-sizing:border-box"></div>`;
+
+  let anyShown=false;
+  [...GAME_GROUPS,'기타'].forEach(gName=>{
+    const list=byGroup[gName];
+    if(!list||list.length===0)return;
+    anyShown=true;
+    const gid=Object.keys(groups).find(id=>groups[id].name===gName);
+    const color=groups[gid]?.color||'#FF9F7A';
+    const sortedList=[...list].sort((a,b)=>{
+      const aA=ADMIN_NAMES.includes(a.realName), bA=ADMIN_NAMES.includes(b.realName);
+      if(aA&&!bA)return -1; if(!aA&&bA)return 1;
+      if(aA&&bA)return ADMIN_NAMES.indexOf(a.realName)-ADMIN_NAMES.indexOf(b.realName);
+      return a.realName.localeCompare(b.realName,'ko');
+    });
+    const grpTotal=list.reduce((s,x)=>s+(x.cnt||0),0);
+    const openByDefault = !isAdmin; // 사원은 펼쳐서 바로 보이게
+    html+=`<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleWarnGroup('${gName}')">`;
+    html+=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>`;
+    html+=`<span style="font-size:11px;font-weight:700;color:var(--text3)">${escH(gName)} (${list.length})</span>`;
+    if(grpTotal>0) html+=`<span style="font-size:10px;font-weight:800;color:#FF5C5C;background:rgba(255,92,92,0.12);padding:1px 7px;border-radius:10px">⚠️ ${grpTotal}</span>`;
+    html+=`<span style="margin-left:auto;font-size:11px;color:var(--text3)" id="warrow_${gName}">${openByDefault?'▾':'▸'}</span></div>`;
+    html+=`<div id="wgroup_${gName}" style="display:${openByDefault?'block':'none'}">`;
+    sortedList.forEach(({key:k,realName,events,cnt})=>{
+      const isAdminMember=ADMIN_NAMES.includes(realName);
+      const pid='wp_'+k.replace(/[^a-zA-Z0-9]/g,'');
+      const danger=cnt>=3;
+      html+=`<div class="warn-person" data-name="${escH(realName)}" style="background:white;border-radius:16px;margin:6px 14px;padding:14px;box-shadow:0 1px 6px rgba(0,0,0,0.06);${danger?'border:1.5px solid #FF5C5C':(isAdminMember?'border:1.5px solid var(--accent)':'')}">`;
+      html+=`<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="togglePerson('${pid}')">`;
+      html+=`<div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${color},${color}bb);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white">${(realName||'?')[0]}</div>`;
+      html+=`<div style="flex:1"><div style="font-size:14px;font-weight:800">${escH(realName)}</div>`;
+      html+=`<div style="font-size:11px;color:${danger?'#FF5C5C':'var(--text3)'};font-weight:${danger?'800':'400'}">경고 ${cnt}회${danger?' · 봉사 대상':''}</div></div>`;
+      html+=`<span style="font-size:13px;font-weight:800;color:white;background:${danger?'#FF5C5C':(cnt>0?'#FF9F43':'#cbd5e1')};min-width:26px;height:26px;border-radius:13px;display:flex;align-items:center;justify-content:center;padding:0 4px">${cnt}</span>`;
+      html+=`<span id="${pid}_arrow" style="font-size:12px;color:var(--text3);margin-left:6px">${openByDefault?'▾':'▸'}</span></div>`;
+      html+=`<div id="${pid}" style="display:${openByDefault?'block':'none'}">`;
+      // 경고/차감 이력 (시간순)
+      if(events.length){
+        html+=`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">`;
+        events.forEach((e)=>{
+          const isSub = e.type==='차감';
+          const c = isSub?'#5DB88A':'#FF5C5C';
+          const ic = isSub?'🙏':'⚠️';
+          const label = isSub ? `봉사 차감 - ${escH(e.reason||'봉사 완료')}` : `${escH(realName)} - ${escH(e.reason||'(사유 없음)')}`;
+          html+=`<div style="display:flex;align-items:flex-start;gap:6px;padding:4px 0;font-size:12px">`;
+          html+=`<span style="min-width:16px">${ic}</span>`;
+          html+=`<span style="color:var(--text3);white-space:nowrap">${escH(e.date||'')}</span>`;
+          html+=`<span style="flex:1;color:${isSub?'#3a9e72':'var(--text2)'};font-weight:${isSub?'700':'400'}">${label}</span>`;
+          if(isAdmin) html+=`<button onclick="removeWarnReason('${k}','${escH(realName)}',${e.t||0})" style="border:none;background:none;color:#FF5C5C;font-size:13px;cursor:pointer;padding:0 2px" title="이 기록 삭제">✕</button>`;
+          html+=`</div>`;
+        });
+        html+=`</div>`;
+      } else {
+        html+=`<div style="margin-top:8px;font-size:11px;color:var(--text3);text-align:center">경고 없음</div>`;
+      }
+      // 관리 (관리자만): 경고 +1 / 봉사 차감 / 전체삭제
+      if(isAdmin){
+        html+=`<div style="display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">`;
+        html+=`<button onclick="addWarn('${k}','${escH(realName)}')" style="flex:1;padding:8px;background:rgba(255,92,92,0.12);color:#FF5C5C;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer">⚠️ 경고 +1</button>`;
+        html+=`<button onclick="deductWarn('${k}','${escH(realName)}')" style="flex:1;padding:8px;background:rgba(93,184,138,0.14);color:#3a9e72;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer">🙏 봉사 차감</button>`;
+        html+=`<button onclick="resetWarnOne('${k}','${escH(realName)}')" style="flex:0 0 auto;padding:8px 10px;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">전체삭제</button>`;
+        html+=`</div>`;
+      }
+      html+=`</div></div>`;
+    });
+    html+=`</div>`;
+  });
+  if(!anyShown) html+=`<div class="empty" style="padding:50px 20px"><div class="empty-icon">🙆</div>현재 누적된 경고가 없어요</div>`;
+  html+='</div>';
+  mb.innerHTML=html;
+}
+function toggleWarnGroup(gName){
+  const el=document.getElementById('wgroup_'+gName);
+  const arrow=document.getElementById('warrow_'+gName);
+  if(!el)return;
+  const open=el.style.display==='none'||el.style.display==='';
+  el.style.display=open?'block':'none';
+  if(arrow)arrow.textContent=open?'▾':'▸';
+}
+function filterWarnList(q){
+  const kw=(q||'').trim().toLowerCase();
+  document.querySelectorAll('[id^="wgroup_"]').forEach(g=>{ if(kw) g.style.display='block'; });
+  document.querySelectorAll('.warn-person').forEach(card=>{
+    const name=(card.getAttribute('data-name')||'').toLowerCase();
+    card.style.display=(!kw||name.includes(kw))?'':'none';
+  });
+}
+// 경고 +1 (사유 입력 필수)
+async function addWarn(gameKey,name){
+  const reason=prompt(`${name} 경고 사유를 입력하세요`);
+  if(reason===null) return;                 // 취소
+  const rsn=(reason||'').trim();
+  if(!rsn){ showToast('사유를 입력해주세요'); return; }
+  const cur=warnArr(await dbGet(`warnReasons/${gameKey}`));
+  const d=new Date();
+  const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  cur.push({type:'경고', date, reason:rsn, by:CU?.name||'admin', t:Date.now()});
+  await dbSet(`warnReasons/${gameKey}`, cur);
+  showToast(`${name}: 경고 +1 (현재 ${warnCount(cur)}회)`);
+  loadWarn();
+}
+// 봉사 차감 (사유 입력, 기본 '봉사 완료')
+async function deductWarn(gameKey,name){
+  const cur0=warnArr(await dbGet(`warnReasons/${gameKey}`));
+  if(warnCount(cur0)<=0){ showToast(`${name}: 차감할 경고가 없어요`); return; }
+  const reason=prompt(`${name} 봉사 차감 사유를 입력하세요`, '봉사 완료');
+  if(reason===null) return;                 // 취소
+  const rsn=(reason||'').trim()||'봉사 완료';
+  const d=new Date();
+  const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  cur0.push({type:'차감', date, reason:rsn, by:CU?.name||'admin', t:Date.now()});
+  await dbSet(`warnReasons/${gameKey}`, cur0);
+  showToast(`${name}: 봉사 차감 (현재 ${warnCount(cur0)}회)`);
+  loadWarn();
+}
+// 기록 1건 삭제 (잘못 입력 정정)
+async function removeWarnReason(gameKey,name,t){
+  const cur=warnArr(await dbGet(`warnReasons/${gameKey}`));
+  const next=cur.filter(r=>(r.t||0)!==Number(t));
+  await dbSet(`warnReasons/${gameKey}`, next.length?next:null);
+  showToast(`${name}: 기록 삭제 (현재 ${warnCount(next)}회)`);
+  loadWarn();
+}
+async function resetWarnOne(gameKey,name){
+  if(!confirm(`${name}의 경고·차감 기록을 전부 삭제할까요?`))return;
+  await dbSet(`warnReasons/${gameKey}`, null);
+  showToast(`${name}: 경고 초기화`);
+  loadWarn();
+}
+// 로그인 시: 본인 그룹 중 한 곳이라도 경고 3회 이상이면 봉사 팝업.
+// 한 번 본 상태(시그니처)면 다시 안 뜸. 경고가 더 쌓여(횟수↑) 상태가 바뀌면 다시 뜸.
+async function checkWarnPopup(){
+  try{
+    if(!CU?.name) return;
+    await checkWarnReset();
+    const [gameMembers, reasonsRaw]=await Promise.all([ gameGet('members'), dbGet('warnReasons') ]);
+    if(!gameMembers) return;
+    const GAME_GROUPS=Array.from(new Set(['좋아요','댓글','시크릿',...Object.values(groups).map(g=>g.name).filter(Boolean)]));
+    const hits=[]; const sig=[];
+    Object.entries(gameMembers).forEach(([k,m])=>{
+      if(!m.name)return;
+      const cleanName=m.name.replace(/^\*/,'');
+      const group=GAME_GROUPS.find(g=>cleanName.startsWith(g));
+      const realName=group?cleanName.replace(group,''):cleanName;
+      if(realName!==CU.name) return;
+      const cnt=warnCount((reasonsRaw||{})[k]);
+      if(cnt>=3){ hits.push(`${group||'기타'} ${cnt}회`); sig.push(`${group||'기타'}:${cnt}`); }
+    });
+    const ackKey='warnPopupAck_'+CU.name;
+    const signature = sig.length ? (getWarnCycle()+'||'+sig.sort().join('|')) : '';
+    if(!signature){ try{localStorage.removeItem(ackKey);}catch(e){} return; } // 3회 미만 → 팝업 X + 기록 초기화
+    let prevAck=''; try{ prevAck=localStorage.getItem(ackKey)||''; }catch(e){}
+    if(signature===prevAck) return;                                          // 이미 본 상태 → 안 뜸
+    try{ localStorage.setItem(ackKey, signature); }catch(e){}                 // 본 것으로 기록
+    showWarnPopup(hits.join(' · '));
+  }catch(e){ console.warn('checkWarnPopup',e); }
+}
+async function showWarnPopup(detail){
+  const id='warnPopupOverlay';
+  if(document.getElementById(id)) return;
+  const ov=document.createElement('div');
+  ov.id=id;
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML=`<div style="background:white;border-radius:20px;max-width:340px;width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,0.25)">
+    <div style="background:linear-gradient(135deg,#FF8A8A,#FF5C5C);padding:24px;text-align:center">
+      <div style="font-size:40px;margin-bottom:6px">⚠️</div>
+      <div style="font-size:17px;font-weight:900;color:white">경고 3회 누적!</div>
+    </div>
+    <div style="padding:20px;text-align:center">
+      <div style="font-size:13px;color:#A0566B;line-height:1.6">이번 경고 주기에 경고가 3회 쌓였어요.<br><b>봉사</b>로 채워주셔야 해요 🙏</div>
+      <div style="font-size:11px;color:#FF5C5C;font-weight:800;margin-top:10px">${escH(detail)}</div>
+      <button onclick="document.getElementById('${id}').remove()" style="margin-top:16px;width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#FF8A8A,#FF5C5C);color:white;font-size:14px;font-weight:800;cursor:pointer">확인</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+
 
 // ══════════════════════════════════════════════
 // ── LEAVE (연차·경품) ──
