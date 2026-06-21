@@ -696,6 +696,28 @@ async function dbGetRecent(p, limit=15){
     return j;
   }catch{return null;}
 }
+// 다운로드 절감(핵심): loadDeptPage가 votes 전체를 받지 않고
+// 해당 그룹 + 'all' 투표만 인덱스 쿼리로 받게 한다.
+// votes/group 인덱스가 없거나 쿼리 오류면 자동으로 기존 전체읽기로 폴백 -> 절대 안 깨짐.
+async function dbGetVotesForGroup(gid){
+  const q = async (g)=>{
+    try{
+      const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"group"')}&equalTo=${encodeURIComponent('"'+g+'"')}`;
+      const controller=new AbortController();
+      const t=setTimeout(()=>controller.abort(),8000);
+      const r=await fetch(url,{signal:controller.signal});
+      clearTimeout(t);
+      if(!r.ok) return undefined;      // 인덱스 없음/오류 -> 폴백 신호
+      const j=await r.json();
+      return j||{};                    // 성공(빈 결과 포함)
+    }catch{ return undefined; }
+  };
+  const [a,b] = await Promise.all([ q(gid), q('all') ]);
+  if(a===undefined && b===undefined){
+    return await dbGet('votes');       // 쿼리 자체 실패 -> 기존 방식으로 안전 폴백
+  }
+  return Object.assign({}, (a===undefined?{}:a), (b===undefined?{}:b));
+}
 async function dbSet(p,d,retry=0){
   try{
     const res=await fetch(`${DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});
@@ -3182,7 +3204,7 @@ async function loadDeptPage(gid){
   }
   mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   const isAdmin=CU?.role==='admin';
-  const votes=await dbGet('votes');
+  const votes=await dbGetVotesForGroup(gid);
   let rawList=votes
     ?Object.entries(votes)
       .filter(([k,v])=>!v.deleted&&(v.group===gid||v.group==='all'))
