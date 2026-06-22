@@ -734,6 +734,9 @@ async function dbDel(p){try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}ca
 async function gameGet(p){try{const r=await fetch(`${GAME_DB}/${p}.json`);return await r.json();}catch{return null;}}
 async function gameSet(p,d){try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});}catch{}}
 async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
+// 멀티경로 PATCH(merge): 여러 항목을 요청 1번으로 한꺼번에 갱신 (키에 / 넣으면 하위경로). 성공시 true.
+async function gameUpdate(p,obj,retry=0){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}console.error('gameUpdate',e);return false;}}
+async function dbUpdate(p,obj,retry=0){try{const r=await fetch(`${DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}console.error('dbUpdate',e);return false;}}
 
 // ══════════════════════════════════════════════
 // ── LOGIN ──
@@ -1224,7 +1227,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.탭복원2' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.지급수정' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -6098,11 +6101,25 @@ async function openFullAttPayout(gid, mondayStr, label, membersJson){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   let members=[]; try{ members=JSON.parse(membersJson)||[]; }catch(e){}
   _payoutData = { gid, mondayStr, label, members };
-  // 이미 지급된 사람 확인 (그룹+주차+이름 단위)
-  const paidRec = await dbGet(`stockPayout/${gid}/${mondayStr}`) || {};
+  // 이미 지급된 사람 확인 — 안전한 게임키(gKey) 기준 + 옛 닉네임키 호환
+  const [paidRec, gameMembers] = await Promise.all([
+    dbGet(`stockPayout/${gid}/${mondayStr}`),
+    gameGet('members')
+  ]);
+  const paid = paidRec||{};
+  const gMembers = gameMembers||{};
+  const gName = groups[gid]?.name || '';
+  const entries = Object.entries(gMembers);
+  const keyOf = (nm)=>{
+    let hit = entries.find(([k,m])=>((m.name||'').replace(/^\*/,''))===(gName+nm));
+    if(!hit) hit = entries.find(([k,m])=>((m.name||'').replace(/^\*/,''))===nm);
+    return hit?hit[0]:null;
+  };
+  const isPaid = (nm)=>{ const gk=keyOf(nm); return (gk&&paid[gk]) || paid[nm]; }; // 게임키 또는 옛 닉네임
+  _payoutData._keyOf = keyOf;
   let m=document.getElementById('payoutModal');
   if(!m){ m=document.createElement('div'); m.id='payoutModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px'; document.body.appendChild(m); }
-  const unpaidCount = members.filter(nm=>!paidRec[nm]).length;
+  const unpaidCount = members.filter(nm=>!isPaid(nm)).length;
   // 카톡 공지문 기본값: 개근자 전원 (관리자가 직접 수정 가능). 지급은 중복 안 되므로 안전.
   const noticeText = `${label} 개근주식 안내\n\n` + members.map(n=>'@'+n).join('\n') + `\n\n10분 내 주식 지급 예정`;
   _payoutData.noticeText = noticeText;
@@ -6120,8 +6137,8 @@ async function openFullAttPayout(gid, mondayStr, label, membersJson){
   h+=`<div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">💰 지급 대상</div>`;
   h+=`<div style="background:var(--surface2,#f5f5f7);border-radius:10px;padding:12px;margin-bottom:10px;max-height:150px;overflow-y:auto">`;
   members.forEach(nm=>{
-    const paid = paidRec[nm];
-    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;font-weight:600">${escH(nm)} ${paid?'<span style="font-size:11px;color:var(--green);font-weight:700">✓ 지급됨</span>':''}</div>`;
+    const paidNm = isPaid(nm);
+    h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;font-weight:600">${escH(nm)} ${paidNm?'<span style="font-size:11px;color:var(--green);font-weight:700">✓ 지급됨</span>':''}</div>`;
   });
   h+=`</div>`;
   h+=`<div style="font-size:11px;color:#FF9F43;margin-bottom:8px">⚠️ 누르면 오락실에서 아직 안 받은 ${unpaidCount}명에게 주식 1주씩 지급됩니다. (이미 받은 사람은 건너뜀)</div>`;
@@ -6147,7 +6164,7 @@ function copyPayoutList(){
 async function runStockPayout(){
   if(!_payoutData){ return; }
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
-  const { gid, mondayStr, members } = _payoutData;
+  const { gid, mondayStr, members, label } = _payoutData;
   const resEl=document.getElementById('payoutResult');
   if(resEl) resEl.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px">지급 중...</div>';
   try{
@@ -6156,24 +6173,39 @@ async function runStockPayout(){
     const paidRec = await dbGet(`stockPayout/${gid}/${mondayStr}`) || {};
     let done=0, fail=[];
     const gName = groups[gid]?.name || '';
+    const entries = Object.entries(gameMembers);
+    const stockUpdates = {};   // "게임키/stock" -> 새 값
+    const logUpdates = {};     // "게임키/로그id" -> stockLog 항목 (오락실 내역에 표시)
+    const payoutUpdates = {};  // "닉네임" -> 크루 지급기록(중복방지)
+    const nowT = Date.now();
+    const kd = new Date(); kd.setHours(kd.getHours()+9); const kstDate = kd.toISOString().slice(0,10); // 오락실과 동일 KST YYYY-MM-DD
+    const memo = `${label}차 풀참 보상`;   // 예: "6월 3주차 풀참 보상"
+    let idx=0;
     for(const nm of members){
-      if(paidRec[nm]) continue; // 이미 지급
       // 연차/투피드와 동일한 검증된 매칭: 그룹명+닉네임 우선, 안 되면 닉네임만
-      const entries = Object.entries(gameMembers);
-      let hit = entries.find(([k,m])=>{
-        const clean=(m.name||'').replace(/^\*/,'');
-        return clean===(gName+nm);
-      });
-      if(!hit) hit = entries.find(([k,m])=>{
-        const clean=(m.name||'').replace(/^\*/,'');
-        return clean===nm;
-      });
+      let hit = entries.find(([k,m])=>((m.name||'').replace(/^\*/,''))===(gName+nm));
+      if(!hit) hit = entries.find(([k,m])=>((m.name||'').replace(/^\*/,''))===nm);
       if(!hit){ fail.push(nm); continue; }
       const [gKey, gM] = hit;
+      if(paidRec[gKey] || paidRec[nm]) continue; // 이미 지급(게임키 또는 옛 닉네임 기준)
       const cur = Number(gM.stock)||0;
-      await gameSet(`members/${gKey}/stock`, cur+1);
-      await dbSet(`stockPayout/${gid}/${mondayStr}/${nm}`, { at:Date.now(), by:CU.name });
-      done++;
+      stockUpdates[`${gKey}/stock`] = cur+1;
+      logUpdates[`${gKey}/payout_${nowT}_${idx}`] = { type:'give', amount:1, date:kstDate, time:nowT, memo };
+      payoutUpdates[gKey] = { nick:nm, at:nowT, by:CU.name, memo }; // 안전한 게임키로 기록(닉네임 특수문자 무관)
+      done++; idx++;
+    }
+    if(done>0){
+      // 1) 오락실 주식 적립 + 내역(stockLog) 먼저 — 성공해야 함
+      const okStock = await gameUpdate('members', stockUpdates);
+      const okLog   = await gameUpdate('stockLog', logUpdates);
+      if(!okStock){
+        if(resEl) resEl.innerHTML='<div style="background:#FDECEA;border-radius:10px;padding:12px;text-align:center;color:#E8927C;font-weight:700">⚠️ 오락실 주식 적립 실패 — 잠시 후 다시 시도해 주세요 (지급기록 남기지 않음)</div>';
+        showToast('지급 실패: 다시 시도');
+        return;
+      }
+      // 2) 적립 성공한 경우에만 크루 지급기록(중복방지) 저장
+      await dbUpdate(`stockPayout/${gid}/${mondayStr}`, payoutUpdates);
+      if(!okLog) showToast('주식은 지급됐는데 내역 기록은 실패했을 수 있어요');
     }
     let rh=`<div style="background:#E8F8EE;border-radius:10px;padding:12px;text-align:center"><div style="font-size:14px;font-weight:800;color:var(--green)">✅ ${done}명에게 주식 1주씩 지급 완료</div>`;
     if(fail.length>0) rh+=`<div style="font-size:11px;color:#E8927C;margin-top:6px">⚠️ 매칭 실패(오락실에 없음): ${fail.map(escH).join(', ')}</div>`;
