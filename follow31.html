@@ -77,6 +77,26 @@ input,select{font-family:inherit;}
 .gp-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
 .gp-thumb{width:74px;height:74px;object-fit:cover;border-radius:11px;border:1.5px solid var(--line);}
 .room-edit{background:var(--pink-tint);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-top:12px;}
+.gate-roominfo{margin-top:10px;}
+.ri-card{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:13px 15px;}
+.ri-row{display:flex;gap:10px;align-items:center;padding:5px 0;}
+.ri-row+.ri-row{border-top:1px dashed var(--line);}
+.ri-lbl{flex:0 0 76px;font-size:12px;font-weight:800;color:var(--ink-soft);}
+.ri-id{font-size:15px;font-weight:800;color:var(--pink-deep);}
+.ri-ids{font-size:14px;font-weight:700;color:var(--ink);line-height:1.7;}
+.ri-note{margin-top:9px;font-size:11.5px;color:var(--ink-soft);background:var(--pink-tint);border-radius:9px;padding:8px 10px;}
+.gate-checking{text-align:center;font-size:13px;color:var(--ink-soft);padding:14px 0;}
+.check-result{margin-top:12px;}
+.chk-miss-h{font-weight:800;color:#c0392b;font-size:13px;margin:8px 0 6px;}
+.chk-miss{background:#fdeaea;border:1px solid #f5c6c6;border-radius:10px;padding:8px 11px;margin-bottom:6px;font-weight:800;color:#c0392b;}
+.chk-miss span{font-weight:600;color:#9a7b85;font-size:12px;margin-left:4px;}
+.chk-ok{background:#e9f7ef;border:1px solid #b8e6c8;border-radius:10px;padding:10px 12px;font-weight:800;color:#1e7e45;}
+.chk-found-h{font-weight:800;color:#1e7e45;font-size:13px;margin:10px 0 5px;}
+.chk-found{font-size:13px;color:var(--ink);line-height:1.7;word-break:break-all;}
+.kakao-card{margin-top:14px;background:#fffdf0;border:2px solid #fae100;border-radius:16px;padding:15px;}
+.kakao-h{font-weight:900;font-size:15px;color:var(--ink);text-align:center;}
+.kakao-pw{margin-top:10px;text-align:center;font-size:14px;color:var(--ink);background:#fff;border:1px dashed var(--line);border-radius:10px;padding:9px;}
+.kakao-pw b{color:var(--pink-deep);font-size:16px;letter-spacing:1px;}
 .room-edit-h{font-size:15px;font-weight:800;color:var(--ink);margin-bottom:8px;}
 .room-edit-h span{font-size:11px;font-weight:700;color:#fff;background:var(--pink);border-radius:8px;padding:2px 8px;margin-left:4px;vertical-align:middle;}
 .mini-label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin:10px 2px 4px;}
@@ -85,7 +105,7 @@ textarea.field{resize:vertical;line-height:1.5;font-family:inherit;}
 .ferr:empty{display:none;}
 .gate-cols{display:flex;gap:10px;}
 .gate-col{flex:1;min-width:0;}
-.gate-col-h{font-size:12px;font-weight:800;color:var(--pink-deep);margin:0 0 8px 2px;}
+.gate-col-h{font-size:12px;font-weight:800;color:var(--pink-deep);margin:0 0 8px 2px;min-height:34px;display:flex;align-items:flex-start;flex-wrap:wrap;gap:3px;line-height:1.35;}
 .gate-col-h span{color:var(--ink-soft);font-weight:600;font-size:10.5px;}
 .gate-cols .field{width:100%;}
 .btn-outline{background:#fff;color:var(--pink-deep);border:2px solid var(--pink);border-radius:15px;font-size:15px;font-weight:800;padding:13px;box-shadow:var(--shadow-sm);}
@@ -278,6 +298,7 @@ textarea.field{resize:vertical;line-height:1.5;font-family:inherit;}
       </div>
       <label style="margin-top:14px">입장할 방 선택</label>
       <select id="gRoom" class="field"></select>
+      <div id="gRoomInfo" class="gate-roominfo"></div>
       <button id="gateBtn" class="btn block" style="margin-top:16px">다음 &rarr;</button>
       <div id="gateErr" class="err"></div>
       <button id="toChoose" class="linkbtn" style="margin-top:10px">&larr; 처음으로</button>
@@ -332,7 +353,7 @@ textarea.field{resize:vertical;line-height:1.5;font-family:inherit;}
 </div>
 
 <script>
-window.onerror=function(msg,src,line,col){try{var d=document.createElement("div");d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#d23a6e;color:#fff;padding:12px;font:13px monospace;white-space:pre-wrap;";d.textContent="JS 에러: "+msg+" (줄 "+line+":"+col+")";(document.body||document.documentElement).appendChild(d);}catch(_){}return false;};
+window.onerror=function(msg,src,line,col){try{ if((!msg||/Script error\.?/i.test(msg)) && (!line||line===0)){ return false; } var d=document.createElement("div");d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#d23a6e;color:#fff;padding:12px;font:13px monospace;white-space:pre-wrap;";d.textContent="JS 에러: "+msg+" (줄 "+line+":"+col+")";(document.body||document.documentElement).appendChild(d);}catch(_){}return false;};
 
 const DB='https://gacha-31-default-rtdb.firebaseio.com/follow31';
 const ADMIN_PW="0307";
@@ -408,11 +429,22 @@ async function doAdminLogin(){ const pw=($("adminPw").value||""); if(pw===ADMIN_
 function doLogout(silent){ state.role=null; state.name=null; save("f31_role",""); save("f31_name",""); $("app").classList.add("hidden"); $("loginScreen").classList.remove("hidden"); $("loginName").value=""; if($("loginPw")) $("loginPw").value=""; $("loginErr").textContent=silent?"명단이 변경되어 다시 로그인해 주세요.":""; }
 function restoreSession(){ const r=load("f31_role"), n=load("f31_name"); if(r==="admin"){ state.role="admin"; state.name="관리자"; enterApp(); } else if(r==="part"&&n){ state.role="part"; state.name=n; enterApp(); } }
 const ROOM_DEFS=[ {key:"like",label:"좋아요방",type:"image"}, {key:"like_comment",label:"좋아요+댓글방",type:"image"}, {key:"matzal",label:"맞팔방",type:"manual"} ];
-function roomCfg(key){ const c=(state.config&&state.config.rooms&&state.config.rooms[key])||{}; const def=ROOM_DEFS.find(function(r){ return r.key===key; })||{}; return { key:key, label:c.label||def.label||key, type:c.type||def.type||"image", rep:c.rep||"", manual:c.manual||"" }; }
+function roomCfg(key){ const c=(state.config&&state.config.rooms&&state.config.rooms[key])||{}; const def=ROOM_DEFS.find(function(r){ return r.key===key; })||{}; return { key:key, label:c.label||def.label||key, type:c.type||def.type||"image", rep:c.rep||"", manual:c.manual||"", kakaoLink:c.kakaoLink||"", kakaoPw:c.kakaoPw||"" }; }
+function staffList(){ return ((state.config&&state.config.staffList)||"").split(/[\n,]/).map(function(s){ return s.trim().replace(/^@/,""); }).filter(Boolean); }
 function showLogin(){ $("gateScreen").classList.add("hidden"); $("loginScreen").classList.remove("hidden"); }
 function showGate(){ $("loginScreen").classList.add("hidden"); $("gateScreen").classList.remove("hidden"); $("gateChoose").classList.remove("hidden"); $("gateForm").classList.add("hidden"); $("gateResult").classList.add("hidden"); }
 function showGateForm(){ $("gateChoose").classList.add("hidden"); $("gateForm").classList.remove("hidden"); $("gateResult").classList.add("hidden"); }
-function fillGateRooms(){ const sel=$("gRoom"); if(!sel) return; sel.innerHTML=ROOM_DEFS.map(function(d){ const rc=roomCfg(d.key); return '<option value="'+d.key+'">'+esc(rc.label)+'</option>'; }).join(""); }
+function fillGateRooms(){ const sel=$("gRoom"); if(!sel) return; sel.innerHTML=ROOM_DEFS.map(function(d){ const rc=roomCfg(d.key); return '<option value="'+d.key+'">'+esc(rc.label)+'</option>'; }).join(""); renderRoomInfo(); }
+function renderRoomInfo(){
+  const box=$("gRoomInfo"); if(!box) return;
+  const sel=$("gRoom"); const key=sel?sel.value:""; const rc=roomCfg(key);
+  const staff=staffList();
+  let h='';
+  if(rc.rep){ h+='<div class="ri-row"><span class="ri-lbl">&#127775; 대표 계정</span><span class="ri-id">@'+esc(rc.rep.replace(/^@/,""))+'</span></div>'; }
+  if(staff.length){ h+='<div class="ri-row" style="align-items:flex-start"><span class="ri-lbl">&#128105;&#8205;&#128188; 인사팀</span><span class="ri-ids">'+staff.map(function(s){ return '@'+esc(s); }).join("<br>")+'</span></div>'; }
+  if(rc.type==="image" && (rc.rep||staff.length)){ h+='<div class="ri-note">위 계정들을 모두 팔로우한 뒤, 다음 단계에서 인증샷을 올려요.</div>'; }
+  box.innerHTML = h ? '<div class="ri-card">'+h+'</div>' : '';
+}
 async function initGate(){ try{ const c=await dbGet("config"); state.config=c||state.config||{}; }catch(e){} fillGateRooms(); }
 async function submitGate(){
   const bn=($("gByName").value||"").trim(), bh=($("gByHandle").value||"").trim();
@@ -421,6 +453,7 @@ async function submitGate(){
   $("errByName").textContent=""; $("errByHandle").textContent=""; $("errInv").textContent=""; $("gateErr").textContent="";
   let ok=true;
   if(!bn){ $("errByName").textContent="닉네임을 입력해 주세요."; ok=false; }
+  else if([...bn].length!==3){ $("errByName").textContent="닉네임은 정확히 3글자로 입력해 주세요."; ok=false; }
   if(!bh){ $("errByHandle").textContent="아이디(또는 링크)를 입력해 주세요."; ok=false; }
   if(!inN && !inH){ $("errInv").textContent="초대자 닉네임 또는 아이디 중 하나는 꼭 입력해 주세요."; ok=false; }
   if(!ok) return;
@@ -428,6 +461,7 @@ async function submitGate(){
   const pushRes=await dbPush("entryLog",{bn:bn,bh:bh,inN:inN,inH:inH,room:room,t:Date.now()});
   state.lastEntryKey=(pushRes&&pushRes.name)||null;
   state.lastRoom=room;
+  state.lastBh=bh; state.lastBn=bn; state.lastProofs=[];
   $("gateErr").textContent="";
   showGateResult(room,bn);
 }
@@ -446,8 +480,11 @@ async function gateUpload(key,input){
   let cur=[]; try{ cur=await dbGet("entryLog/"+key+"/proof")||[]; }catch(e){}
   const merged=cur.concat(urls);
   if(key) await dbSet("entryLog/"+key+"/proof",merged);
+  state.lastProofs=merged;
   renderGateProofs(merged);
-  if(st) st.textContent="\u2705 인증샷 "+merged.length+"장 올렸어요!";
+  if($("gp_checkbox")) $("gp_checkbox").innerHTML="";
+  if($("gp_kakao")){ $("gp_kakao").classList.add("hidden"); $("gp_kakao").innerHTML=""; }
+  if(st) st.textContent="\u2705 인증샷 "+merged.length+"장 올렸어요! 아래 검수하기를 눌러 주세요.";
 }
 function showGateResult(room,bn){
   const rc=roomCfg(room);
@@ -462,7 +499,10 @@ function showGateResult(room,bn){
       '<input type="file" id="gp_input" accept="image/*" multiple style="display:none">'+
       '<button class="btn-outline block" id="gp_btn">&#128247; 사진 선택</button>'+
       '<div id="gp_thumbs" class="gp-thumbs"></div>'+
-      '<div id="gp_status" class="filehint" style="margin-top:8px"></div></div>';
+      '<div id="gp_status" class="filehint" style="margin-top:8px"></div>'+
+      '<button class="btn block" id="gp_check" style="margin-top:12px">&#128269; 인증샷 검수하기</button>'+
+      '<div id="gp_checkbox"></div>'+
+      '<div id="gp_kakao" class="hidden"></div></div>';
     body=manualHtml+repBtn+uploader;
   }
   $("gateForm").classList.add("hidden");
@@ -471,7 +511,60 @@ function showGateResult(room,bn){
   if(rc.type!=="manual"){
     const inp=$("gp_input"), btn=$("gp_btn"), key=state.lastEntryKey;
     if(btn&&inp){ btn.addEventListener("click",function(){ inp.click(); }); inp.addEventListener("change",function(){ gateUpload(key,inp); }); }
+    const cbtn=$("gp_check"); if(cbtn){ cbtn.addEventListener("click",function(){ runGateCheck(key); }); }
   }
+}
+function revealKakao(rc){
+  const box=$("gp_kakao"); if(!box) return;
+  let h='<div class="kakao-card"><div class="kakao-h">&#127881; 모든 인증 완료! 입장 미션 끝</div>';
+  if(rc.kakaoLink){ h+='<a class="btn block" style="margin-top:10px;background:#fae100;color:#3c1e1e" href="'+esc(rc.kakaoLink)+'" target="_blank" rel="noopener">&#128172; 카톡 오픈방 입장하기</a>'; }
+  else { h+='<div class="filehint" style="margin-top:8px">카톡 링크가 아직 등록되지 않았어요. 관리자에게 문의해 주세요.</div>'; }
+  if(rc.kakaoPw){ h+='<div class="kakao-pw">&#128274; 입장 비밀번호 &nbsp;<b>'+esc(rc.kakaoPw)+'</b></div>'; }
+  h+='</div>';
+  box.innerHTML=h; box.classList.remove("hidden");
+}
+async function runGateCheck(key){
+  const box=$("gp_checkbox"); if(!box) return;
+  let urls=state.lastProofs||[];
+  if(key){ try{ const p=await dbGet("entryLog/"+key+"/proof"); if(p&&p.length) urls=p; }catch(e){} }
+  if(!urls.length){ box.innerHTML='<div class="ferr" style="margin-top:10px">먼저 인증샷을 올려 주세요.</div>'; return; }
+  const rc=roomCfg(state.lastRoom);
+  const seen={}, refs=[];
+  function addRef(label,id){ const idn=(id||"").replace(/^@/,"").toLowerCase().replace(/[^a-z0-9]/g,""); if(idn.length<3||seen[idn]) return; seen[idn]=true; refs.push({label:label,id:(id||"").replace(/^@/,""),idn:idn}); }
+  if(rc.rep) addRef("대표",rc.rep);
+  staffList().forEach(function(s){ addRef("인사팀",s); });
+  if(state.lastBh) addRef("본인 프로필",cleanHandle(state.lastBh));
+  if(!refs.length){ box.innerHTML='<div class="ferr" style="margin-top:10px">검수 기준(대표·인사팀 아이디)이 없어요. 관리자에게 문의해 주세요.</div>'; return; }
+  box.innerHTML='<div class="gate-checking">&#128270; 캡처를 읽는 중… <span id="gp_prog"></span><div class="filehint" style="margin-top:6px">처음엔 글자 인식기를 받느라 조금 걸려요 (10~30초)</div></div>';
+  const cbtn=$("gp_check"); if(cbtn) cbtn.disabled=true;
+  try{
+    const mod=await import("https://cdn.jsdelivr.net/npm/tesseract.js@5/+esm");
+    const Tesseract=mod.default||mod;
+    const worker=await Tesseract.createWorker("eng");
+    let ocr="", unread=0;
+    for(let i=0;i<urls.length;i++){ const pr=$("gp_prog"); if(pr) pr.textContent="("+(i+1)+"/"+urls.length+")"; const u=urls[i].includes("/upload/")?urls[i].replace("/upload/","/upload/q_auto,f_auto,w_1000/"):urls[i]; try{ const res=await worker.recognize(u); const text=(res&&res.data&&res.data.text)||""; const norm=text.toLowerCase(); if(norm.replace(/[^a-z0-9]/g,"").length<3) unread++; ocr+="\n"+norm; }catch(e){ unread++; } }
+    await worker.terminate();
+    const textNorm=ocr.replace(/[^a-z0-9]/g,"");
+    const found=[], missing=[];
+    refs.forEach(function(r){ (textNorm.includes(r.idn)?found:missing).push(r); });
+    let h='<div class="check-result">';
+    h+='<div class="filehint" style="margin-bottom:8px">검수 기준 '+refs.length+'개 · 캡처 '+urls.length+'장<br>&#9888;&#65039; 자동판독은 100%가 아니에요. 아래 목록을 한 번 더 직접 확인하세요.</div>';
+    if(missing.length){
+      h+='<div class="chk-miss-h">&#10060; 누락/안 보임 ('+missing.length+')</div>';
+      h+=missing.map(function(r){ return '<div class="chk-miss">@'+esc(r.id)+' <span>'+esc(r.label)+'</span></div>'; }).join("");
+      h+='<div class="filehint" style="margin-top:8px">빠진 계정 캡처를 다시 올린 뒤 검수하기를 또 눌러 주세요.</div>';
+    } else {
+      h+='<div class="chk-ok">&#9989; 모든 계정 확인됐어요!</div>';
+    }
+    if(found.length){ h+='<div class="chk-found-h">&#9989; 확인된 것 ('+found.length+')</div><div class="chk-found">'+found.map(function(r){ return "@"+esc(r.id); }).join(", ")+'</div>'; }
+    if(unread>0){ h+='<div class="filehint" style="color:#c98a00;margin-top:8px">&#10067; 글자를 못 읽은 캡처 '+unread+'장 있음 → 그만큼 잘못 잡혔을 수 있으니 직접 확인하세요.</div>'; }
+    h+='</div>';
+    box.innerHTML=h;
+    if(missing.length===0){ revealKakao(rc); }
+  }catch(e){
+    box.innerHTML='<div class="ferr" style="margin-top:10px">검수 중 오류가 났어요. 인터넷 연결을 확인하고 다시 시도해 주세요.<br><span style="font-weight:500;color:var(--ink-soft)">'+esc(String(e&&e.message||e))+'</span></div>';
+  }
+  if(cbtn) cbtn.disabled=false;
 }
 
 async function addWeek(){ const el=$("weekLabel"); const label=(el.value||"").trim()||suggestWeekLabel(); el.value=""; await dbPush("weeks",{label:label,createdAt:Date.now()}); await refreshAll(); }
@@ -867,22 +960,31 @@ function renderSettings(){
     '<p class="filehint">매주 맞팔 대상을 리포하는 공식 인스타 계정. 저장하면 모두에게 상단 버튼으로 떠요. (블로그·오늘의집은 리포 안 하므로 인스타만)</p>'+
     '<div class="add-row"><input id="officialIg" class="field" placeholder="@아이디 또는 링크" value="'+esc(state.config.official||"")+'"><button class="btn" data-act="saveOfficial">저장</button></div></div>'+
     '<div class="add-box"><div class="section-title" style="margin-top:0">&#128273; 로그인 기록 (최근 30)</div>'+loginLogHtml(null,30)+'</div>'+
+    '<div class="add-box"><div class="section-title" style="margin-top:0">&#128105;&#8205;&#128188; 인사팀 명단 (검수 기준 · 모든 방 공통)</div>'+
+    '<p class="filehint">신입이 팔로우해야 할 인사팀 아이디. 한 줄에 하나씩 적어요. 관문에서 안내로 뜨고, 인증샷 검수 기준이 돼요.</p>'+
+    '<textarea id="staffList" class="field" rows="6" placeholder="@cccc_crong&#10;@narin_a.to&#10;@92_seonmi">'+esc(state.config.staffList||"")+'</textarea>'+
+    '<button class="btn block" style="margin-top:10px" data-act="saveStaff">인사팀 명단 저장</button></div>'+
     '<div class="add-box"><div class="section-title" style="margin-top:0">&#127880; 입장 방 설정 (관문)</div>'+
-    '<p class="filehint">관문에서 신청자가 고르는 방이에요. 그룹명·대표 계정·메뉴얼을 방마다 바꿀 수 있어요.</p>'+
+    '<p class="filehint">관문에서 신청자가 고르는 방이에요. 그룹명·대표 계정·메뉴얼·카톡 링크/비번을 방마다 바꿀 수 있어요.</p>'+
     ROOM_DEFS.map(function(d){ const rc=roomCfg(d.key); const isImg=rc.type==="image";
       return '<div class="room-edit"><div class="room-edit-h">'+esc(rc.label)+' <span>'+(isImg?"인증샷 업로드":"메뉴얼 안내")+'</span></div>'+
         '<label class="mini-label">그룹명</label><input id="rl_'+d.key+'" class="field" value="'+esc(rc.label)+'" placeholder="'+esc(d.label)+'">'+
-        '<label class="mini-label">대표 계정 (아이디/링크)</label><input id="rr_'+d.key+'" class="field" value="'+esc(rc.rep)+'" placeholder="@대표계정">'+
+        '<label class="mini-label">대표 계정 (아이디)</label><input id="rr_'+d.key+'" class="field" value="'+esc(rc.rep)+'" placeholder="@대표계정">'+
         '<label class="mini-label">메뉴얼 안내문</label><textarea id="rm_'+d.key+'" class="field" rows="4" placeholder="신청자에게 보여줄 안내 (줄바꿈 가능)">'+esc(rc.manual)+'</textarea>'+
+        '<label class="mini-label">&#128172; 카톡 오픈방 링크 (미션 완료 후 공개)</label><input id="rk_'+d.key+'" class="field" value="'+esc(rc.kakaoLink)+'" placeholder="https://open.kakao.com/...">'+
+        '<label class="mini-label">&#128274; 카톡방 비밀번호</label><input id="rp_'+d.key+'" class="field" value="'+esc(rc.kakaoPw)+'" placeholder="입장 비번 (없으면 비워둠)">'+
         '<button class="btn block" style="margin-top:10px" data-act="saveRoom" data-key="'+d.key+'">'+esc(rc.label)+' 저장</button></div>';
     }).join("")+'</div>';
 }
+async function saveStaff(){ const v=($("staffList").value||"").trim(); state.config.staffList=v; if(v){ await dbSet("config/staffList",v); } else { await dbDel("config/staffList"); } await refreshAll(); }
 async function saveRoom(key){
   const def=ROOM_DEFS.find(function(r){ return r.key===key; })||{};
   const label=($("rl_"+key).value||"").trim()||def.label||key;
   const rep=($("rr_"+key).value||"").trim();
   const manual=($("rm_"+key).value||"");
-  const obj={label:label,rep:rep,manual:manual,type:def.type||"image"};
+  const kakaoLink=($("rk_"+key).value||"").trim();
+  const kakaoPw=($("rp_"+key).value||"").trim();
+  const obj={label:label,rep:rep,manual:manual,type:def.type||"image",kakaoLink:kakaoLink,kakaoPw:kakaoPw};
   if(!state.config.rooms) state.config.rooms={};
   state.config.rooms[key]=obj;
   await dbSet("config/rooms/"+key,obj);
@@ -934,6 +1036,7 @@ function bcancelEdit(){ state.bEdit=null; render(); }
 async function bdelPost(id,name){ if(!confirm("'"+name+"' 신청을 삭제할까요?")) return; await dbDel("board/"+state.platform+"/"+id); if(state.myPosts.has(id)){ state.myPosts.delete(id); saveMyPosts(); } if(state.bEdit===id) state.bEdit=null; await refreshBoard(); }
 
 $("gateBtn").addEventListener("click",submitGate);
+$("gRoom").addEventListener("change",renderRoomInfo);
 $("chooseSignup").addEventListener("click",showGateForm);
 $("chooseLogin").addEventListener("click",showLogin);
 $("toChoose").addEventListener("click",showGate);
@@ -967,6 +1070,7 @@ $("app").addEventListener("click",function(e){
   else if(act==="saveOfficial"){ setOfficial(); }
   else if(act==="saveLoginPw"){ saveLoginPw(); }
   else if(act==="saveRoom"){ saveRoom(el.dataset.key); }
+  else if(act==="saveStaff"){ saveStaff(); }
   else if(act==="bpost"){ addPost(); }
   else if(act==="bedit"){ beditPost(el.dataset.id); }
   else if(act==="bdel"){ bdelPost(el.dataset.id, el.dataset.name); }
