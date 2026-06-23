@@ -1228,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.시크릿당직' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.선택지연동' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -4501,12 +4501,23 @@ async function adminEditLink(vid, linkKey){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   const cur = await dbGet(`votes/${vid}/links/${linkKey}`);
   if(!cur){ showToast('링크를 찾을 수 없습니다'); return; }
+  const v = await dbGet(`votes/${vid}`);
+  const _opts = (v && v.options) || [];
+  const _curOptIdx = (v && v.responses && v.responses[cur.nick]!==undefined) ? v.responses[cur.nick] : -1;
+  let _optSelect='';
+  if(_opts.length){
+    _optSelect = `<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">선택지 (변경 가능)</div>
+    <select id="el_opt" style="width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)">`
+      + _opts.map((o,i)=>`<option value="${i}" ${i===_curOptIdx?'selected':''}>${escH(o)}</option>`).join('')
+      + `</select>`;
+  }
   let m=document.getElementById('editLinkModal');
   if(!m){ m=document.createElement('div'); m.id='editLinkModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:24px'; document.body.appendChild(m); }
   m.innerHTML=`<div style="background:var(--surface,#fff);border-radius:18px;padding:22px;max-width:360px;width:100%">
     <div style="font-size:16px;font-weight:900;margin-bottom:16px">✏️ 링크 수정</div>
     <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">닉네임</div>
     <input id="el_nick" value="${escH(cur.nick||'')}" style="width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)">
+    ${_optSelect}
     <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">인스타그램 아이디</div>
     <input id="el_id" value="${escH(cur.id||'')}" style="width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)">
     <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">참여 게시물 링크</div>
@@ -4531,8 +4542,31 @@ async function saveEditLink(vid, linkKey){
   await dbSet(`votes/${vid}/links/${linkKey}/nick`, nick);
   await dbSet(`votes/${vid}/links/${linkKey}/id`, id);
   await dbSet(`votes/${vid}/links/${linkKey}/url`, cleanUrlVal);
+  // 선택지 변경 반영 (참여→당직 등) — responses 키는 닉네임 기준
+  const _optSel=document.getElementById('el_opt');
+  let _changedOpt=false;
+  if(_optSel){
+    const newOptIdx=Number(_optSel.value);
+    const v=await dbGet(`votes/${vid}`);
+    const origNick=cur?.nick||nick;
+    const curOptIdx=(v&&v.responses&&v.responses[origNick]!==undefined)?v.responses[origNick]:-1;
+    if(!isNaN(newOptIdx) && newOptIdx!==curOptIdx){
+      await dbSet(`votes/${vid}/responses/${origNick}`, newOptIdx);
+      // 링크 배지 타입도 새 선택지에 맞게
+      const ot=((v&&v.options&&v.options[newOptIdx])||'').toLowerCase();
+      let newType='normal';
+      if(ot.includes('투피드')||ot.includes('두배')) newType='tupide';
+      else if(ot.includes('연차')||ot.includes('프패')||ot.includes('프리패스')) newType='leave';
+      else if(ot.includes('봉사')||ot.includes('열정페이')) newType='bonus';
+      else if(ot.includes('당직')) newType='duty';
+      await dbSet(`votes/${vid}/links/${linkKey}/type`, newType);
+      // 현황·달력 자동 연동: 바뀐 멤버의 attendance 재계산 (castVote와 동일)
+      try{ await recomputeAttendance(v.group, getTitleDate(v), origNick); }catch(e){ console.warn('recompute',e); }
+      _changedOpt=true;
+    }
+  }
   closeEditLink();
-  showToast('✅ 수정됨 (닉네임·아이디·링크)');
+  showToast(_changedOpt?'✅ 수정됨 (선택지·닉·아이디·링크)':'✅ 수정됨 (닉네임·아이디·링크)');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
