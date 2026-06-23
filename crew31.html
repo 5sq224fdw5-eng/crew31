@@ -1171,7 +1171,8 @@ async function checkAutoVote(){
       if(voteExists(title, gid)) continue;                  // 이미 생성됨
       if(!(await claimGuard(guardKey))) continue;           // 서버 선점 실패 → 다른 기기가 생성
       const gData = groups[gid]||{};
-      const opts = ['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','오늘 당직이에요 (당직)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+      let opts = ['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','오늘 당직이에요 (당직)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+      if(groups[gid]?.name==='시크릿') opts = opts.filter(o=>!o.includes('당직')); // 시크릿 그룹은 당직 선택지 제외
       const startData = {title,group:gid,date:todayStr2,time:sch.startCloseTime||'22:00',options:opts,createdAt:Date.now()};
       if(sch.startMode==='image') startData.imageUpload=true;
       await dbPush('votes',startData);
@@ -1227,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.완료취소없음' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.시크릿당직' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -5698,6 +5699,7 @@ async function openVoteModal(vid, defaultGroup, voteType){
       document.getElementById('voteTitle').value=`${dateLabel} 업무(참여) 시작`;
       document.getElementById('voteTime').value=defaultStartTime;
       _editOptList=['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','오늘 당직이에요 (당직)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
+      if(gName==='시크릿') _editOptList=_editOptList.filter(o=>!o.includes('당직')); // 시크릿 그룹은 당직 선택지 제외
     } else if(voteType==='end'){
       document.getElementById('voteTitle').value=`${dateLabel} 업무 완료`;
       document.getElementById('voteTime').value=defaultEndTime;
