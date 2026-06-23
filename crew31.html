@@ -1228,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.선택지연동' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.노링크변경' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -4057,6 +4057,7 @@ async function renderVoteCard(vid,v){
         html+=`<span style="font-size:11px;color:var(--text3);min-width:20px">${num++}.</span>`;
         html+=`<span style="font-size:13px;font-weight:700;flex:1">${escH(entry.nick)}</span>`;
         html+=`<span style="background:${_bc};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${escH(_bl)}</span>`;
+        if(isAdmin) html+=`<button onclick="adminEditResponse('${vid}','${escH(entry.nick)}')" style="flex-shrink:0;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ 변경</button>`;
         html+=`</div>`;
       } else {
         html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border)">`;
@@ -4567,6 +4568,41 @@ async function saveEditLink(vid, linkKey){
   }
   closeEditLink();
   showToast(_changedOpt?'✅ 수정됨 (선택지·닉·아이디·링크)':'✅ 수정됨 (닉네임·아이디·링크)');
+  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+// 링크 없는 선택자(노피드·봉사·취소 후 등) 선택지 변경 — 관리자 전용
+async function adminEditResponse(vid, nick){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const v = await dbGet(`votes/${vid}`);
+  if(!v){ showToast('투표를 찾을 수 없습니다'); return; }
+  const opts=(v.options)||[];
+  const curIdx=(v.responses&&v.responses[nick]!==undefined)?v.responses[nick]:-1;
+  let m=document.getElementById('editRespModal');
+  if(!m){ m=document.createElement('div'); m.id='editRespModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10002;display:flex;align-items:center;justify-content:center;padding:24px'; document.body.appendChild(m); }
+  m.innerHTML=`<div style="background:var(--surface,#fff);border-radius:18px;padding:22px;max-width:340px;width:100%">
+    <div style="font-size:16px;font-weight:900;margin-bottom:6px">✏️ 선택지 변경</div>
+    <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:14px">${escH(nick)}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">선택지</div>
+    <select id="er_opt" style="width:100%;box-sizing:border-box;padding:10px 11px;margin-bottom:18px;background:var(--surface2);border:1.5px solid var(--accent);border-radius:8px;font-size:13px;color:var(--text);font-weight:700">${opts.map((o,i)=>`<option value="${i}" ${i===curIdx?'selected':''}>${escH(o)}</option>`).join('')}</select>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeEditResp()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">취소</button>
+      <button onclick="saveEditResponse('${vid}','${escH(nick)}')" style="flex:1;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer">저장</button>
+    </div>
+  </div>`;
+  m.style.display='flex';
+}
+function closeEditResp(){ const m=document.getElementById('editRespModal'); if(m)m.style.display='none'; }
+async function saveEditResponse(vid, nick){
+  const sel=document.getElementById('er_opt'); if(!sel) return;
+  const newIdx=Number(sel.value);
+  const v=await dbGet(`votes/${vid}`);
+  if(!isNaN(newIdx) && v){
+    await dbSet(`votes/${vid}/responses/${nick}`, newIdx);
+    try{ await recomputeAttendance(v.group, getTitleDate(v), nick); }catch(e){ console.warn('recompute',e); }
+  }
+  closeEditResp();
+  showToast('✅ 선택지 변경됨 (현황·달력 연동)');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
