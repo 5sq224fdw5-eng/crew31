@@ -71,6 +71,32 @@ input,select{font-family:inherit;}
 .logintabs{display:flex;gap:8px;margin-bottom:18px;}
 .logintab{flex:1;padding:12px;border-radius:13px;font-size:14px;font-weight:800;background:var(--pink-tint);color:var(--ink-soft);border:1.5px solid transparent;}
 .logintab.on{background:#fff;color:var(--pink-deep);border-color:var(--pink);box-shadow:0 0 0 3px rgba(255,92,122,.12);}
+.gate-title{font-size:19px;font-weight:900;color:var(--ink);margin:0 0 4px;}
+.linkbtn{background:none;border:none;color:var(--ink-soft);font-weight:700;font-size:13px;width:100%;padding:6px;text-decoration:underline;}
+.gate-manual{background:var(--pink-tint);border:1px solid var(--line);border-radius:13px;padding:13px 14px;font-size:14px;line-height:1.6;color:var(--ink);white-space:pre-line;}
+.gp-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.gp-thumb{width:74px;height:74px;object-fit:cover;border-radius:11px;border:1.5px solid var(--line);}
+.room-edit{background:var(--pink-tint);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-top:12px;}
+.room-edit-h{font-size:15px;font-weight:800;color:var(--ink);margin-bottom:8px;}
+.room-edit-h span{font-size:11px;font-weight:700;color:#fff;background:var(--pink);border-radius:8px;padding:2px 8px;margin-left:4px;vertical-align:middle;}
+.mini-label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin:10px 2px 4px;}
+textarea.field{resize:vertical;line-height:1.5;font-family:inherit;}
+.ferr{color:#e23a63;font-size:12px;font-weight:700;margin:5px 3px 0;min-height:0;}
+.ferr:empty{display:none;}
+.gate-cols{display:flex;gap:10px;}
+.gate-col{flex:1;min-width:0;}
+.gate-col-h{font-size:12px;font-weight:800;color:var(--pink-deep);margin:0 0 8px 2px;}
+.gate-col-h span{color:var(--ink-soft);font-weight:600;font-size:10.5px;}
+.gate-cols .field{width:100%;}
+.btn-outline{background:#fff;color:var(--pink-deep);border:2px solid var(--pink);border-radius:15px;font-size:15px;font-weight:800;padding:13px;box-shadow:var(--shadow-sm);}
+.btn-outline:active{transform:scale(.98);}
+.btn-outline.block{display:block;width:100%;}
+.choose-row{display:flex;gap:12px;}
+.choose-btn{flex:1;display:flex;align-items:center;justify-content:center;padding:52px 10px;border-radius:22px;border:2px solid transparent;}
+.choose-btn .cb-main{font-size:22px;font-weight:800;}
+.choose-btn.signup{background:#f6d3dc;color:#c77b90;box-shadow:0 10px 22px -8px rgba(199,123,144,.55), inset 0 1px 0 rgba(255,255,255,.5);}
+.choose-btn.login{background:#ffe8d2;color:#c08a5e;border-color:transparent;box-shadow:0 10px 22px -8px rgba(192,138,94,.5), inset 0 1px 0 rgba(255,255,255,.5);}
+.choose-btn:active{transform:translateY(2px);box-shadow:0 4px 10px -6px rgba(150,100,110,.5);}
 .adminlink{display:block;text-align:center;margin-top:22px;color:var(--ink-soft);font-size:13px;text-decoration:none;font-weight:600;}
 .err{color:#c0392b;font-size:13px;font-weight:600;margin:10px 2px 0;min-height:16px;}
 @keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
@@ -218,7 +244,49 @@ input,select{font-family:inherit;}
 </head>
 <body>
 
-<div id="loginScreen">
+<div id="gateScreen">
+  <div class="logo" style="margin-bottom:18px">
+    <div class="brandmark"><span class="bm31">31</span>
+      <svg class="bm-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21C5.5 15.8 2 12 2 7.8 2 4.6 4.6 2.4 7.5 3.6 9.2 4.3 10.8 5.9 12 7.4 13.2 5.9 14.8 4.3 16.5 3.6 19.4 2.4 22 4.6 22 7.8 22 12 18.5 15.8 12 21Z" fill="rgba(255,255,255,.92)"/></svg>
+    </div>
+  </div>
+  <div class="login-card">
+    <div id="gateChoose">
+      <p class="filehint" style="text-align:center;margin:2px 0 18px;font-size:14px">처음이면 입장 신청, 이미 멤버면 사원 입장을 눌러 주세요.</p>
+      <div class="choose-row">
+        <button id="chooseSignup" class="choose-btn signup"><span class="cb-main">입장 신청</span></button>
+        <button id="chooseLogin" class="choose-btn login"><span class="cb-main">사원 입장</span></button>
+      </div>
+    </div>
+    <div id="gateForm" class="hidden">
+      <div class="gate-title">입장 신청 &#127880;</div>
+      <p class="filehint" style="margin:0 0 14px">정보를 적고 원하는 방을 선택하면 안내가 나와요.</p>
+      <div class="gate-cols">
+        <div class="gate-col">
+          <div class="gate-col-h">입장자 <span>(나)</span></div>
+          <input id="gByName" class="field" placeholder="닉네임" autocomplete="off">
+          <div id="errByName" class="ferr"></div>
+          <input id="gByHandle" class="field" style="margin-top:8px" placeholder="아이디/링크" autocomplete="off">
+          <div id="errByHandle" class="ferr"></div>
+        </div>
+        <div class="gate-col">
+          <div class="gate-col-h">초대자 <span>(닉/아이디 중 1)</span></div>
+          <input id="gInvName" class="field" placeholder="닉네임" autocomplete="off">
+          <input id="gInvHandle" class="field" style="margin-top:8px" placeholder="아이디/링크" autocomplete="off">
+          <div id="errInv" class="ferr"></div>
+        </div>
+      </div>
+      <label style="margin-top:14px">입장할 방 선택</label>
+      <select id="gRoom" class="field"></select>
+      <button id="gateBtn" class="btn block" style="margin-top:16px">다음 &rarr;</button>
+      <div id="gateErr" class="err"></div>
+      <button id="toChoose" class="linkbtn" style="margin-top:10px">&larr; 처음으로</button>
+    </div>
+    <div id="gateResult" class="hidden"></div>
+  </div>
+</div>
+
+<div id="loginScreen" class="hidden">
   <div class="logo">
     <div class="brandmark"><span class="bm31">31</span>
       <svg class="bm-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21C5.5 15.8 2 12 2 7.8 2 4.6 4.6 2.4 7.5 3.6 9.2 4.3 10.8 5.9 12 7.4 13.2 5.9 14.8 4.3 16.5 3.6 19.4 2.4 22 4.6 22 7.8 22 12 18.5 15.8 12 21Z" fill="rgba(255,255,255,.92)"/></svg>
@@ -233,6 +301,8 @@ input,select{font-family:inherit;}
     <div id="loginSecMember">
       <label for="loginName">닉네임</label>
       <input id="loginName" class="field" type="text" placeholder="닉네임을 입력하세요" autocomplete="off">
+      <label for="loginPw" style="margin-top:14px">입장 비밀번호</label>
+      <input id="loginPw" class="field" type="password" inputmode="numeric" placeholder="비밀번호를 입력하세요" autocomplete="off">
       <button id="loginBtn" class="btn block">들어가기</button>
       <div id="loginErr" class="err"></div>
     </div>
@@ -242,6 +312,7 @@ input,select{font-family:inherit;}
       <button id="adminLoginBtn" class="btn block">관리자 들어가기</button>
       <div id="adminErr" class="err"></div>
     </div>
+    <button id="toGate" class="linkbtn" style="margin-top:12px">&larr; 입장 신청으로</button>
   </div>
 </div>
 
@@ -272,7 +343,7 @@ async function dbPush(p,d){ try{ const r=await fetch(DB+"/"+p+".json",{method:'P
 async function dbSet(p,d){ try{ await fetch(DB+"/"+p+".json",{method:'PUT',body:JSON.stringify(d)}); }catch(e){} }
 async function dbDel(p){ try{ await fetch(DB+"/"+p+".json",{method:'DELETE'}); }catch(e){} }
 
-const state={ role:null, name:null, weeks:[], parts:[], checks:{}, config:{}, platform:"ig", tab:"parts", expanded:new Set(), efilter:"all", fMap:null, gMap:null, board:{}, bEdit:null, myPosts:new Set(), memberSearch:"", profiles:{}, editProfile:false, draft:{}, votes:{}, scoops:{}, settled:{}, scoopLog:{} };
+const state={ role:null, name:null, weeks:[], parts:[], checks:{}, config:{}, platform:"ig", tab:"parts", expanded:new Set(), efilter:"all", fMap:null, gMap:null, board:{}, bEdit:null, myPosts:new Set(), memberSearch:"", profiles:{}, editProfile:false, draft:{}, votes:{}, scoops:{}, settled:{}, scoopLog:{}, loginLog:{}, unfollowLog:{}, entryLog:{} };
 const GRADS={ gcream:"linear-gradient(160deg,#fff4f6 0%,#ffd0dd 58%,#ff9fb8 100%)", g1:"linear-gradient(135deg,#ff8a9b,#ffb37b)", g2:"linear-gradient(135deg,#4facfe,#00d4c8)", g3:"linear-gradient(135deg,#f78ca0,#fd9a8a)", g4:"linear-gradient(135deg,#43e97b,#38f9d7)", g5:"linear-gradient(135deg,#a18cd1,#fbc2eb)", g6:"linear-gradient(135deg,#d7c4a8,#6f5a44)", g7:"linear-gradient(135deg,#f857a6,#a23bd6)", g8:"linear-gradient(135deg,#89f7fe,#66a6ff)", g9:"linear-gradient(135deg,#30cfd0,#330867)", g10:"linear-gradient(135deg,#5b4d42,#2f2823)" };
 const SOLIDS=["#ff7a90","#ff9f5a","#5bc079","#3aa6c0","#6c8cff","#a877e0","#e8709b","#3a322e"];
 const FONTS={ pretendard:["기본","\"Pretendard\",\"Pretendard Variable\",-apple-system,sans-serif"], paperlogy:["페이퍼로지","\"Paperlogy\",sans-serif"], ryuryu:["류류체","\"OngleipRyuryu\",cursive"], studyhard:["공부잘하자나","\"OwnglyphStudyHard\",cursive"] };
@@ -298,7 +369,7 @@ function statusTag(s){ const m={mutual:["맞팔","st-mutual"],pending:["나만 �
 
 async function refreshAll(){
   const btn=$("refreshBtn"); if(btn) btn.classList.add("spin");
-  const wraw=await dbGet("weeks"); const praw=await dbGet("participants"); const craw=await dbGet("checks"); const cfg=await dbGet("config"); const braw=await dbGet("board"); const prof=await dbGet("profile"); const vraw=await dbGet("votes"); const sraw=await dbGet("scoops"); const setraw=await dbGet("settled"); const slog=await dbGet("scoopLog");
+  const wraw=await dbGet("weeks"); const praw=await dbGet("participants"); const craw=await dbGet("checks"); const cfg=await dbGet("config"); const braw=await dbGet("board"); const prof=await dbGet("profile"); const vraw=await dbGet("votes"); const sraw=await dbGet("scoops"); const setraw=await dbGet("settled"); const slog=await dbGet("scoopLog"); const llog=await dbGet("loginLog"); const uflog=await dbGet("unfollowLog"); const elog=await dbGet("entryLog");
   const wv=wraw||{};
   state.weeks=Object.keys(wv).map(function(id){ return {id:id,label:wv[id].label||"(주차)",deadline:wv[id].deadline||0,createdAt:wv[id].createdAt||0}; }).sort(function(a,b){ return b.createdAt-a.createdAt; });
   const pv=praw||{};
@@ -311,23 +382,97 @@ async function refreshAll(){
   state.scoops=sraw||{};
   state.settled=setraw||{};
   state.scoopLog=slog||{};
+  state.loginLog=llog||{};
+  state.unfollowLog=uflog||{};
+  state.entryLog=elog||{};
   if(btn) btn.classList.remove("spin");
   if(state.role==="part" && !state.parts.some(function(p){ return (p.name||"").trim()===state.name; })){ doLogout(true); return; }
   render();
 }
 
+async function logLogin(name,role){ try{ await dbPush("loginLog",{n:name,r:role,t:Date.now()}); }catch(e){} }
 async function doLogin(name){
   const n=(name||"").trim();
   if(!n){ $("loginErr").textContent="닉네임을 입력해 주세요."; return; }
   $("loginErr").textContent="확인 중...";
   const praw=await dbGet("participants"); const pv=praw||{};
+  const cfg=await dbGet("config")||{}; const setPw=(cfg.loginPw||"").trim();
+  const inPw=($("loginPw")&&$("loginPw").value||"").trim();
   const ok=Object.keys(pv).some(function(id){ return (pv[id].name||"").trim()===n; });
-  if(ok){ state.role="part"; state.name=n; save("f31_role","part"); save("f31_name",n); enterApp(); }
-  else { $("loginErr").textContent="등록된 참가자 명단에 없는 닉네임이에요."; }
+  if(!ok){ $("loginErr").textContent="등록된 참가자 명단에 없는 닉네임이에요."; return; }
+  if(setPw && inPw!==setPw){ $("loginErr").textContent="입장 비밀번호가 올바르지 않아요."; return; }
+  await logLogin(n,"part");
+  state.role="part"; state.name=n; save("f31_role","part"); save("f31_name",n); if($("loginPw")) $("loginPw").value=""; enterApp();
 }
-function doAdminLogin(){ const pw=($("adminPw").value||""); if(pw===ADMIN_PW){ state.role="admin"; state.name="관리자"; save("f31_role","admin"); save("f31_name","관리자"); $("adminPw").value=""; $("adminErr").textContent=""; enterApp(); } else { $("adminErr").textContent="비밀번호가 올바르지 않습니다."; } }
-function doLogout(silent){ state.role=null; state.name=null; save("f31_role",""); save("f31_name",""); $("app").classList.add("hidden"); $("loginScreen").classList.remove("hidden"); $("loginName").value=""; $("loginErr").textContent=silent?"명단이 변경되어 다시 로그인해 주세요.":""; }
+async function doAdminLogin(){ const pw=($("adminPw").value||""); if(pw===ADMIN_PW){ await logLogin("관리자","admin"); state.role="admin"; state.name="관리자"; save("f31_role","admin"); save("f31_name","관리자"); $("adminPw").value=""; $("adminErr").textContent=""; enterApp(); } else { $("adminErr").textContent="비밀번호가 올바르지 않습니다."; } }
+function doLogout(silent){ state.role=null; state.name=null; save("f31_role",""); save("f31_name",""); $("app").classList.add("hidden"); $("loginScreen").classList.remove("hidden"); $("loginName").value=""; if($("loginPw")) $("loginPw").value=""; $("loginErr").textContent=silent?"명단이 변경되어 다시 로그인해 주세요.":""; }
 function restoreSession(){ const r=load("f31_role"), n=load("f31_name"); if(r==="admin"){ state.role="admin"; state.name="관리자"; enterApp(); } else if(r==="part"&&n){ state.role="part"; state.name=n; enterApp(); } }
+const ROOM_DEFS=[ {key:"like",label:"좋아요방",type:"image"}, {key:"like_comment",label:"좋아요+댓글방",type:"image"}, {key:"matzal",label:"맞팔방",type:"manual"} ];
+function roomCfg(key){ const c=(state.config&&state.config.rooms&&state.config.rooms[key])||{}; const def=ROOM_DEFS.find(function(r){ return r.key===key; })||{}; return { key:key, label:c.label||def.label||key, type:c.type||def.type||"image", rep:c.rep||"", manual:c.manual||"" }; }
+function showLogin(){ $("gateScreen").classList.add("hidden"); $("loginScreen").classList.remove("hidden"); }
+function showGate(){ $("loginScreen").classList.add("hidden"); $("gateScreen").classList.remove("hidden"); $("gateChoose").classList.remove("hidden"); $("gateForm").classList.add("hidden"); $("gateResult").classList.add("hidden"); }
+function showGateForm(){ $("gateChoose").classList.add("hidden"); $("gateForm").classList.remove("hidden"); $("gateResult").classList.add("hidden"); }
+function fillGateRooms(){ const sel=$("gRoom"); if(!sel) return; sel.innerHTML=ROOM_DEFS.map(function(d){ const rc=roomCfg(d.key); return '<option value="'+d.key+'">'+esc(rc.label)+'</option>'; }).join(""); }
+async function initGate(){ try{ const c=await dbGet("config"); state.config=c||state.config||{}; }catch(e){} fillGateRooms(); }
+async function submitGate(){
+  const bn=($("gByName").value||"").trim(), bh=($("gByHandle").value||"").trim();
+  const inN=($("gInvName").value||"").trim(), inH=($("gInvHandle").value||"").trim();
+  const room=$("gRoom").value;
+  $("errByName").textContent=""; $("errByHandle").textContent=""; $("errInv").textContent=""; $("gateErr").textContent="";
+  let ok=true;
+  if(!bn){ $("errByName").textContent="닉네임을 입력해 주세요."; ok=false; }
+  if(!bh){ $("errByHandle").textContent="아이디(또는 링크)를 입력해 주세요."; ok=false; }
+  if(!inN && !inH){ $("errInv").textContent="초대자 닉네임 또는 아이디 중 하나는 꼭 입력해 주세요."; ok=false; }
+  if(!ok) return;
+  $("gateErr").textContent="접수 중...";
+  const pushRes=await dbPush("entryLog",{bn:bn,bh:bh,inN:inN,inH:inH,room:room,t:Date.now()});
+  state.lastEntryKey=(pushRes&&pushRes.name)||null;
+  state.lastRoom=room;
+  $("gateErr").textContent="";
+  showGateResult(room,bn);
+}
+const CLOUDINARY_CLOUD="ds9vkwlse";
+const CLOUDINARY_PRESET="crew31_upload";
+function compressImg(file){ return new Promise(function(resolve){ const img=new Image(); const url=URL.createObjectURL(file); img.onload=function(){ URL.revokeObjectURL(url); const maxW=1200; const scale=Math.min(1,maxW/Math.max(img.width,img.height)); const w=Math.round(img.width*scale), h=Math.round(img.height*scale); const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); c.toBlob(function(b){ resolve(b||file); },"image/jpeg",0.82); }; img.onerror=function(){ resolve(file); }; img.src=url; }); }
+function uploadOne(file,folder){ return new Promise(async function(resolve){ if(file.size>50*1024*1024){ resolve(null); return; } let comp=await compressImg(file); if(comp&&comp.size>10*1024*1024){ comp=await compressImg(comp)||comp; } const fd=new FormData(); fd.append("file",comp,"photo.jpg"); fd.append("upload_preset",CLOUDINARY_PRESET); fd.append("folder",folder); try{ const r=await fetch("https://api.cloudinary.com/v1_1/"+CLOUDINARY_CLOUD+"/image/upload",{method:"POST",body:fd}); const d=await r.json(); if(d&&d.secure_url){ resolve(d.secure_url.replace("/upload/","/upload/q_auto,f_auto,w_600/")); } else resolve(null); }catch(e){ resolve(null); } }); }
+function renderGateProofs(urls){ const box=$("gp_thumbs"); if(!box) return; box.innerHTML=(urls||[]).map(function(u){ return '<a href="'+u+'" target="_blank" rel="noopener"><img src="'+u+'" class="gp-thumb"></a>'; }).join(""); }
+async function gateUpload(key,input){
+  const files=Array.from(input.files); if(!files.length) return;
+  const st=$("gp_status"); if(st) st.textContent="⏳ 업로드 중...";
+  const folder="follow31/"+(state.lastRoom||"etc");
+  const urls=(await Promise.all(files.map(function(f){ return uploadOne(f,folder); }))).filter(Boolean);
+  input.value="";
+  if(!urls.length){ if(st) st.textContent="업로드 실패. 다시 시도해 주세요."; return; }
+  let cur=[]; try{ cur=await dbGet("entryLog/"+key+"/proof")||[]; }catch(e){}
+  const merged=cur.concat(urls);
+  if(key) await dbSet("entryLog/"+key+"/proof",merged);
+  renderGateProofs(merged);
+  if(st) st.textContent="\u2705 인증샷 "+merged.length+"장 올렸어요!";
+}
+function showGateResult(room,bn){
+  const rc=roomCfg(room);
+  const repBtn = rc.rep ? '<a class="btn block" style="margin-top:12px" href="'+platformUrl("ig",rc.rep)+'" target="_blank" rel="noopener">&#128247; 대표 계정 바로가기</a>' : '<div class="filehint" style="margin-top:10px">대표 계정이 아직 등록되지 않았어요.</div>';
+  const manualHtml = rc.manual ? '<div class="gate-manual">'+esc(rc.manual).replace(/\n/g,"<br>")+'</div>' : (rc.type==="manual" ? '<div class="gate-manual">메뉴얼이 아직 등록되지 않았어요. 관리자에게 문의해 주세요.</div>' : "");
+  let body;
+  if(rc.type==="manual"){
+    body=manualHtml+repBtn;
+  } else {
+    const uploader='<div class="gate-upload"><div class="section-title" style="margin:14px 0 6px">&#128247; 인증샷 올리기</div>'+
+      '<p class="filehint" style="margin:0 0 10px">대표 계정 좋아요/댓글 완료 후 캡처를 올려 주세요. 관리자와 본인만 볼 수 있어요.</p>'+
+      '<input type="file" id="gp_input" accept="image/*" multiple style="display:none">'+
+      '<button class="btn-outline block" id="gp_btn">&#128247; 사진 선택</button>'+
+      '<div id="gp_thumbs" class="gp-thumbs"></div>'+
+      '<div id="gp_status" class="filehint" style="margin-top:8px"></div></div>';
+    body=manualHtml+repBtn+uploader;
+  }
+  $("gateForm").classList.add("hidden");
+  $("gateResult").classList.remove("hidden");
+  $("gateResult").innerHTML='<div class="gate-title">'+esc(bn||"")+'님, '+esc(rc.label)+' 신청 완료 &#9989;</div>'+body+'<button class="linkbtn" style="margin-top:16px" data-act="gateBack">&larr; 처음으로</button>';
+  if(rc.type!=="manual"){
+    const inp=$("gp_input"), btn=$("gp_btn"), key=state.lastEntryKey;
+    if(btn&&inp){ btn.addEventListener("click",function(){ inp.click(); }); inp.addEventListener("change",function(){ gateUpload(key,inp); }); }
+  }
+}
 
 async function addWeek(){ const el=$("weekLabel"); const label=(el.value||"").trim()||suggestWeekLabel(); el.value=""; await dbPush("weeks",{label:label,createdAt:Date.now()}); await refreshAll(); }
 async function removeWeek(id,label){ if(confirm("'"+label+"' 주차를 삭제할까요?")){ await dbDel("weeks/"+id); await refreshAll(); } }
@@ -374,6 +519,23 @@ async function addPart(){
   await refreshAll();
 }
 async function removePart(pid,name){ if(confirm("'"+name+"' 참가자를 삭제할까요?")){ await dbDel("participants/"+pid); await refreshAll(); } }
+function isRegistered(pl,name,link){
+  const h=pl==="ig"?cleanHandle(link).toLowerCase():(link||"").trim().toLowerCase();
+  const nm=(name||"").trim();
+  return state.parts.some(function(p){ if(p.platform!==pl) return false; const ph=pl==="ig"?cleanHandle(p.handle).toLowerCase():(p.handle||"").trim().toLowerCase(); return (h&&ph===h)||(nm&&(p.name||"").trim()===nm); });
+}
+async function registerFromBoard(pl,name,link){
+  const nm=(name||"").trim(); if(!nm) return;
+  const handle=pl==="ig"?cleanHandle(link):(link||"").trim();
+  if(!handle){ alert("아이디/링크가 없어 등록할 수 없어요. 게시글을 확인해 주세요."); return; }
+  if(isRegistered(pl,nm,link)){ alert("'"+nm+"'님은 이미 "+platformLabel(pl)+" 참가자예요."); return; }
+  let wid=currentWid();
+  if(!wid){ const ws=state.weeks.slice().sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); }); wid=ws.length?ws[0].id:null; }
+  if(!wid){ alert("먼저 참가자 탭에서 주차를 만들어 주세요."); return; }
+  if(!confirm("'"+nm+"'님을 "+platformLabel(pl)+" 참가자로 등록할까요?\n("+weekLabel(wid)+" 주차)")) return;
+  await dbPush("participants",{name:nm,handle:handle,platform:pl,wid:wid,createdAt:Date.now()});
+  await refreshAll();
+}
 async function setOfficial(){ const v=($("officialIg").value||"").trim(); state.config.official=v; await dbSet("config/official",v); await refreshAll(); }
 
 async function toggleCheck(pl,toPid,field){
@@ -405,15 +567,17 @@ async function applyFile(){
     }
     const st=statusOf(next); if(st==="mutual")mutual++; else if(st==="pending")onlyMe++; else if(st==="them")them++; else if(st==="none")none++;
   });
-  render(); await Promise.all(writes);
+  render(); 
+  if(dropped.length){ const now=Date.now(); dropped.forEach(function(nm){ writes.push(dbPush("unfollowLog",{by:state.name,who:nm,t:now})); }); }
+  await Promise.all(writes);
   let msg='<b>&#10003; 자동 확인 완료</b><br>맞팔 '+mutual+' · 나만 선팔 '+onlyMe+' · 상대만 '+them+' · 안 함 '+none;
   if(!state.gMap) msg+='<br><span style="color:var(--ink-soft)">(팔로잉 파일 없이 팔로워만 반영했어요)</span>';
-  if(dropped.length) msg+='<br><br><span style="color:#c0392b">&#9888;&#65039; 지난번 맞팔이었는데 이번에 빠짐: '+dropped.map(esc).join(", ")+'</span>';
+  if(dropped.length) msg+='<br><br><span style="display:inline-block;background:#fdeaea;color:#c0392b;font-weight:800;padding:9px 12px;border-radius:11px">&#9888;&#65039; 이번에 새로 언팔당했어요 ('+dropped.length+'명)<br>'+dropped.map(esc).join(", ")+'</span>';
   res.innerHTML=msg;
 }
 
 function enterApp(){
-  $("loginScreen").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("gateScreen").classList.add("hidden"); $("loginScreen").classList.add("hidden"); $("app").classList.remove("hidden");
   const isAdmin=state.role==="admin";
   $("whoName").textContent=isAdmin?"관리자":(state.name+"님");
   state.tab=isAdmin?"parts":"check";
@@ -421,7 +585,7 @@ function enterApp(){
   refreshAll();
 }
 function tabsFor(){ return state.role==="admin"
-  ? [["parts","&#128203; 참가자"],["status","&#128202; 현황"],["board","&#128221; 신청"],["settings","&#9881;&#65039; 설정"]]
+  ? [["parts","&#128203; 참가자"],["status","&#128202; 현황"],["board","&#128221; 신청"],["entry","&#127880; 입장기록"],["settings","&#9881;&#65039; 설정"]]
   : [["check","&#128203; 맞팔 체크"],["board","&#128221; 신청 게시판"]]; }
 function renderTabs(){ $("tabBar").innerHTML=tabsFor().map(function(t){ return '<button class="tab'+(state.tab===t[0]?" on":"")+'" data-tab="'+t[0]+'">'+t[1]+'</button>'; }).join(""); }
 function switchTab(t){ state.tab=t; if(t==="board"){ state.bEdit=null; } render(); }
@@ -440,6 +604,7 @@ function render(){
   else if(state.tab==="parts") renderAdminParts();
   else if(state.tab==="status") renderStatus();
   else if(state.tab==="board") renderBoard();
+  else if(state.tab==="entry") renderEntryLog();
   else if(state.tab==="settings") renderSettings();
 }
 
@@ -489,6 +654,8 @@ function renderMyList(){
   if(state.editProfile){ v.innerHTML=coverHtml()+profileEditorHtml(); bindProfileEditor(); return; }
   let html=coverHtml();
   if(state.expanded.has("myslog") && scoopOf(state.name)>0){ html+='<div class="card" style="padding:14px 16px"><div class="section-title" style="margin:0 0 8px">&#127848; 내 스쿱(봉사) 내역</div>'+scoopLogHtml(state.name)+'</div>'; }
+  html+='<button class="btn block" style="background:#fff;color:var(--ink-soft);border:1.5px solid var(--line);box-shadow:none;margin-bottom:12px" data-act="myLogin">&#128273; 내 로그인 기록 '+(state.expanded.has("mylogin")?"&#9650;":"&#9660;")+'</button>';
+  if(state.expanded.has("mylogin")){ html+='<div class="card" style="padding:14px 16px"><div class="section-title" style="margin:0 0 8px">&#128273; 내 로그인 기록 (최근 10)</div>'+loginLogHtml(state.name,10)+'</div>'; }
   html+=officialBanner();
   html+=applySummaryCard();
   html+='<div class="searchbar"><span class="si">&#128269;</span><input id="memberSearch" class="searchinput" placeholder="멤버 검색 (닉네임·아이디)" autocomplete="off" value="'+esc(state.memberSearch||"")+'"></div>';
@@ -635,6 +802,8 @@ function dlInputValue(ms){ if(!ms) return ""; const u=new Date(ms); const k=new 
 function fmtDeadline(ms){ if(!ms) return ""; const u=new Date(ms); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); return (k.getMonth()+1)+"/"+k.getDate()+" "+("0"+k.getHours()).slice(-2)+":"+("0"+k.getMinutes()).slice(-2); }
 
 function scoopLogHtml(name){ const es=logEntries(name); if(!es.length) return '<div class="voterlist">내역이 없어요.</div>'; return '<div class="sloglist">'+es.map(function(e){ const up=(e.d||0)>=0; return '<div class="slogrow"><span class="slogd">'+fmtLogDate(e.t)+'</span><span class="slogn '+(up?"up":"dn")+'">'+(up?"+":"")+(e.d||0)+'</span><span class="slogr">'+esc(e.r||"")+'</span></div>'; }).join("")+'</div>'; }
+function unfollowEntries(){ const o=state.unfollowLog||{}; return Object.keys(o).map(function(k){ return o[k]; }).filter(Boolean).sort(function(a,b){ return (b.t||0)-(a.t||0); }); }
+function unfollowLogHtml(limit){ const es=unfollowEntries().slice(0,limit||30); if(!es.length) return '<div class="voterlist">아직 언팔 기록이 없어요.</div>'; return '<div class="sloglist">'+es.map(function(e){ return '<div class="slogrow"><span class="slogd" style="flex:0 0 42px">'+fmtLogDate(e.t)+'</span><span class="slogr"><b style="color:#c0392b">'+esc(e.who||"")+'</b> &rarr; '+esc(e.by||"")+'님 언팔</span></div>'; }).join("")+'</div>'; }
 function scoopManagerHtml(){
   const names=Object.keys(state.scoops||{}).filter(function(n){ return (state.scoops[n]|0)>0; }).sort(function(a,b){ return state.scoops[b]-state.scoops[a]; });
   let rows=names.length? names.map(function(n){
@@ -648,7 +817,7 @@ function scoopManagerHtml(){
 }
 function renderStatus(){
   const v=$("viewMain"); const pl=state.platform; const pool=poolOf(pl);
-  let html=scoopManagerHtml();
+  let html='<div class="add-box"><div class="section-title" style="margin-top:0">&#9888;&#65039; 최근 언팔 알림 (인스타 파일 기준)</div>'+unfollowLogHtml(30)+'</div>'+scoopManagerHtml();
   if(!pool.length){ v.innerHTML=html+'<div class="empty"><div class="e">&#128202;</div><p>'+platformLabel(pl)+' 풀에 참가자가 없어요.</p></div>'; return; }
   html+='<div class="section-title">'+platformIcon(pl)+' '+platformLabel(pl)+' 맞팔 현황</div>';
   html+=pool.map(function(me){
@@ -672,12 +841,54 @@ async function toggleCheck2(pl,from,toPid,field){
   await dbSet("checks/"+pl+"/"+from+"/"+toPid,next);
 }
 
+function fmtLoginTime(t){ if(!t) return ""; const u=new Date(t); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); const mm=k.getMonth()+1, dd=k.getDate(), hh=("0"+k.getHours()).slice(-2), mi=("0"+k.getMinutes()).slice(-2); return mm+"/"+("0"+dd).slice(-2)+" "+hh+":"+mi; }
+function loginEntries(name){ const o=state.loginLog||{}; let arr=Object.keys(o).map(function(k){ return o[k]; }).filter(Boolean); if(name) arr=arr.filter(function(e){ return e.n===name; }); return arr.sort(function(a,b){ return (b.t||0)-(a.t||0); }); }
+function loginLogHtml(name,limit){ const es=loginEntries(name).slice(0,limit||30); if(!es.length) return '<div class="voterlist">기록이 없어요.</div>'; return '<div class="sloglist">'+es.map(function(e){ return '<div class="slogrow"><span class="slogd" style="flex:0 0 78px">'+fmtLoginTime(e.t)+'</span><span class="slogr">'+esc(e.n||"")+(e.r==="admin"?' <b style="color:var(--pink-deep)">(관리자)</b>':'')+'</span></div>'; }).join("")+'</div>'; }
+function entryEntries(){ const o=state.entryLog||{}; return Object.keys(o).map(function(k){ return o[k]; }).filter(Boolean).sort(function(a,b){ return (b.t||0)-(a.t||0); }); }
+function fmtEntryDate(t){ if(!t) return ""; const u=new Date(t); const k=new Date(u.getTime()+(9*60+u.getTimezoneOffset())*60000); const mm=k.getMonth()+1,dd=k.getDate(),hh=("0"+k.getHours()).slice(-2),mi=("0"+k.getMinutes()).slice(-2); return mm+"/"+("0"+dd).slice(-2)+" "+hh+":"+mi; }
+function renderEntryLog(){
+  const v=$("viewMain");
+  const es=entryEntries();
+  let rows = es.length ? es.map(function(e){
+    const rc=roomCfg(e.room);
+    const inv=(e.inN||e.inH)?('<div class="ph" style="margin-top:2px">초대자: '+esc(e.inN||"")+(e.inH?" ("+esc(e.inH)+")":"")+'</div>'):'';
+    const proof=(e.proof&&e.proof.length)?('<div class="gp-thumbs" style="margin-top:8px">'+e.proof.map(function(u){ return '<a href="'+u+'" target="_blank" rel="noopener"><img src="'+u+'" class="gp-thumb"></a>'; }).join("")+'</div>'):'';
+    return '<div class="card" style="padding:13px 14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div class="info" style="min-width:0"><div class="pn">'+esc(e.bn||"")+' <span class="ph">'+esc(e.bh||"")+'</span></div>'+inv+'</div><div style="text-align:right;flex:0 0 auto"><span class="newbadge">'+esc(rc.label)+'</span><div class="ph" style="margin-top:4px">'+fmtEntryDate(e.t)+'</div></div></div>'+proof+'</div>';
+  }).join("") : '<div class="empty"><div class="e">&#127880;</div><p>아직 입장 신청 기록이 없어요.</p></div>';
+  v.innerHTML='<div class="section-title" style="margin-top:4px">&#127880; 입장 신청 기록 ('+es.length+'건)</div><p class="filehint" style="margin:0 0 12px">링크로 들어와 신청한 사람들이 최신순으로 쌓여요.</p>'+rows;
+}
 function renderSettings(){
   const v=$("viewMain");
-  v.innerHTML='<div class="add-box"><div class="section-title" style="margin-top:0">&#128247; 인스타 공식 계정 (사이트 상단 표시)</div>'+
+  const pwSet=(state.config.loginPw||"").trim();
+  v.innerHTML='<div class="add-box"><div class="section-title" style="margin-top:0">&#128274; 입장 비밀번호 (사원 공통)</div>'+
+    '<p class="filehint">사원은 닉네임 + 이 비밀번호로 들어와요. 외부 유출 시 여기서 바꾸면 즉시 차단돼요. 비우고 저장하면 잠금 해제(누구나 닉네임만으로 입장).</p>'+
+    '<div class="add-row"><input id="loginPwSet" class="field" placeholder="'+(pwSet?"●●●● (설정됨)":"비밀번호 입력")+'" value="'+esc(pwSet)+'"><button class="btn" data-act="saveLoginPw">저장</button></div></div>'+
+    '<div class="add-box"><div class="section-title" style="margin-top:0">&#128247; 인스타 공식 계정 (사이트 상단 표시)</div>'+
     '<p class="filehint">매주 맞팔 대상을 리포하는 공식 인스타 계정. 저장하면 모두에게 상단 버튼으로 떠요. (블로그·오늘의집은 리포 안 하므로 인스타만)</p>'+
-    '<div class="add-row"><input id="officialIg" class="field" placeholder="@아이디 또는 링크" value="'+esc(state.config.official||"")+'"><button class="btn" data-act="saveOfficial">저장</button></div></div>';
+    '<div class="add-row"><input id="officialIg" class="field" placeholder="@아이디 또는 링크" value="'+esc(state.config.official||"")+'"><button class="btn" data-act="saveOfficial">저장</button></div></div>'+
+    '<div class="add-box"><div class="section-title" style="margin-top:0">&#128273; 로그인 기록 (최근 30)</div>'+loginLogHtml(null,30)+'</div>'+
+    '<div class="add-box"><div class="section-title" style="margin-top:0">&#127880; 입장 방 설정 (관문)</div>'+
+    '<p class="filehint">관문에서 신청자가 고르는 방이에요. 그룹명·대표 계정·메뉴얼을 방마다 바꿀 수 있어요.</p>'+
+    ROOM_DEFS.map(function(d){ const rc=roomCfg(d.key); const isImg=rc.type==="image";
+      return '<div class="room-edit"><div class="room-edit-h">'+esc(rc.label)+' <span>'+(isImg?"인증샷 업로드":"메뉴얼 안내")+'</span></div>'+
+        '<label class="mini-label">그룹명</label><input id="rl_'+d.key+'" class="field" value="'+esc(rc.label)+'" placeholder="'+esc(d.label)+'">'+
+        '<label class="mini-label">대표 계정 (아이디/링크)</label><input id="rr_'+d.key+'" class="field" value="'+esc(rc.rep)+'" placeholder="@대표계정">'+
+        '<label class="mini-label">메뉴얼 안내문</label><textarea id="rm_'+d.key+'" class="field" rows="4" placeholder="신청자에게 보여줄 안내 (줄바꿈 가능)">'+esc(rc.manual)+'</textarea>'+
+        '<button class="btn block" style="margin-top:10px" data-act="saveRoom" data-key="'+d.key+'">'+esc(rc.label)+' 저장</button></div>';
+    }).join("")+'</div>';
 }
+async function saveRoom(key){
+  const def=ROOM_DEFS.find(function(r){ return r.key===key; })||{};
+  const label=($("rl_"+key).value||"").trim()||def.label||key;
+  const rep=($("rr_"+key).value||"").trim();
+  const manual=($("rm_"+key).value||"");
+  const obj={label:label,rep:rep,manual:manual,type:def.type||"image"};
+  if(!state.config.rooms) state.config.rooms={};
+  state.config.rooms[key]=obj;
+  await dbSet("config/rooms/"+key,obj);
+  await refreshAll();
+}
+async function saveLoginPw(){ const v=($("loginPwSet").value||"").trim(); state.config.loginPw=v; if(v){ await dbSet("config/loginPw",v); } else { await dbDel("config/loginPw"); } await refreshAll(); }
 
 function loadMyPosts(){ try{ return new Set(JSON.parse(load("f31_myposts")||"[]")); }catch(e){ return new Set(); } }
 function saveMyPosts(){ try{ save("f31_myposts", JSON.stringify(Array.from(state.myPosts))); }catch(e){} }
@@ -696,10 +907,16 @@ function renderBoard(){
   if(!posts.length){ html+='<div class="empty"><div class="e">&#128221;</div><p>아직 '+platformLabel(pl)+' 신청이 없어요.<br>위에서 닉네임과 링크를 남겨주세요.</p></div>'; }
   else { html+='<div class="section-title">신청 명단 ('+posts.length+'명)</div><div class="stagger">'+posts.map(function(p){
     const manage=canManage(p.id);
+    const isAdmin=state.role==="admin";
+    const reg=isRegistered(pl,p.name,p.link);
+    const regBtn = isAdmin ? (reg
+        ? '<button class="chk on" style="flex:0 0 auto;padding:7px 12px" disabled>&#10003; 등록됨</button>'
+        : '<button class="btn" style="padding:7px 14px;font-size:13px" data-act="bregister" data-pl="'+pl+'" data-name="'+esc(p.name)+'" data-link="'+esc(p.link)+'">&#10133; 참가자로 등록</button>') : "";
+    const btnRow = (manage||isAdmin) ? '<div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">'+regBtn+(manage?'<button class="del" data-act="bedit" data-id="'+p.id+'">수정</button><button class="del" data-act="bdel" data-id="'+p.id+'" data-name="'+esc(p.name)+'">삭제</button>':"")+'</div>' : "";
     return '<div class="card" style="padding:14px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">'+
       '<div class="info" style="min-width:0"><div class="pn">'+esc(p.name)+'</div>'+(p.memo?'<div class="ph" style="margin-top:3px">'+esc(p.memo)+'</div>':"")+'<div class="ph" style="margin-top:2px">'+platformDisp(pl,p.link)+'</div></div>'+
       '<a class="go" href="'+platformUrl(pl,p.link)+'" target="_blank" rel="noopener">보기 &rarr;</a></div>'+
-      (manage?'<div style="display:flex;gap:8px;margin-top:11px"><button class="del" data-act="bedit" data-id="'+p.id+'">수정</button><button class="del" data-act="bdel" data-id="'+p.id+'" data-name="'+esc(p.name)+'">삭제</button></div>':"")+
+      btnRow+
     '</div>';
   }).join("")+'</div>'; }
   v.innerHTML=html;
@@ -716,8 +933,15 @@ function beditPost(id){ state.bEdit=id; render(); try{ window.scrollTo(0,0); }ca
 function bcancelEdit(){ state.bEdit=null; render(); }
 async function bdelPost(id,name){ if(!confirm("'"+name+"' 신청을 삭제할까요?")) return; await dbDel("board/"+state.platform+"/"+id); if(state.myPosts.has(id)){ state.myPosts.delete(id); saveMyPosts(); } if(state.bEdit===id) state.bEdit=null; await refreshBoard(); }
 
+$("gateBtn").addEventListener("click",submitGate);
+$("chooseSignup").addEventListener("click",showGateForm);
+$("chooseLogin").addEventListener("click",showLogin);
+$("toChoose").addEventListener("click",showGate);
+$("gateScreen").addEventListener("click",function(e){ const b=e.target.closest&&e.target.closest('[data-act="gateBack"]'); if(b){ showGate(); fillGateRooms(); $("gByName").value="";$("gByHandle").value="";$("gInvName").value="";$("gInvHandle").value=""; } });
+$("toGate").addEventListener("click",showGate);
 $("loginBtn").addEventListener("click",function(){ doLogin($("loginName").value); });
 $("loginName").addEventListener("keydown",function(e){ if(e.key==="Enter") doLogin($("loginName").value); });
+$("loginPw").addEventListener("keydown",function(e){ if(e.key==="Enter") doLogin($("loginName").value); });
 function switchLoginTab(t){ const m=t==="member"; $("ltMember").classList.toggle("on",m); $("ltAdmin").classList.toggle("on",!m); $("loginSecMember").classList.toggle("hidden",!m); $("loginSecAdmin").classList.toggle("hidden",m); if(m){ $("loginName").focus(); } else { $("adminPw").focus(); } }
 $("ltMember").addEventListener("click",function(){ switchLoginTab("member"); });
 $("ltAdmin").addEventListener("click",function(){ switchLoginTab("admin"); });
@@ -741,9 +965,12 @@ $("app").addEventListener("click",function(e){
   else if(act==="addPart"){ addPart(); }
   else if(act==="delPart"){ removePart(el.dataset.id, el.dataset.name); }
   else if(act==="saveOfficial"){ setOfficial(); }
+  else if(act==="saveLoginPw"){ saveLoginPw(); }
+  else if(act==="saveRoom"){ saveRoom(el.dataset.key); }
   else if(act==="bpost"){ addPost(); }
   else if(act==="bedit"){ beditPost(el.dataset.id); }
   else if(act==="bdel"){ bdelPost(el.dataset.id, el.dataset.name); }
+  else if(act==="bregister"){ registerFromBoard(el.dataset.pl, el.dataset.name, el.dataset.link); }
   else if(act==="bcancel"){ bcancelEdit(); }
   else if(act==="goboard"){ switchTab("board"); }
   else if(act==="editProfile"){ openProfileEdit(); }
@@ -759,10 +986,12 @@ $("app").addEventListener("click",function(e){
   else if(act==="scoopAdd"){ addScoopManual(); }
   else if(act==="slogToggle"){ const k="slog_"+el.dataset.n; if(state.expanded.has(k)) state.expanded.delete(k); else state.expanded.add(k); render(); }
   else if(act==="mySlog"){ if(state.expanded.has("myslog")) state.expanded.delete("myslog"); else state.expanded.add("myslog"); render(); }
+  else if(act==="myLogin"){ if(state.expanded.has("mylogin")) state.expanded.delete("mylogin"); else state.expanded.add("mylogin"); render(); }
 });
 
 state.myPosts=loadMyPosts();
 restoreSession();
+if(!state.role){ initGate(); }
 </script>
 </body>
 </html>
