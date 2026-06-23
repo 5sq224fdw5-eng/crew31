@@ -1228,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.노링크변경' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.관리자링크등록' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -4584,7 +4584,11 @@ async function adminEditResponse(vid, nick){
     <div style="font-size:16px;font-weight:900;margin-bottom:6px">✏️ 선택지 변경</div>
     <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:14px">${escH(nick)}</div>
     <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">선택지</div>
-    <select id="er_opt" style="width:100%;box-sizing:border-box;padding:10px 11px;margin-bottom:18px;background:var(--surface2);border:1.5px solid var(--accent);border-radius:8px;font-size:13px;color:var(--text);font-weight:700">${opts.map((o,i)=>`<option value="${i}" ${i===curIdx?'selected':''}>${escH(o)}</option>`).join('')}</select>
+    <select id="er_opt" style="width:100%;box-sizing:border-box;padding:10px 11px;margin-bottom:12px;background:var(--surface2);border:1.5px solid var(--accent);border-radius:8px;font-size:13px;color:var(--text);font-weight:700">${opts.map((o,i)=>`<option value="${i}" ${i===curIdx?'selected':''}>${escH(o)}</option>`).join('')}</select>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">인스타 아이디 <span style="font-weight:500">(링크 등록 시)</span></div>
+    <input id="er_id" placeholder="예: narin_a.to" style="width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">참여 게시물 링크 <span style="font-weight:500">(당직·참여·연차·투피드면 입력)</span></div>
+    <input id="er_url" placeholder="https://www.instagram.com/p/..." style="width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:18px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)">
     <div style="display:flex;gap:8px">
       <button onclick="closeEditResp()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">취소</button>
       <button onclick="saveEditResponse('${vid}','${escH(nick)}')" style="flex:1;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer">저장</button>
@@ -4596,9 +4600,26 @@ function closeEditResp(){ const m=document.getElementById('editRespModal'); if(m
 async function saveEditResponse(vid, nick){
   const sel=document.getElementById('er_opt'); if(!sel) return;
   const newIdx=Number(sel.value);
+  const id=document.getElementById('er_id')?.value.trim()||'';
+  const urlRaw=document.getElementById('er_url')?.value.trim()||'';
   const v=await dbGet(`votes/${vid}`);
   if(!isNaN(newIdx) && v){
     await dbSet(`votes/${vid}/responses/${nick}`, newIdx);
+    // 선택지에 맞는 링크 타입
+    const ot=((v.options||[])[newIdx]||'').toLowerCase();
+    let type='normal';
+    if(ot.includes('투피드')||ot.includes('두배')) type='tupide';
+    else if(ot.includes('연차')||ot.includes('프패')||ot.includes('프리패스')) type='leave';
+    else if(ot.includes('봉사')||ot.includes('열정페이')) type='bonus';
+    else if(ot.includes('당직')) type='duty';
+    // 링크 입력 시: 그 멤버 키(없으면 닉네임)로 링크 저장
+    if(urlRaw){
+      let linkKey=nick;
+      try{ const crew=await dbGet('members')||{}; const f=Object.entries(crew).find(([k,mm])=>mm&&mm.name===nick); if(f) linkKey=f[0]; }catch(e){}
+      const cleanUrlVal=(typeof cleanUrl==='function')?cleanUrl(urlRaw):urlRaw;
+      const ex=await dbGet(`votes/${vid}/links/${linkKey}`);
+      await dbSet(`votes/${vid}/links/${linkKey}`, {nick, id, url:cleanUrlVal, type, time:ex?.time||Date.now()});
+    }
     try{ await recomputeAttendance(v.group, getTitleDate(v), nick); }catch(e){ console.warn('recompute',e); }
   }
   closeEditResp();
