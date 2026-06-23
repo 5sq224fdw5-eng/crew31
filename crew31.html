@@ -1227,7 +1227,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.지급수정' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.완료취소없음' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3884,8 +3884,8 @@ async function renderVoteCard(vid,v){
         _quotaReady = true;
       }
     }catch(e){}
-    // 취소 기록 있으면 노피드(재능기부)만 선택 가능 (비관리자)
-    const _canceledMe = (CU?.role!=='admin') && !!(v.canceled && v.canceled[myKey] && (v.canceled[myKey].count||0)>0);
+    // 취소 기록 있으면 노피드(재능기부)만 선택 가능 (비관리자) — 완료투표는 취소 개념 없음 → 무시
+    const _canceledMe = (CU?.role!=='admin') && !isEndVote && !!(v.canceled && v.canceled[myKey] && (v.canceled[myKey].count||0)>0);
     if(_canceledMe){
       html+=`<div style="background:#FFF0F0;border:1px solid #FFD0D0;border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:#E5484D;font-weight:700">🚫 취소한 투표예요 · 재능기부(노피드)만 다시 선택할 수 있어요</div>`;
     }
@@ -3917,7 +3917,8 @@ async function renderVoteCard(vid,v){
       }
     });
     if(hasVoted&&!isClosed){
-      html+=`<div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span><button onclick="cancelVote('${vid}')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid #ddd;background:white;color:var(--text3);cursor:pointer">취소</button></div>`;
+      const _cancelBtn = isEndVote ? '' : `<button onclick="cancelVote('${vid}')" style="font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid #ddd;background:white;color:var(--text3);cursor:pointer">취소</button>`;
+      html+=`<div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center"><span class="voted-badge">✅ ${escH(opts[myVote]||'')} · 선택 변경 가능</span>${_cancelBtn}</div>`;
     }
     if(isClosed){
       html+=`<div style="text-align:center;margin-top:8px"><span class="closed-badge">🔒 마감 · 총 ${totalVotes}명 참여</span></div>`;
@@ -5407,8 +5408,9 @@ async function castVote(vid,optIdx){
   const wasDuty = prevOptText.includes('당직');
   const usedDate = getTitleDate(v) || todayStr;
 
-  // 취소 후 재투표 제한: 취소 기록이 있으면 노피드(재능기부)만 가능 (비관리자). 연차 차감 전에 막아 영향 0.
-  if(CU?.role!=='admin'){
+  // 취소 후 재투표 제한: 취소 기록이 있으면 노피드(재능기부)만 가능 (비관리자). 단, 완료투표는 취소 개념 없음 → 무시.
+  const _isEndVoteCast = (v.title||'').includes('완료')||(v.title||'').includes('마감')||v.imageUpload===true;
+  if(CU?.role!=='admin' && !_isEndVoteCast){
     const _cRec = v.canceled?.[myKey];
     const _newIsNopid = newOptText.includes('노피드')||newOptText.includes('재능기부');
     if(_cRec && (_cRec.count||0)>0 && !_newIsNopid){
@@ -5417,9 +5419,10 @@ async function castVote(vid,optIdx){
     }
   }
 
-  // 재선택 제한(원복): 이미 투표한 사람이 다른 선택지로 바꾸려 하면 → 노피드(재능기부)·당직으로만 가능.
-  // 단, 이전 선택이 연차(프패)·봉사(열정페이)·당직이었으면 제한 없음.
-  if(prevOptIdx!==undefined && prevOptIdx!==optIdx && !wasLeave && !wasBonus && !wasDuty){
+  // 재선택 제한 — 완료투표/시작투표 분리
+  //  · 완료(마감)투표: 선택지 자유 변경 (제한 없음)
+  //  · 시작투표 등: 기존 규칙 그대로 (노피드·당직만, 단 이전이 연차·봉사·당직이면 제한 없음)
+  if(!_isEndVoteCast && prevOptIdx!==undefined && prevOptIdx!==optIdx && !wasLeave && !wasBonus && !wasDuty){
     const newIsNopid = newOptText.includes('노피드')||newOptText.includes('재능기부');
     const newIsDuty = newOptText.includes('당직');
     if(!newIsNopid && !newIsDuty){
