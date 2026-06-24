@@ -1228,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.미참여차단' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.시크릿제외' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -5536,9 +5536,9 @@ async function castVote(vid,optIdx){
     }
   }
 
-  // 시작↔완료 선택지 일치 검사 (비관리자, 완료투표 제출 시)
-  //  참여→완료 / 투피드→투피드 / 노피드→노피드 / 봉사→봉사 / 당직→완료 / 연차→완료투표 대상 아님
-  if(CU?.role!=='admin' && _isEndVoteCast){
+  // 시작↔완료 선택지 일치 검사 (비관리자, 선택지형 완료투표만 — 시크릿 사진업로드형은 제외)
+  //  참여→완료 / 투피드→투피드 / 노피드→노피드 / 봉사→봉사 / 연차·당직→완료투표 대상 아님
+  if(CU?.role!=='admin' && _isEndVoteCast && v.imageUpload!==true){
     try{
       const _allV = await dbGet('votes');
       const _t2 = (v.title||'').match(/(\d+)월\s*(\d+)일/);
