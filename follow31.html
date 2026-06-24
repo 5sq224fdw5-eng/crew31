@@ -56,7 +56,9 @@ input,select{font-family:inherit;}
 .field:focus{border-color:var(--pink);box-shadow:0 0 0 4px rgba(74,63,55,.14);}
 .field::placeholder{color:#b8ad9b;}
 
-#loginScreen{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px;max-width:420px;margin:0 auto;}
+#loginScreen,#gateScreen{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px;max-width:420px;margin:0 auto;}
+#gateScreen .login-card{position:relative;}
+#gateScreen .gate-logo{position:absolute;left:0;right:0;bottom:100%;margin:0 0 6px;}
 .logo{text-align:center;margin-bottom:30px;animation:rise .6s ease both;}
 .brandmark{position:relative;display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:17px;background:linear-gradient(140deg,#fff0f3 0%,#ffd0db 100%);box-shadow:0 10px 20px -8px rgba(226,58,99,.45);animation:float 4.2s ease-in-out infinite;overflow:hidden;}
 .brandmark::after{content:"";position:absolute;inset:0;z-index:0;background:radial-gradient(circle at 26% 30%, #ff5c7a 0 2.6px, transparent 3.6px),radial-gradient(circle at 74% 26%, #d9466a 0 2px, transparent 3px),radial-gradient(circle at 80% 64%, #ff5c7a 0 2.4px, transparent 3.4px),radial-gradient(circle at 20% 72%, #b85e8f 0 2px, transparent 3px),radial-gradient(circle at 50% 84%, #ff5c7a 0 2px, transparent 3px);}
@@ -82,8 +84,11 @@ input,select{font-family:inherit;}
 .ri-row{display:flex;gap:10px;align-items:center;padding:5px 0;}
 .ri-row+.ri-row{border-top:1px dashed var(--line);}
 .ri-lbl{flex:0 0 76px;font-size:12px;font-weight:800;color:var(--ink-soft);}
-.ri-id{font-size:15px;font-weight:800;color:var(--pink-deep);}
-.ri-ids{font-size:14px;font-weight:700;color:var(--ink);line-height:1.7;}
+.ri-id{font-size:15px;font-weight:800;color:var(--pink-deep);word-break:break-all;min-width:0;}
+.ri-ids{font-size:14px;font-weight:700;color:var(--ink);line-height:1.7;word-break:break-all;min-width:0;}
+.ri-h{font-size:13px;font-weight:800;color:var(--pink-deep);margin-bottom:8px;text-align:left;}
+.ri-list{font-size:14px;font-weight:700;color:var(--ink);line-height:1.8;text-align:left;word-break:break-all;}
+.ri-rep{display:inline-block;font-size:16px;font-weight:800;color:var(--pink-deep);text-decoration:none;background:var(--pink-tint);border:1.5px solid var(--pink-soft);border-radius:11px;padding:9px 13px;word-break:break-all;}
 .ri-note{margin-top:9px;font-size:11.5px;color:var(--ink-soft);background:var(--pink-tint);border-radius:9px;padding:8px 10px;}
 .gate-checking{text-align:center;font-size:13px;color:var(--ink-soft);padding:14px 0;}
 .check-result{margin-top:12px;}
@@ -265,18 +270,19 @@ textarea.field{resize:vertical;line-height:1.5;font-family:inherit;}
 <body>
 
 <div id="gateScreen">
-  <div class="logo" style="margin-bottom:18px">
-    <div class="brandmark"><span class="bm31">31</span>
-      <svg class="bm-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21C5.5 15.8 2 12 2 7.8 2 4.6 4.6 2.4 7.5 3.6 9.2 4.3 10.8 5.9 12 7.4 13.2 5.9 14.8 4.3 16.5 3.6 19.4 2.4 22 4.6 22 7.8 22 12 18.5 15.8 12 21Z" fill="rgba(255,255,255,.92)"/></svg>
-    </div>
-  </div>
   <div class="login-card">
+    <div class="logo gate-logo">
+      <div class="brandmark"><span class="bm31">31</span>
+        <svg class="bm-heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21C5.5 15.8 2 12 2 7.8 2 4.6 4.6 2.4 7.5 3.6 9.2 4.3 10.8 5.9 12 7.4 13.2 5.9 14.8 4.3 16.5 3.6 19.4 2.4 22 4.6 22 7.8 22 12 18.5 15.8 12 21Z" fill="rgba(255,255,255,.92)"/></svg>
+      </div>
+    </div>
     <div id="gateChoose">
       <p class="filehint" style="text-align:center;margin:2px 0 18px;font-size:14px">처음이면 입장 신청, 이미 멤버면 사원 입장을 눌러 주세요.</p>
       <div class="choose-row">
         <button id="chooseSignup" class="choose-btn signup"><span class="cb-main">입장 신청</span></button>
         <button id="chooseLogin" class="choose-btn login"><span class="cb-main">사원 입장</span></button>
       </div>
+      <button id="chooseAdmin" class="linkbtn" style="margin-top:14px">&#128273; 관리자 로그인</button>
     </div>
     <div id="gateForm" class="hidden">
       <div class="gate-title">입장 신청 &#127880;</div>
@@ -373,7 +379,7 @@ function $(id){ return document.getElementById(id); }
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
 function getKSTDate(){ const n=new Date(); return new Date(n.getTime()+n.getTimezoneOffset()*60000+9*3600000); }
 function suggestWeekLabel(){ const d=getKSTDate(); return (d.getMonth()+1)+"월 "+Math.ceil(d.getDate()/7)+"주차"; }
-function cleanHandle(h){ return (h||"").trim().replace(/^@+/,"").replace(/\s+/g,""); }
+function cleanHandle(h){ var s=(h||"").trim(); if(/https?:\/\//i.test(s)||/\.(com|se|net|to|kr)\//i.test(s)){ s=s.split(/[?#]/)[0].replace(/\/+$/,""); s=s.split("/").filter(Boolean).pop()||s; } return s.replace(/^@+/,"").replace(/\s+/g,""); }
 function platformUrl(p,h){ h=(h||"").trim(); if(!h) return "#"; if(/^https?:\/\//i.test(h)) return h; h=h.replace(/^@+/,""); if(p==="blog") return "https://blog.naver.com/"+encodeURIComponent(h); if(p==="ohou") return "https://ohou.se/users/"+encodeURIComponent(h); return "https://www.instagram.com/"+encodeURIComponent(h)+"/"; }
 function platformLabel(p){ return p==="blog"?"블로그":(p==="ohou"?"오늘의집":"인스타"); }
 function platformIcon(p){ return p==="blog"?"&#128221;":(p==="ohou"?"&#128715;":"&#128247;"); }
@@ -440,11 +446,28 @@ function renderRoomInfo(){
   const sel=$("gRoom"); const key=sel?sel.value:""; const rc=roomCfg(key);
   const staff=staffList();
   let h='';
-  if(rc.rep){ h+='<div class="ri-row"><span class="ri-lbl">&#127775; 대표 계정</span><span class="ri-id">@'+esc(rc.rep.replace(/^@/,""))+'</span></div>'; }
-  if(staff.length){ h+='<div class="ri-row" style="align-items:flex-start"><span class="ri-lbl">&#128105;&#8205;&#128188; 인사팀</span><span class="ri-ids">'+staff.map(function(s){ return '@'+esc(s); }).join("<br>")+'</span></div>'; }
+  if(rc.rep){
+    const rh=cleanHandle(rc.rep);
+    h+='<div class="ri-h">&#127775; 대표 계정 (눌러서 이동)</div>';
+    h+='<a class="ri-rep" href="'+platformUrl("ig",rc.rep)+'" target="_blank" rel="noopener">@'+esc(rh)+' &rarr;</a>';
+  }
+  if(staff.length){
+    h+='<div class="ri-h" style="margin-top:'+(rc.rep?'12px':'0')+'">&#128105;&#8205;&#128188; 인사팀 ('+staff.length+')</div>';
+    h+='<div class="ri-list">'+staff.map(function(s){ return '@'+esc(cleanHandle(s)); }).join("<br>")+'</div>';
+  }
+  if(staff.length){ h+='<button class="btn-outline block" style="margin-top:10px;padding:10px;font-size:13px" data-act="copyIds">&#128203; 인사팀 아이디 복사</button>'; }
   if(rc.type==="image" && (rc.rep||staff.length)){ h+='<div class="ri-note">위 계정들을 모두 팔로우한 뒤, 다음 단계에서 인증샷을 올려요.</div>'; }
   box.innerHTML = h ? '<div class="ri-card">'+h+'</div>' : '';
+  state.lastIdList = staff.map(function(s){ return '@'+cleanHandle(s); }).join("\n");
 }
+function copyIds(){
+  const txt=state.lastIdList||"";
+  if(!txt) return;
+  function done(){ const b=$("gRoomInfo")&&$("gRoomInfo").querySelector('[data-act="copyIds"]'); if(b){ b.innerHTML="&#9989; 복사됐어요!"; setTimeout(function(){ b.innerHTML="&#128203; 아이디 전체 복사"; },1500); } }
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(function(){ fallbackCopy(txt,done); }); }
+  else { fallbackCopy(txt,done); }
+}
+function fallbackCopy(txt,cb){ try{ const ta=document.createElement("textarea"); ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); if(cb) cb(); }catch(e){} }
 async function initGate(){ try{ const c=await dbGet("config"); state.config=c||state.config||{}; }catch(e){} fillGateRooms(); }
 async function submitGate(){
   const bn=($("gByName").value||"").trim(), bh=($("gByHandle").value||"").trim();
@@ -1039,8 +1062,9 @@ $("gateBtn").addEventListener("click",submitGate);
 $("gRoom").addEventListener("change",renderRoomInfo);
 $("chooseSignup").addEventListener("click",showGateForm);
 $("chooseLogin").addEventListener("click",showLogin);
+$("chooseAdmin").addEventListener("click",function(){ showLogin(); switchLoginTab("admin"); });
 $("toChoose").addEventListener("click",showGate);
-$("gateScreen").addEventListener("click",function(e){ const b=e.target.closest&&e.target.closest('[data-act="gateBack"]'); if(b){ showGate(); fillGateRooms(); $("gByName").value="";$("gByHandle").value="";$("gInvName").value="";$("gInvHandle").value=""; } });
+$("gateScreen").addEventListener("click",function(e){ const t=e.target.closest&&e.target.closest("[data-act]"); if(!t) return; const a=t.dataset.act; if(a==="gateBack"){ showGate(); fillGateRooms(); $("gByName").value="";$("gByHandle").value="";$("gInvName").value="";$("gInvHandle").value=""; } else if(a==="copyIds"){ copyIds(); } });
 $("toGate").addEventListener("click",showGate);
 $("loginBtn").addEventListener("click",function(){ doLogin($("loginName").value); });
 $("loginName").addEventListener("keydown",function(e){ if(e.key==="Enter") doLogin($("loginName").value); });
