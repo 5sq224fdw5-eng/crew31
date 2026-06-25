@@ -1228,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.여러장개수' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.카드OCR개수' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3808,6 +3808,10 @@ async function renderVoteCard(vid,v){
       const sanitizedNick = nick.replace(/[\.#$\/\[\]\s]/g, '_');
       const imgs = (allImages[sanitizedNick]||allImages[nick]||[]).filter(img=>img?.url&&img.url!=='연차');
       const uploadCount = imgs.length;
+      // 분자 = OCR로 읽은 저장 개수(saveCount.n). 없으면(옛 업로드) 캡쳐 장수로 폴백
+      const _sc = v.saveCount && (v.saveCount[sanitizedNick]||v.saveCount[nick]);
+      const cnt = (_sc && _sc.n>0) ? _sc.n : uploadCount;
+      const _scReview = !!(_sc && _sc.status==='review'); // OCR 'N개' 못 읽음 → 관리자 확인
       const collapseId = `imgCollapse_${vid}_${idx}`;
       const isBonus = bonusSet.has(nick);
       let fillPct, label, btnStyle, canUpload;
@@ -3817,8 +3821,8 @@ async function renderVoteCard(vid,v){
         btnStyle = `background:#FFB347;color:white;border:1.5px solid #FFB347;`;
         canUpload = false;
       } else if(isBonus){
-        fillPct = totalCount>0 ? Math.min(100, Math.round(uploadCount/totalCount*100)) : 0;
-        label = `열정페이 (${uploadCount}/${totalCount})`;
+        fillPct = totalCount>0 ? Math.min(100, Math.round(cnt/totalCount*100)) : 0;
+        label = `열정페이 (${cnt}/${totalCount})`;
         btnStyle = fillPct===100
           ? `background:#94a3b8;color:white;border:1.5px solid #94a3b8;`
           : fillPct===0
@@ -3826,8 +3830,8 @@ async function renderVoteCard(vid,v){
             : `background:linear-gradient(to right,#94a3b8 ${fillPct}%,transparent ${fillPct}%);color:${fillPct>50?'white':'#94a3b8'};border:1.5px solid #94a3b8;`;
         canUpload = true;
       } else {
-        fillPct = totalCount>0 ? Math.min(100, Math.round(uploadCount/totalCount*100)) : 0;
-        label = `(${uploadCount}/${totalCount})`;
+        fillPct = totalCount>0 ? Math.min(100, Math.round(cnt/totalCount*100)) : 0;
+        label = _scReview ? `(🔎확인 ${uploadCount}장)` : `(${cnt}/${totalCount})`;
         btnStyle = fillPct===100
           ? `background:#FF85C1;color:white;border:1.5px solid #FF85C1;`
           : fillPct===0
