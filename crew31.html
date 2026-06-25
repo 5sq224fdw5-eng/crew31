@@ -1228,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.카드OCR개수' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.수동개수입력' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3857,6 +3857,10 @@ async function renderVoteCard(vid,v){
           html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
         }
       }
+      if(isAdmin && !isLeave){
+        const _scLabel = _sc ? (_sc.status==='manual'?`현재 ${_sc.n}개(수동)`:_sc.status==='auto'?`자동 ${_sc.n}개`:_sc.status==='review'?'자동인식 실패':'') : '미인식';
+        html+=`<button onclick="adminSetSaveCount('${vid}','${sanitizedNick}','${escH(nick).replace(/'/g,"\\'")}')" style="width:100%;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:6px">🔢 개수 직접 입력 <span style="font-weight:500;color:var(--text3)">· ${_scLabel}</span></button>`;
+      }
       if(imgs.length>0){
         const sorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
         html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
@@ -4352,6 +4356,22 @@ async function deleteMyImages(vid){
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
+// 관리자: 시크릿 저장 개수 직접 입력(수동 충족 처리)
+async function adminSetSaveCount(vid, key, nick){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const cur = await dbGet(`votes/${vid}/saveCount/${key}`);
+  const def = (cur && cur.n) ? String(cur.n) : '';
+  const inp = prompt(`${nick} 저장 개수를 입력하세요 (숫자)`, def);
+  if(inp===null) return;
+  const n = parseInt(inp,10);
+  if(isNaN(n)||n<0){ showToast('숫자를 입력해주세요'); return; }
+  const v = await dbGet(`votes/${vid}`);
+  const P = await getParticipantCount(v);
+  const ok = (P===0)||(n>=P);
+  await dbSet(`votes/${vid}/saveCount/${key}`, { n, ocr:(cur&&cur.ocr)||0, grid:(cur&&cur.grid)||0, P, ok, status:'manual', by:CU?.name||'', at:Date.now() });
+  showToast(`✅ ${nick} ${n}개 처리됨`);
+  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
 async function toggleNickBtn(vid, collapseId, nick){
   const el = document.getElementById(collapseId);
   if(!el) return;
