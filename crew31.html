@@ -1228,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.개수입력위치' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.노피드투피드변경' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -4120,8 +4120,21 @@ async function renderVoteCard(vid,v){
   // 사원은 링크를 한 번 제출하면 수정 불가 (관리자만 ✏️수정 가능) — 렌더 표시만, 저장 로직 무관
   const _myLinkKey = CU?.key||'admin';
   const _alreadySubmittedLink = !!(v.links && (v.links[_myLinkKey] || v.links[_myLinkKey+'_1'] || v.links[_myLinkKey+'_2']));
+  const _hasLink2 = !!(v.links && v.links[_myLinkKey+'_2']);
   if(canSubmitLink && _alreadySubmittedLink && !isAdmin){
-    html+=`<div style="margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--text2);font-weight:800;line-height:1.6">🔒 링크 제출 완료❗️<div style="font-weight:500;color:var(--text3);font-size:12px;margin-top:6px">오타로 수정이 필요한 경우<br>채팅창에 인사팀을 소환해 주세요.</div><div style="font-weight:600;color:var(--text2);font-size:11px;margin-top:8px">※ 제출 후 링크 및 게시물 변경은 불가능합니다.</div></div>`;
+    if(isTupide && !_hasLink2){
+      // 투피드로 변경 — 1번 링크는 제출완료(잠금), 2번 링크칸만 추가 입력
+      const _l1 = (v.links && (v.links[_myLinkKey+'_1']||v.links[_myLinkKey])) || {};
+      html+=`<div style="margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text2);font-weight:700;margin-bottom:8px">🔒 1번 링크 제출 완료 (수정 불가)<div style="font-weight:500;color:var(--text3);font-size:11px;margin-top:4px">투피드 변경 — 아래에 <b>2번째 링크만</b> 추가해 주세요</div></div>`;
+      html+=`<div>`;
+      html+=`<input id="linkId_${vid}" class="linkfield" value="${escH(_l1.nick||'')}" placeholder="인스타그램 아이디 (예: narin_a.to)" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:2px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<div style="font-size:10px;color:var(--text3);margin:0 2px 8px;line-height:1.4">※ 한글 닉네임 ❌ · 인스타 아이디(영문)만 입력해 주세요</div>`;
+      html+=`<input id="linkUrl_${vid}_2" class="linkfield" placeholder="참여 게시물 링크 2 (투피드 추가) · 붙여넣기" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<button onclick="submitTupide2('${vid}')" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">✅ 2번째 링크 제출</button>`;
+      html+=`</div>`;
+    } else {
+      html+=`<div style="margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--text2);font-weight:800;line-height:1.6">🔒 링크 제출 완료❗️<div style="font-weight:500;color:var(--text3);font-size:12px;margin-top:6px">오타로 수정이 필요한 경우<br>채팅창에 인사팀을 소환해 주세요.</div><div style="font-weight:600;color:var(--text2);font-size:11px;margin-top:8px">※ 제출 후 링크 및 게시물 변경은 불가능합니다.</div></div>`;
+    }
   } else if(canSubmitLink){
     // 드랍박스 제거 — 위에서 고른 선택지로 링크칸 자동 결정 (투피드면 2칸)
     html+=`<div style="margin-top:10px">`;
@@ -4327,6 +4340,21 @@ async function submitVoteLink(vid, isTupide=false){
   showToast('✅ 링크 제출됨!');
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+// 투피드 변경 시 2번째 링크만 추가 제출 (1번은 잠금 유지)
+async function submitTupide2(vid){
+  const nick=CU?.name||'익명';
+  const key=CU?.key||'admin';
+  const linkId=document.getElementById(`linkId_${vid}`)?.value.trim()||'';
+  const url2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
+  if(!url2){ showToast('2번째 링크를 입력하세요'); return; }
+  const l1 = (await dbGet(`votes/${vid}/links/${key}_1`)) || (await dbGet(`votes/${vid}/links/${key}`)) || {};
+  const displayNick = l1.nick || linkId || nick;
+  const ex2 = await dbGet(`votes/${vid}/links/${key}_2`);
+  await dbSet(`votes/${vid}/links/${key}_2`, { nick:displayNick, url:cleanUrl(url2), type:'tupide', time:ex2?.time||Date.now() });
+  showToast('✅ 2번째 링크 제출됨!');
+  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
 function cleanUrl(url){
@@ -5753,14 +5781,12 @@ async function castVote(vid,optIdx){
     }catch(e){ console.warn('startEndMatch',e); }
   }
 
-  // 재선택 제한 — 완료투표/시작투표 분리
-  //  · 완료(마감)투표: 선택지 자유 변경 (제한 없음)
-  //  · 시작투표 등: 기존 규칙 그대로 (노피드·당직만, 단 이전이 연차·봉사·당직이면 제한 없음)
-  if(!_isEndVoteCast && prevOptIdx!==undefined && prevOptIdx!==optIdx && !wasLeave && !wasBonus && !wasDuty){
+  // 재선택 제한 — 시작·완료 둘 다: 한번 투표하면 노피드(재능기부)·투피드로만 변경 가능
+  if(prevOptIdx!==undefined && prevOptIdx!==optIdx){
     const newIsNopid = newOptText.includes('노피드')||newOptText.includes('재능기부');
-    const newIsDuty = newOptText.includes('당직');
-    if(!newIsNopid && !newIsDuty){
-      showToast('⚠️ 한번 투표하면 재능기부(노피드)·당직으로만 변경할 수 있어요');
+    const newIsTupide = newOptText.includes('투피드')||newOptText.includes('두배');
+    if(!newIsNopid && !newIsTupide){
+      showToast('⚠️ 한번 투표하면 재능기부(노피드)·투피드로만 변경할 수 있어요');
       window._castVoteOK=false; window._castVoting=false; return;
     }
   }
