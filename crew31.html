@@ -1228,7 +1228,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.수동개수입력' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.개수입력위치' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3857,10 +3857,6 @@ async function renderVoteCard(vid,v){
           html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
         }
       }
-      if(isAdmin && !isLeave){
-        const _scLabel = _sc ? (_sc.status==='manual'?`현재 ${_sc.n}개(수동)`:_sc.status==='auto'?`자동 ${_sc.n}개`:_sc.status==='review'?'자동인식 실패':'') : '미인식';
-        html+=`<button onclick="adminSetSaveCount('${vid}','${sanitizedNick}','${escH(nick).replace(/'/g,"\\'")}')" style="width:100%;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:6px">🔢 개수 직접 입력 <span style="font-weight:500;color:var(--text3)">· ${_scLabel}</span></button>`;
-      }
       if(imgs.length>0){
         const sorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
         html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
@@ -4423,6 +4419,12 @@ async function toggleNickBtn(vid, collapseId, nick){
   if((isMe || CU?.role==='admin') && realImgs.length>0){
     const btnLabel = isMe ? '🔍 내 누락 확인 (안 올린 게시물 찾기)' : '🔍 누락 확인 (캡쳐 OCR)';
     html+=`<button onclick="runRepostCheck('${vid}','${nick.replace(/'/g,"\\'")}')" style="width:100%;margin-top:6px;background:#E8F0FE;color:#3B6FD4;border:1.5px solid #B9D0F5;border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">${btnLabel}</button>`;
+  }
+  // 관리자: 저장 개수 직접 입력 (OCR 자동인식 실패한 경우 등)
+  if(CU?.role==='admin'){
+    const _sc = v && v.saveCount && (v.saveCount[sanitized]||v.saveCount[nick]);
+    const _scLabel = _sc ? (_sc.status==='manual'?`현재 ${_sc.n}개(수동)`:_sc.status==='auto'?`자동 ${_sc.n}개`:_sc.status==='review'?'자동인식 실패':(_sc.n?(_sc.n+'개'):'미인식')) : '미인식';
+    html+=`<button onclick="adminSetSaveCount('${vid}','${sanitized}','${nick.replace(/'/g,"\\'")}')" style="width:100%;margin-top:6px;background:rgba(91,155,213,0.12);color:var(--blue);border:1.5px solid rgba(91,155,213,0.3);border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">🔢 개수 직접 입력 · ${_scLabel}</button>`;
   }
   el.innerHTML = html;
 }
