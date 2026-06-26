@@ -311,14 +311,13 @@ document.addEventListener('keydown',e=>{
           <div id="headerWeeklyAtt" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:auto auto auto;gap:4px;align-items:center;justify-items:end">
-        <button onclick="goTab('noti')" style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.2);border:none;font-size:14px;cursor:pointer;position:relative">
-          🔔<span id="notiBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span>
-        </button>
-        <button onclick="goToGame()" style="height:28px;padding:0 8px;border-radius:14px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white;white-space:nowrap">🎡 오락실</button>
-        <button onclick="location.href='https://5sq224fdw5-eng.github.io/crew31/follow31.html'" style="height:28px;padding:0 8px;border-radius:14px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white;white-space:nowrap">🤝 맞팔앱</button>
-        <button id="reloadBtn" onclick="forceReload()" ondblclick="hardUpdate()" title="탭: 새로고침 · 길게/더블탭: 강제 업데이트" style="width:30px;height:26px;border-radius:12px;background:rgba(255,255,255,0.2);border:none;font-size:13px;cursor:pointer;color:white">🔄</button>
-        <button onclick="logout()" style="height:26px;padding:0 8px;border-radius:12px;background:rgba(255,255,255,0.2);border:none;font-size:10px;font-weight:700;cursor:pointer;color:white;white-space:nowrap">🚪 나가기</button>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;justify-content:end;align-items:center">
+        <button onclick="goTab('noti')" style="height:28px;border-radius:14px;background:#FFE0EC;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#D6457E;white-space:nowrap;position:relative">알림<span id="notiBadge" style="display:none;position:absolute;top:-3px;right:-3px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span></button>
+        <button onclick="goToGame()" style="height:28px;border-radius:14px;background:#E0F0FF;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#3D7DB8;white-space:nowrap">오락실</button>
+        <button onclick="location.href='https://5sq224fdw5-eng.github.io/crew31/follow31.html'" style="height:28px;border-radius:14px;background:#E3F6E8;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#3E9E63;white-space:nowrap">맞팔31</button>
+        <button id="reloadBtn" onclick="forceReload()" ondblclick="hardUpdate()" title="탭: 새로고침 · 길게/더블탭: 강제 업데이트" style="height:28px;border-radius:14px;background:#FFF2D6;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#B8862A;white-space:nowrap">갱신</button>
+        <button id="adminSwitchBtn" onclick="switchToAdmin()" title="관리자 전환" style="display:none;height:28px;border-radius:14px;background:#EFE3FB;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#8B5FC0;white-space:nowrap">관리자</button>
+        <button onclick="logout()" style="height:28px;border-radius:14px;background:#FFE2DC;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#D2674E;white-space:nowrap">나가기</button>
       </div>
     </div>
 
@@ -1228,7 +1227,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.노피드투피드변경' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.헤더파스텔' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -1237,6 +1236,15 @@ async function enterApp(){
   // 주간 참여 현황 헤더 표시
   setTimeout(loadHeaderWeeklyAtt, 1000);
   if(roleEl) roleEl.textContent = userRole;
+  // 인사팀 계정 → 관리자 전환 버튼 (로그아웃 불필요)
+  const _swBtn=document.getElementById('adminSwitchBtn');
+  if(_swBtn){
+    if(CU.role==='member' && _ADMIN_SWITCH_NAMES.includes(CU.name)){
+      _swBtn.style.display=''; _swBtn.textContent='관리자'; _swBtn.title='관리자 전환'; _swBtn.onclick=switchToAdmin;
+    } else if(CU.role==='admin' && window._origMember){
+      _swBtn.style.display=''; _swBtn.textContent='사원'; _swBtn.title='사원으로 복귀'; _swBtn.onclick=switchToMember;
+    } else { _swBtn.style.display='none'; _swBtn.onclick=null; }
+  }
   // 새 버전 배너 체크
   setTimeout(checkUpdateBanner, 1200);
   setTimeout(checkScheduledPopup, 1600);
@@ -4129,7 +4137,7 @@ async function renderVoteCard(vid,v){
       html+=`<div>`;
       html+=`<input id="linkId_${vid}" class="linkfield" value="${escH(_l1.nick||'')}" placeholder="인스타그램 아이디 (예: narin_a.to)" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:2px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
       html+=`<div style="font-size:10px;color:var(--text3);margin:0 2px 8px;line-height:1.4">※ 한글 닉네임 ❌ · 인스타 아이디(영문)만 입력해 주세요</div>`;
-      html+=`<input id="linkUrl_${vid}_2" class="linkfield" placeholder="참여 게시물 링크 2 (투피드 추가) · 붙여넣기" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      html+=`<div style="display:flex;gap:6px;margin-bottom:8px"><input id="linkUrl_${vid}_2" class="linkfield" placeholder="참여 게시물 링크 2 (투피드 추가) · 붙여넣기" style="flex:1;box-sizing:border-box;padding:8px 10px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;font-size:12px;color:var(--text);outline:none"><button type="button" onclick="pasteInto('linkUrl_${vid}_2')" style="flex-shrink:0;padding:0 12px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">📋</button></div>`;
       html+=`<button onclick="submitTupide2('${vid}')" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">✅ 2번째 링크 제출</button>`;
       html+=`</div>`;
     } else {
@@ -4141,12 +4149,12 @@ async function renderVoteCard(vid,v){
     html+=`<input id="linkId_${vid}" class="linkfield" placeholder="인스타그램 아이디 (예: narin_a.to)" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:2px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
     html+=`<div style="font-size:10px;color:var(--text3);margin:0 2px 8px;line-height:1.4">※ 한글 닉네임 ❌ · 인스타 아이디(영문)만 입력해 주세요</div>`;
     if(isTupide){
-      // 투피드 → 링크 2칸
-      html+=`<input id="linkUrl_${vid}_1" class="linkfield" placeholder="참여 게시물 링크 1 · 그대로 붙여넣기 · 수정 X" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
-      html+=`<input id="linkUrl_${vid}_2" class="linkfield" placeholder="참여 게시물 링크 2 · 그대로 붙여넣기 · 수정 X" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      // 투피드 → 링크 2칸 (+ 📋 붙여넣기)
+      html+=`<div style="display:flex;gap:6px;margin-bottom:8px"><input id="linkUrl_${vid}_1" class="linkfield" placeholder="참여 게시물 링크 1 · 붙여넣기" style="flex:1;box-sizing:border-box;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none"><button type="button" onclick="pasteInto('linkUrl_${vid}_1')" style="flex-shrink:0;padding:0 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">📋</button></div>`;
+      html+=`<div style="display:flex;gap:6px;margin-bottom:8px"><input id="linkUrl_${vid}_2" class="linkfield" placeholder="참여 게시물 링크 2 · 붙여넣기" style="flex:1;box-sizing:border-box;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none"><button type="button" onclick="pasteInto('linkUrl_${vid}_2')" style="flex-shrink:0;padding:0 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">📋</button></div>`;
     } else {
-      // 일반 → 링크 1칸
-      html+=`<input id="linkUrl_${vid}" class="linkfield" placeholder="참여 게시물 링크 · 그대로 붙여넣기 · 수정 X" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
+      // 일반 → 링크 1칸 (+ 📋 붙여넣기)
+      html+=`<div style="display:flex;gap:6px;margin-bottom:8px"><input id="linkUrl_${vid}" class="linkfield" placeholder="참여 게시물 링크 · 붙여넣기" style="flex:1;box-sizing:border-box;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none"><button type="button" onclick="pasteInto('linkUrl_${vid}')" style="flex-shrink:0;padding:0 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">📋</button></div>`;
     }
     html+=`<button onclick="submitVote('${vid}')" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">✅ 투표 제출</button>`;
     html+=`</div>`;
@@ -4355,6 +4363,37 @@ async function submitTupide2(vid){
   await dbSet(`votes/${vid}/links/${key}_2`, { nick:displayNick, url:cleanUrl(url2), type:'tupide', time:ex2?.time||Date.now() });
   showToast('✅ 2번째 링크 제출됨!');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+
+// 클립보드 링크를 입력칸에 자동 붙여넣기
+async function pasteInto(id){
+  const el=document.getElementById(id); if(!el) return;
+  try{
+    const t=await navigator.clipboard.readText();
+    if(t && t.trim()){ el.value=t.trim(); el.focus(); showToast('📋 붙여넣기 완료'); }
+    else showToast('클립보드가 비어 있어요');
+  }catch(e){
+    showToast('붙여넣기 권한이 없어요 — 칸을 길게 눌러 붙여넣기 해주세요');
+    el.focus();
+  }
+}
+// 인사팀 계정(ADMIN_NAMES) → 로그아웃 없이 관리자 모드 전환
+const _ADMIN_SWITCH_NAMES=['고인물','에이스','경력직','불주먹','김월루','퇴사각','알잘딱'];
+async function switchToAdmin(){
+  if(!CU || !_ADMIN_SWITCH_NAMES.includes(CU.name)){ showToast('권한이 없어요'); return; }
+  window._origMember={...CU};
+  CU={name:'관리자',role:'admin',key:null};
+  try{ await persistSession(); }catch(e){}
+  await enterApp();
+  showToast('🔑 관리자 모드로 전환됐어요');
+}
+async function switchToMember(){
+  if(!window._origMember){ showToast('복귀할 사원 정보가 없어요'); return; }
+  CU={...window._origMember};
+  window._origMember=null;
+  try{ await persistSession(); }catch(e){}
+  await enterApp();
+  showToast('↩️ 사원 모드로 돌아왔어요');
 }
 
 function cleanUrl(url){
@@ -6420,6 +6459,8 @@ async function loadStatusGroup(gid) {
     // 정렬: 인사팀 먼저, 그다음 가나다 ('관리자' 계정은 현황에서 제외 — 관리만 함)
     const sortedMembers = Object.entries(memberResults)
       .filter(([n]) => n!=='관리자')
+      // 취소 유령 빈 줄 제외: 그 주 7칸이 전부 비면 명단에서 뺌 (단, 관리자 7명은 항상 표시)
+      .filter(([n,md]) => ADMIN_NAMES.includes(n) || dates.some(d => md[d] && md[d]!==''))
       .sort(([a],[b]) => {
         const aA = ADMIN_NAMES.includes(a), bA = ADMIN_NAMES.includes(b);
         if(aA && !bA) return -1; if(!aA && bA) return 1;
@@ -6711,7 +6752,7 @@ function openAttendanceEdit(gid, mondayStr) {
     </div>
     <div id="attEditList" style="flex:1;overflow-y:auto;padding:0 20px 10px">로딩 중...</div>
     <div style="padding:10px 20px 20px;flex-shrink:0">
-      <button onclick="document.getElementById('attEditModal').remove();loadStatus();" style="width:100%;padding:12px;background:var(--surface2);color:var(--text2);border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">닫기</button>
+      <button onclick="document.getElementById('attEditModal').remove();loadStatusGroup('${gid}');" style="width:100%;padding:12px;background:var(--surface2);color:var(--text2);border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">닫기</button>
     </div>
   </div>`;
   document.body.appendChild(modal);
