@@ -311,13 +311,51 @@ document.addEventListener('keydown',e=>{
           <div id="headerWeeklyAtt" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;justify-content:end;align-items:center">
-        <button onclick="goTab('noti')" style="height:28px;border-radius:14px;background:#FFE0EC;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#D6457E;white-space:nowrap;position:relative">알림<span id="notiBadge" style="display:none;position:absolute;top:-3px;right:-3px;background:#FF5C5C;color:white;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px"></span></button>
-        <button onclick="goToGame()" style="height:28px;border-radius:14px;background:#E0F0FF;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#3D7DB8;white-space:nowrap">오락실</button>
-        <button onclick="location.href='https://5sq224fdw5-eng.github.io/crew31/follow31.html'" style="height:28px;border-radius:14px;background:#E3F6E8;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#3E9E63;white-space:nowrap">맞팔31</button>
-        <button id="reloadBtn" onclick="forceReload()" ondblclick="hardUpdate()" title="탭: 새로고침 · 길게/더블탭: 강제 업데이트" style="height:28px;border-radius:14px;background:#FFF2D6;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#B8862A;white-space:nowrap">갱신</button>
-        <button id="adminSwitchBtn" onclick="switchToAdmin()" title="관리자 전환" style="display:none;height:28px;border-radius:14px;background:#EFE3FB;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#8B5FC0;white-space:nowrap">관리자</button>
-        <button onclick="logout()" style="height:28px;border-radius:14px;background:#FFE2DC;border:none;font-size:12px;font-weight:800;cursor:pointer;color:#D2674E;white-space:nowrap">나가기</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button id="reloadBtn" onclick="forceReload()" ondblclick="hardUpdate()" title="탭: 새로고침 · 길게/더블탭: 강제 업데이트" style="height:26px;padding:0 11px;border-radius:14px;background:rgba(255,255,255,0.92);border:none;font-size:10.5px;font-weight:600;cursor:pointer;color:#C77BA0;white-space:nowrap">🔄 새로고침</button>
+        <button onclick="logout()" style="height:26px;padding:0 11px;border-radius:14px;background:#FFE2DC;border:none;font-size:10.5px;font-weight:600;cursor:pointer;color:#D2674E;white-space:nowrap">나가기</button>
+      </div>
+    </div>
+
+    <!-- ▌하트 FAB (우하단, 위로 펼침 · 반투명) ▌ -->
+    <style>
+      #heartFab .hfHeart{position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent}
+      #heartFab .hfHeart svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+      #heartFab .hfLbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;padding-bottom:4px;pointer-events:none}
+      #heartFab .hfTrig{width:60px;height:54px;filter:drop-shadow(0 4px 8px rgba(244,114,182,.45))}
+      #heartFab .hfTrig .hfLbl{font-size:10.5px;white-space:nowrap}
+      #heartFab .hfAct{width:56px;height:50px;opacity:0;transform:translateY(14px) scale(.7);pointer-events:none;transition:all .24s cubic-bezier(.34,1.56,.64,1);filter:drop-shadow(0 3px 6px rgba(0,0,0,.16))}
+      #heartFab .hfAct .hfLbl{font-size:11px;padding-bottom:3px}
+      #heartFab.open .hfAct{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
+      #heartFab .hfBadge{position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:#fff;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px;text-align:center;z-index:2;display:none;line-height:1.4}
+    </style>
+    <div id="heartFab" style="position:fixed;right:20px;bottom:86px;display:flex;flex-direction:column-reverse;align-items:center;gap:10px;z-index:800">
+      <!-- 트리거 -->
+      <div class="hfHeart hfTrig" onclick="document.getElementById('heartFab').classList.toggle('open')">
+        <svg viewBox="0 0 24 24"><path fill="rgba(255,123,160,0.92)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfBadge" id="notiBadgeTrig"></span>
+        <span class="hfLbl">바로가기</span>
+      </div>
+      <!-- 알림 -->
+      <div class="hfHeart hfAct" style="transition-delay:0s" onclick="document.getElementById('heartFab').classList.remove('open');goTab('noti')">
+        <svg viewBox="0 0 24 24"><path fill="rgba(255,224,236,0.3)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfBadge" id="notiBadge"></span>
+        <span class="hfLbl" style="color:#D6457E">알림</span>
+      </div>
+      <!-- 오락실 -->
+      <div class="hfHeart hfAct" style="transition-delay:.04s" onclick="document.getElementById('heartFab').classList.remove('open');goToGame()">
+        <svg viewBox="0 0 24 24"><path fill="rgba(224,240,255,0.3)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfLbl" style="color:#3D7DB8">오락실</span>
+      </div>
+      <!-- 맞팔 -->
+      <div class="hfHeart hfAct" style="transition-delay:.08s" onclick="document.getElementById('heartFab').classList.remove('open');location.href='https://5sq224fdw5-eng.github.io/crew31/follow31.html'">
+        <svg viewBox="0 0 24 24"><path fill="rgba(227,246,232,0.3)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfLbl" style="color:#3E9E63">맞팔</span>
+      </div>
+      <!-- 관리자 (자격 있을 때만 enterApp에서 표시) -->
+      <div class="hfHeart hfAct" id="adminHeart" style="transition-delay:.12s;display:none">
+        <svg viewBox="0 0 24 24"><path fill="rgba(239,227,251,0.3)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfLbl" id="adminSwitchLbl" style="color:#8B5FC0">관리자</span>
       </div>
     </div>
 
@@ -750,8 +788,8 @@ function switchLoginTab(tab){
   document.getElementById('tabAdmin').style.color = isMember?'#C97A40':'white';
 }
 
-function forceReload(){
-  showToast('🔄 새로고침 중...');
+function forceReload(silent){
+  if(!silent) showToast('🔄 최신 버전 불러오는 중');
   // 서비스워커 업데이트 체크(새 버전 있으면 받아옴)
   try{ navigator.serviceWorker?.getRegistration().then(r=>r&&r.update().catch(()=>{})).catch(()=>{}); }catch(e){}
   loadGroups().then(()=>{
@@ -1227,23 +1265,25 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.헤더파스텔' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.PTR토스트off' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
   if(avatarEl) avatarEl.textContent = initial;
   if(nameEl) nameEl.textContent = CU.name+'님';
-  // 주간 참여 현황 헤더 표시
-  setTimeout(loadHeaderWeeklyAtt, 1000);
+  // 주간 참여 현황 헤더 표시 (정의가 뒤쪽 스크립트 블록 → 발화 시점에 평가하도록 화살표+가드)
+  setTimeout(()=>{ if(typeof loadHeaderWeeklyAtt==='function') loadHeaderWeeklyAtt(); }, 1000);
   if(roleEl) roleEl.textContent = userRole;
-  // 인사팀 계정 → 관리자 전환 버튼 (로그아웃 불필요)
-  const _swBtn=document.getElementById('adminSwitchBtn');
-  if(_swBtn){
+  // 인사팀 계정 → 관리자 전환 (하트 FAB 내 '관리자' 하트)
+  const _swHeart=document.getElementById('adminHeart');
+  const _swLbl=document.getElementById('adminSwitchLbl');
+  if(_swHeart){
+    const _closeFab=()=>{ const f=document.getElementById('heartFab'); if(f) f.classList.remove('open'); };
     if(CU.role==='member' && _ADMIN_SWITCH_NAMES.includes(CU.name)){
-      _swBtn.style.display=''; _swBtn.textContent='관리자'; _swBtn.title='관리자 전환'; _swBtn.onclick=switchToAdmin;
+      _swHeart.style.display=''; if(_swLbl)_swLbl.textContent='관리자'; _swHeart.title='관리자 전환'; _swHeart.onclick=()=>{_closeFab();switchToAdmin();};
     } else if(CU.role==='admin' && window._origMember){
-      _swBtn.style.display=''; _swBtn.textContent='사원'; _swBtn.title='사원으로 복귀'; _swBtn.onclick=switchToMember;
-    } else { _swBtn.style.display='none'; _swBtn.onclick=null; }
+      _swHeart.style.display=''; if(_swLbl)_swLbl.textContent='사원'; _swHeart.title='사원으로 복귀'; _swHeart.onclick=()=>{_closeFab();switchToMember();};
+    } else { _swHeart.style.display='none'; _swHeart.onclick=null; }
   }
   // 새 버전 배너 체크
   setTimeout(checkUpdateBanner, 1200);
@@ -3568,7 +3608,7 @@ async function loadDeptPage(gid){
     html+=`<div onclick="toggleVoteDetail('${vid2}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer">`;
     html+=`<div style="flex:1;min-width:0">`;
     html+=`<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${badge} ${escH(v2.title||'')}</div>`;
-    html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">${isClosed2?'🔒 마감':'⏰ 진행중'} · ${resCount}명 참여 · ${v2.date||''}</div>`;
+    html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">${isClosed2?'🔒 마감':'⏰ 진행중'} · ${resCount}명 참여 · ${fmtDateWd(v2.date)}</div>`;
     html+=`</div>${stampHtml}<span style="color:var(--text3);font-size:12px;margin-left:8px">▼</span>`;
     html+=`</div>`;
     html+=`<div id="voteDetail_${vid2}" style="display:none;border-top:1px solid var(--border)"></div>`;
@@ -3810,6 +3850,8 @@ async function renderVoteCard(vid,v){
     }
     if(totalCount===0) totalCount = startVoters.length;
 
+    window._voteGal = window._voteGal || {};
+    window._voteGal[vid] = [];  // 이 투표의 전체 사진(모든 참여자, 순번대로) — 전체화면 연속 슬라이드용
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 0">`;
     startVoters.forEach((nick, idx)=>{
       const isLeave = leaveSet.has(nick);
@@ -3820,6 +3862,9 @@ async function renderVoteCard(vid,v){
       const _sc = v.saveCount && (v.saveCount[sanitizedNick]||v.saveCount[nick]);
       const cnt = (_sc && _sc.n>0) ? _sc.n : uploadCount;
       const _scReview = !!(_sc && _sc.status==='review'); // OCR 'N개' 못 읽음 → 관리자 확인
+      // B안: 넘치게 인식된 건 분모(totalCount)로 캡해서 100% 처리, 부족한 것만 그대로 표시
+      const _capShown = totalCount>0 ? Math.min(cnt, totalCount) : cnt;
+      const _capDone = totalCount>0 && cnt>=totalCount;
       const collapseId = `imgCollapse_${vid}_${idx}`;
       const isBonus = bonusSet.has(nick);
       let fillPct, label, btnStyle, canUpload;
@@ -3830,7 +3875,7 @@ async function renderVoteCard(vid,v){
         canUpload = false;
       } else if(isBonus){
         fillPct = totalCount>0 ? Math.min(100, Math.round(cnt/totalCount*100)) : 0;
-        label = `열정페이 (${cnt}/${totalCount})`;
+        label = `열정페이 ${_capDone?`✓ ${_capShown}/${totalCount}`:`(${_capShown}/${totalCount})`}`;
         btnStyle = fillPct===100
           ? `background:#94a3b8;color:white;border:1.5px solid #94a3b8;`
           : fillPct===0
@@ -3839,7 +3884,7 @@ async function renderVoteCard(vid,v){
         canUpload = true;
       } else {
         fillPct = totalCount>0 ? Math.min(100, Math.round(cnt/totalCount*100)) : 0;
-        label = _scReview ? `(🔎확인 ${uploadCount}장)` : `(${cnt}/${totalCount})`;
+        label = _scReview ? `(🔎확인 ${uploadCount}장)` : (_capDone ? `✓ ${_capShown}/${totalCount}` : `(${_capShown}/${totalCount})`);
         btnStyle = fillPct===100
           ? `background:#FF85C1;color:white;border:1.5px solid #FF85C1;`
           : fillPct===0
@@ -3865,15 +3910,18 @@ async function renderVoteCard(vid,v){
           html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
         }
       }
+      // 이 참여자 사진을 투표 통합 갤러리에 순번대로 추가 (전체화면에서 다음 사람으로 계속 슬라이드)
+      const _galSorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+      _galSorted.forEach(x=>{
+        const _big = x.url.includes('/upload/') ? x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/') : x.url;
+        window._voteGal[vid].push({url:_big, nick:nick});
+      });
       if(imgs.length>0){
-        const sorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+        const sorted = _galSorted;
         html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
-        window._imgGalleries = window._imgGalleries || {};
-        const _galKey1 = 'gal'+(window._galSeq=(window._galSeq||0)+1);
-        window._imgGalleries[_galKey1] = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url);
         sorted.forEach((img,imgIdx)=>{
           const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
-          html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewerKey('${_galKey1}',${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+          html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openSecretViewerByNick('${vid}','${nick.replace(/'/g,'\\\'')}',${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
         });
         html+=`</div>`;
       }
@@ -4240,7 +4288,7 @@ async function renderVoteCard(vid,v){
     const responses2=v.responses||{};
     let fb=`<div class="card" style="margin:0 14px 16px;padding:14px">`;
     fb+=`<div style="font-size:15px;font-weight:800;margin-bottom:8px">${escH(v.title||'투표')}</div>`;
-    fb+=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">📅 ${v.date||''} · 마감 ${v.time||''} · ${Object.keys(responses2).length}명 참여</div>`;
+    fb+=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">📅 ${fmtDateWd(v.date)} · 마감 ${v.time||''} · ${Object.keys(responses2).length}명 참여</div>`;
     opts2.forEach((o,i)=>{
       const cnt=Object.values(responses2).filter(r=>r===i).length;
       const names=Object.entries(responses2).filter(([k,r])=>r===i).map(([k])=>k);
@@ -4473,12 +4521,9 @@ async function toggleNickBtn(vid, collapseId, nick){
   if(realImgs.length>0){
     const sorted = [...realImgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
-    window._imgGalleries = window._imgGalleries || {};
-    const _galKey2 = 'gal'+(window._galSeq=(window._galSeq||0)+1);
-    window._imgGalleries[_galKey2] = sorted.map(x=>x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url);
     sorted.forEach((img,imgIdx)=>{
       const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
-      html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openImgViewerKey('${_galKey2}',${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+      html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openSecretViewerByNick('${vid}','${nick.replace(/'/g,'\\\'')}',${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
     });
     html+=`</div>`;
   }
@@ -6395,6 +6440,9 @@ async function loadStatusGroup(gid) {
     });
   }
 
+  window._statusWeeksCache = window._statusWeeksCache || {};
+  window._statusWeeksCache[gid] = weeks;
+
   if(Object.keys(weeks).length === 0) {
     el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div>${gName} 데이터 없음</div>`;
     return;
@@ -6443,11 +6491,10 @@ async function loadStatusGroup(gid) {
     // 오른쪽: 엑셀 / 수정
     html += `<div style="display:flex;gap:6px;align-items:center">`;
     html += `<button onclick="downloadWeekExcel('${gid}','${mondayStr}')" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:var(--green);color:white;font-weight:700">⬇️ 엑셀</button>`;
-    if(CU?.role==='admin') html += `<button onclick="openAttendanceEdit('${gid}','${mondayStr}')" style="font-size:11px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;background:var(--surface2);color:var(--text2);font-weight:700">✏️ 수정</button>`;
     html += `</div></div>`;
 
     html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed">`;
-    html += `<tr style="background:var(--surface2)"><th style="padding:4px 3px;text-align:left;font-weight:700;white-space:nowrap;width:46px">멤버</th>`;
+    html += `<tr style="background:var(--surface2)"><th style="padding:4px 3px;text-align:center;font-weight:700;white-space:nowrap;width:46px">멤버</th>`;
     dates.forEach(d => {
       const dd = new Date(d);
       const days = ['일','월','화','수','목','금','토'];
@@ -6477,7 +6524,7 @@ async function loadStatusGroup(gid) {
       const isFull = fullCount >= 7;
       const isAdminM = ADMIN_NAMES.includes(mname);
       html += `<tr style="border-top:1px solid var(--border);${isAdminM?'background:#fff8f5':''}">`;
-      html += `<td style="padding:5px 3px;font-weight:${isAdminM?'800':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isAdminM?'var(--accent)':'inherit'}">${escH(mname)}</td>`;
+      html += `<td style="padding:5px 3px;text-align:center;font-weight:${isAdminM?'800':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isAdminM?'var(--accent)':'inherit'}">${escH(mname)}</td>`;
       dates.forEach(d => {
         let r = mdates[d] || '';
         if(r==='시작') r='참여';
@@ -6488,7 +6535,17 @@ async function loadStatusGroup(gid) {
         const cellBg = !r ? '#f1f5f9' : (isDim ? bg+'18' : bg+'33');
         const cellFg = !r ? '#ccc' : (isDim ? bg+'99' : bg);
         const cellWeight = isDim ? '600' : '800';
-        html += `<td style="padding:3px 1px;text-align:center"><span style="display:inline-block;padding:2px 1px;border-radius:5px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:9px;width:100%;box-sizing:border-box;overflow:hidden;white-space:nowrap">${label||'-'}</span></td>`;
+        if(CU?.role==='admin'){
+          const editVal = isMiwan ? label : r; // 미완료 접미사 제거한 편집 기준값
+          const stdOpts = ['','완료','당직','지각','프패','공게','봉사','노피드','투피드','확인증'];
+          let optsHtml = '';
+          if(editVal && !stdOpts.includes(editVal)) optsHtml += `<option value="${escH(editVal)}" selected>${escH(editVal)}</option>`;
+          optsHtml += stdOpts.map(o=>`<option value="${o}" ${editVal===o?'selected':''}>${o||'-'}</option>`).join('');
+          const nm = mname.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+          html += `<td style="padding:3px 1px;text-align:center"><select onchange="selectAttResult('${gid}','${mondayStr}','${nm}','${d}',this)" style="width:100%;height:24px;border:none;border-radius:5px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:9px;text-align:center;-webkit-appearance:none;appearance:none;padding:0;cursor:pointer">${optsHtml}</select></td>`;
+        } else {
+          html += `<td style="padding:3px 1px;text-align:center"><span style="display:inline-block;padding:2px 1px;border-radius:5px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:9px;width:100%;box-sizing:border-box;overflow:hidden;white-space:nowrap">${label||'-'}</span></td>`;
+        }
       });
       html += `<td style="padding:5px 2px;text-align:center;font-weight:800;font-size:10px;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':(fullCount+'/7')}</td>`;
       html += `</tr>`;
@@ -6760,6 +6817,13 @@ function openAttendanceEdit(gid, mondayStr) {
   renderAttEditList(gid, mondayStr, dates, '');
 }
 
+function fmtDateWd(s){
+  if(!s) return '';
+  const m=String(s).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return String(s);
+  const wd=['일','월','화','수','목','금','토'][new Date(+m[1],+m[2]-1,+m[3]).getDay()];
+  return `${m[1]}-${m[2]}-${m[3]} ${wd}요일`;
+}
 const _attResultCycle = ['완료','당직','지각','프패','공게','봉사','노피드','투피드','확인증',''];
 const _attResultColor = {'완료':'#5DB88A','당직':'#7C9CDB','지각':'#E8927C','프패':'#FFB347','공게':'#5B9BD5','봉사':'#A78BFA','노피드':'#94a3b8','투피드':'#f59e0b','확인증':'#FF85C1','':'#ddd'};
 
@@ -6800,12 +6864,13 @@ async function renderAttEditList(gid, mondayStr, dates, filter){
   const searchInput = document.querySelector('#attEditModal input');
   const scrollTop = listEl.scrollTop;
   listEl.innerHTML = members.map(m=>{
-    const mData = attData[m.name] || {};
+    const _merged = window._statusWeeksCache?.[gid]?.[mondayStr]?.members?.[m.name] || {};
+    const mData = {..._merged, ...(attData[m.name]||{})};
     return `<div style="margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:12px">
       <div style="font-size:13px;font-weight:700;margin-bottom:8px">${escH(m.name)}</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
         ${dates.map(d=>{
-          const cur = mData[d]||'';
+          const cur = (mData[d]||'').replace('·미완료','');
           const dayLabel=['월','화','수','목','금','토','일'][new Date(d).getDay()===0?6:new Date(d).getDay()-1];
           const col = _attResultColor[cur]||'#ddd';
           return `<div style="text-align:center">
@@ -7734,11 +7799,14 @@ function markAllRead(){localStorage.setItem(NOTI_READ_KEY,Date.now().toString())
 
 // 배지 갱신
 function updateNotiBadge(){
-  const badge=document.getElementById('notiBadge');if(!badge)return;
   const lastRead=getLastRead();
   const unread=getNotiList().filter(n=>n.ts>lastRead).length;
-  if(unread>0){badge.textContent=unread>9?'9+':unread;badge.style.display='inline-flex';}
-  else{badge.style.display='none';}
+  const txt=unread>9?'9+':String(unread);
+  ['notiBadge','notiBadgeTrig'].forEach(id=>{
+    const badge=document.getElementById(id); if(!badge)return;
+    if(unread>0){badge.textContent=txt;badge.style.display='inline-flex';}
+    else{badge.style.display='none';}
+  });
 }
 
 // 알림 추가 (내부 함수)
@@ -7994,16 +8062,37 @@ async function loadNotiPage(){
 }
 
 
-let _imgViewerUrls = [];
+let _imgViewerItems = [];   // [{url, nick}] (문자열도 허용)
 let _imgViewerIdx = 0;
 let _touchStartX = 0;
 
+function _galItem(it){ return (it && typeof it==='object') ? it : {url:it, nick:''}; }
+
 function openImgViewerKey(k, idx){
-  const urls = (window._imgGalleries && window._imgGalleries[k]) || [];
-  openImgViewer(urls, idx);
+  const arr = (window._imgGalleries && window._imgGalleries[k]) || [];
+  openImgViewer(arr, idx);
 }
-function openImgViewer(urls, idx){
-  _imgViewerUrls = urls;
+// 시크릿: 그 투표의 전체 갤러리(모든 참여자, 순번대로)에서 해당 닉의 localIdx번째 사진을 연다 → 좌우 슬라이드 시 다음 사람으로 계속 넘어감
+async function openSecretViewerByNick(vid, nick, localIdx){
+  let gal = window._voteGal && window._voteGal[vid];
+  if(!gal || !gal.length){
+    // 폴백: 통합 갤러리가 없으면 그 사람 사진만이라도 보여줌
+    try{
+      const v = await dbGet(`votes/${vid}`);
+      const san = nick.replace(/[\.#$\/\[\]\s]/g,'_');
+      const imgs = (((v&&v.images)&&(v.images[san]||v.images[nick]))||[]).filter(x=>x&&x.url&&x.url!=='연차').sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+      gal = imgs.map(x=>({url:(x.url.includes('/upload/')?x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/'):x.url), nick}));
+    }catch(e){ gal=[]; }
+    openImgViewer(gal, localIdx||0);
+    return;
+  }
+  // 통합 갤러리에서 이 닉의 localIdx번째 위치를 전체 인덱스로 변환
+  let count=-1, gi=0;
+  for(let i=0;i<gal.length;i++){ if(gal[i].nick===nick){ count++; if(count===(localIdx||0)){ gi=i; break; } } }
+  openImgViewer(gal, gi);
+}
+function openImgViewer(items, idx){
+  _imgViewerItems = (items||[]).map(_galItem);
   _imgViewerIdx = idx||0;
   const el = document.getElementById('imgViewer');
   el.style.display = 'flex';
@@ -8012,11 +8101,12 @@ function openImgViewer(urls, idx){
   el.addEventListener('touchend', _imgTouchEnd, {passive:true});
 }
 function _showImgViewer(){
-  const url = _imgViewerUrls[_imgViewerIdx];
-  // 이미 w_600 압축된 URL 그대로 사용 (빠른 로딩)
+  const it = _imgViewerItems[_imgViewerIdx] || {url:'',nick:''};
   const img = document.getElementById('imgViewerImg');
-  img.src = url;
-  document.getElementById('imgViewerCount').textContent = (_imgViewerIdx+1)+'/'+_imgViewerUrls.length;
+  img.src = it.url;
+  document.getElementById('imgViewerCount').textContent = (_imgViewerIdx+1)+'/'+_imgViewerItems.length;
+  const nk = document.getElementById('imgViewerNick');
+  if(nk){ nk.textContent = it.nick ? ('🔖 '+it.nick) : ''; nk.style.display = it.nick ? 'block' : 'none'; }
 }
 function closeImgViewer(){
   document.getElementById('imgViewer').style.display='none';
@@ -8024,7 +8114,7 @@ function closeImgViewer(){
   document.getElementById('imgViewer').removeEventListener('touchend',_imgTouchEnd);
 }
 function prevImg(){if(_imgViewerIdx>0){_imgViewerIdx--;_showImgViewer();}}
-function nextImg(){if(_imgViewerIdx<_imgViewerUrls.length-1){_imgViewerIdx++;_showImgViewer();}}
+function nextImg(){if(_imgViewerIdx<_imgViewerItems.length-1){_imgViewerIdx++;_showImgViewer();}}
 function _imgTouchStart(e){_touchStartX=e.touches[0].clientX;}
 function _imgTouchEnd(e){
   const dx=e.changedTouches[0].clientX-_touchStartX;
@@ -8040,10 +8130,60 @@ function clearNotiList(){
 </script>
 <div id="imgViewer" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;flex-direction:column;align-items:center;justify-content:center" onclick="closeImgViewer()">
   <div style="position:absolute;top:16px;right:16px;color:white;font-size:24px;cursor:pointer;z-index:2" onclick="closeImgViewer()">✕</div>
+  <div style="position:absolute;top:14px;left:16px;color:white;font-size:15px;font-weight:800;z-index:2;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 5px rgba(0,0,0,0.7);background:rgba(0,0,0,0.35);padding:4px 12px;border-radius:14px" id="imgViewerNick"></div>
   <div style="position:absolute;top:16px;left:50%;transform:translateX(-50%);color:white;font-size:13px;font-weight:700" id="imgViewerCount"></div>
   <div style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:white;font-size:32px;cursor:pointer;z-index:2;padding:10px" onclick="event.stopPropagation();prevImg()">‹</div>
   <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:white;font-size:32px;cursor:pointer;z-index:2;padding:10px" onclick="event.stopPropagation();nextImg()">›</div>
   <img id="imgViewerImg" src="" style="max-width:100%;max-height:90vh;object-fit:contain;user-select:none" ondragstart="return false">
 </div>
+<style>@keyframes ptrSpinRot{to{transform:rotate(360deg)}}#ptrInd .ptrSpin{width:12px;height:12px;border:2px solid #FFD3E2;border-top-color:#FF7BA0;border-radius:50%;display:inline-block;animation:ptrSpinRot .7s linear infinite;flex-shrink:0}</style>
+<script>
+/* ▌당겨서 새로고침 (pull-to-refresh) — #mainBody 최상단에서 아래로 당기면 forceReload ▌ */
+(function(){
+  var sc=document.getElementById('mainBody');
+  if(!sc) return;
+  var ind=document.createElement('div');
+  ind.id='ptrInd';
+  ind.style.cssText='position:fixed;top:0;left:50%;transform:translate(-50%,-44px);background:#fff;box-shadow:0 3px 12px rgba(0,0,0,.16);border-radius:20px;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;z-index:790;opacity:0;pointer-events:none;font-size:12.5px;color:#FF7BA0;font-weight:800';
+  ind.textContent='↓ 당겨서 새로고침';
+  document.body.appendChild(ind);
+  var startY=0,dist=0,pulling=false,busy=false;
+  var TH=70,MAX=80;
+  sc.addEventListener('touchstart',function(e){
+    if(busy) return;
+    if(sc.scrollTop<=0){ startY=e.touches[0].clientY; pulling=true; dist=0; } else pulling=false;
+  },{passive:true});
+  sc.addEventListener('touchmove',function(e){
+    if(!pulling||busy) return;
+    dist=e.touches[0].clientY-startY;
+    if(dist>0 && sc.scrollTop<=0){
+      var d=Math.min(dist*0.5,MAX);
+      ind.style.transform='translate(-50%,'+Math.min(d-44,14)+'px)';
+      ind.style.opacity=Math.min(dist/TH,1);
+      ind.textContent= dist>TH ? '↑ 놓으면 새로고침' : '↓ 당겨서 새로고침';
+    } else pulling=false;
+  },{passive:true});
+  sc.addEventListener('touchend',function(){
+    if(!pulling||busy){ pulling=false; return; }
+    pulling=false;
+    if(dist>TH){
+      busy=true;
+      ind.innerHTML='<span class="ptrSpin"></span><span>최신 버전 불러오는 중</span>';
+      ind.style.opacity='1';
+      ind.style.transform='translate(-50%,14px)';
+      try{ forceReload(true); }catch(e){}
+      setTimeout(function(){
+        ind.textContent='↓ 당겨서 새로고침';
+        ind.style.transform='translate(-50%,-44px)';
+        ind.style.opacity='0';
+        busy=false;
+      },1100);
+    } else {
+      ind.style.transform='translate(-50%,-44px)';
+      ind.style.opacity='0';
+    }
+  });
+})();
+</script>
 </body>
 </html>
