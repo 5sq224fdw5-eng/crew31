@@ -319,12 +319,12 @@ document.addEventListener('keydown',e=>{
 
     <!-- ▌하트 FAB (우하단, 위로 펼침 · 반투명) ▌ -->
     <style>
-      #heartFab .hfHeart{position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent}
-      #heartFab .hfHeart svg{position:absolute;inset:0;width:100%;height:100%;display:block}
-      #heartFab .hfLbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;padding-bottom:4px;pointer-events:none}
-      #heartFab .hfTrig{width:60px;height:54px;filter:drop-shadow(0 4px 8px rgba(244,114,182,.45))}
+      #heartFab .hfHeart{position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+      #heartFab .hfHeart svg{position:absolute;inset:0;width:100%;height:100%;display:block;max-width:60px;max-height:54px}
+      #heartFab .hfLbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:400;padding-bottom:4px;pointer-events:none}
+      #heartFab .hfTrig{width:60px;height:54px;max-width:60px;max-height:54px;filter:drop-shadow(0 4px 8px rgba(244,114,182,.45))}
       #heartFab .hfTrig .hfLbl{font-size:10.5px;white-space:nowrap}
-      #heartFab .hfAct{width:56px;height:50px;opacity:0;transform:translateY(14px) scale(.7);pointer-events:none;transition:all .24s cubic-bezier(.34,1.56,.64,1);filter:drop-shadow(0 3px 6px rgba(0,0,0,.16))}
+      #heartFab .hfAct{width:56px;height:50px;max-width:56px;max-height:50px;opacity:0;transform:translateY(14px) scale(.7);pointer-events:none;transition:all .24s cubic-bezier(.34,1.56,.64,1);filter:drop-shadow(0 3px 6px rgba(0,0,0,.16))}
       #heartFab .hfAct .hfLbl{font-size:11px;padding-bottom:3px}
       #heartFab.open .hfAct{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
       #heartFab .hfBadge{position:absolute;top:-2px;right:-2px;background:#FF5C5C;color:#fff;font-size:8px;font-weight:800;padding:1px 4px;border-radius:8px;min-width:14px;text-align:center;z-index:2;display:none;line-height:1.4}
@@ -332,30 +332,30 @@ document.addEventListener('keydown',e=>{
     <div id="heartFab" style="position:fixed;right:20px;bottom:86px;display:flex;flex-direction:column-reverse;align-items:center;gap:10px;z-index:800">
       <!-- 트리거 -->
       <div class="hfHeart hfTrig" onclick="hfTrigTap()">
-        <svg viewBox="0 0 24 24"><path fill="rgba(255,123,160,0.92)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="rgba(214,69,126,0.6)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         <span class="hfBadge" id="notiBadgeTrig"></span>
         <span class="hfLbl">바로가기</span>
       </div>
       <!-- 알림 -->
       <div class="hfHeart hfAct" style="transition-delay:0s" onclick="document.getElementById('heartFab').classList.remove('open');goTab('noti')">
-        <svg viewBox="0 0 24 24"><path fill="rgba(255,224,236,0.3)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <svg viewBox="0 0 24 24"><path fill="rgba(255,133,193,0.6)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         <span class="hfBadge" id="notiBadge"></span>
         <span class="hfLbl" style="color:#D6457E">알림</span>
       </div>
       <!-- 오락실 -->
       <div class="hfHeart hfAct" style="transition-delay:.04s" onclick="document.getElementById('heartFab').classList.remove('open');goToGame()">
-        <svg viewBox="0 0 24 24"><path fill="rgba(224,240,255,0.3)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-        <span class="hfLbl" style="color:#3D7DB8">오락실</span>
+        <svg viewBox="0 0 24 24"><path fill="rgba(255,180,213,0.6)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfLbl" style="color:#D6457E">오락실</span>
       </div>
       <!-- 맞팔 -->
       <div class="hfHeart hfAct" style="transition-delay:.08s" onclick="document.getElementById('heartFab').classList.remove('open');location.href='https://5sq224fdw5-eng.github.io/crew31/follow31.html'">
-        <svg viewBox="0 0 24 24"><path fill="rgba(227,246,232,0.3)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-        <span class="hfLbl" style="color:#3E9E63">맞팔</span>
+        <svg viewBox="0 0 24 24"><path fill="rgba(255,210,228,0.6)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfLbl" style="color:#D6457E">맞팔</span>
       </div>
       <!-- 관리자 (자격 있을 때만 enterApp에서 표시) -->
       <div class="hfHeart hfAct" id="adminHeart" style="transition-delay:.12s;display:none">
-        <svg viewBox="0 0 24 24"><path fill="rgba(239,227,251,0.3)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-        <span class="hfLbl" id="adminSwitchLbl" style="color:#8B5FC0">관리자</span>
+        <svg viewBox="0 0 24 24"><path fill="rgba(255,245,249,0.6)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfLbl" id="adminSwitchLbl" style="color:#D6457E">관리자</span>
       </div>
     </div>
 
@@ -1265,7 +1265,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.현황셀중앙' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.하트핑크고정' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3585,9 +3585,24 @@ async function loadDeptPage(gid){
   });
   list.forEach(([vid2,v2])=>{
     const isClosed2 = v2.closed||(v2.date&&v2.time&&Date.now()>new Date(v2.date+'T'+v2.time).getTime());
-    const resCount = v2.imageUpload 
+    let resCount = v2.imageUpload 
       ? Object.keys(v2.images||{}).filter(k=>{const imgs=v2.images[k];return imgs&&imgs.length>0&&imgs[0]?.url!=='연차';}).length + Object.keys(v2.images||{}).filter(k=>{const imgs=v2.images[k];return imgs&&imgs.length>0&&imgs[0]?.url==='연차';}).length
       : Object.keys(v2.responses||{}).length;
+    // 완료 투표: 연차/당직자도 자동 포함
+    if((v2.title||'').includes('완료')){
+      const startVote = list.find(([_,v])=>v.title===(v2.title||'').replace('완료','시작'));
+      if(startVote && startVote[1]){
+        const _svOpts = startVote[1].options||[];
+        const _leaveNames = new Set(
+          Object.entries(startVote[1].responses||{})
+            .filter(([_,idx])=>{ const o=(_svOpts[idx]||''); return o.includes('연차')||o.includes('당직'); })
+            .map(([nm])=>nm)
+        );
+        const _curRespSet = new Set(Object.keys(v2.responses||{}));
+        _leaveNames.forEach(nm=>_curRespSet.add(nm));
+        resCount = _curRespSet.size;
+      }
+    }
     const isEnd2 = (v2.title||'').includes('완료')||v2.imageUpload;
     const badge = isEnd2 ? '🌙' : '🌅';
     // 내 참여 여부 → 출근/퇴근 완료 도장 (연차 쓴 날의 완료 투표도 퇴근완료 처리)
@@ -3608,7 +3623,7 @@ async function loadDeptPage(gid){
     html+=`<div onclick="toggleVoteDetail('${vid2}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer">`;
     html+=`<div style="flex:1;min-width:0">`;
     html+=`<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${badge} ${escH(v2.title||'')}</div>`;
-    html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">${isClosed2?'🔒 마감':'⏰ 진행중'} · ${resCount}명 참여 · ${fmtDateWd(v2.date)}</div>`;
+    html+=`<div style="font-size:11px;color:var(--text3);margin-top:2px">${isClosed2?'🔒 마감':'⏰ 진행중'} · ${resCount}명 참여</div>`;
     html+=`</div>${stampHtml}<span style="color:var(--text3);font-size:12px;margin-left:8px">▼</span>`;
     html+=`</div>`;
     html+=`<div id="voteDetail_${vid2}" style="display:none;border-top:1px solid var(--border)"></div>`;
@@ -6494,14 +6509,52 @@ async function loadStatusGroup(gid) {
     html += `</div></div>`;
 
     html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed">`;
-    html += `<tr style="background:var(--surface2)"><th style="padding:4px 3px;text-align:center;font-weight:700;white-space:nowrap;width:46px">멤버</th>`;
+    html += `<tr style="background:var(--surface2)"><th style="padding:4px 3px;text-align:center;font-weight:700;white-space:nowrap;width:calc(100% / 9)">멤버</th>`;
     dates.forEach(d => {
       const dd = new Date(d);
       const days = ['일','월','화','수','목','금','토'];
       const cnt = Object.entries(memberResults).filter(([n,md])=> n!=='관리자' && md[d] && md[d]!=='').length;
-      html += `<th style="padding:4px 1px;text-align:center;font-weight:700;white-space:nowrap"><span style="font-size:9px">${dd.getMonth()+1}/${dd.getDate()}</span><br><span style="font-weight:400;color:var(--text3);font-size:9px">${days[dd.getDay()]}</span><br><span style="font-weight:700;color:var(--accent);font-size:8px">${cnt}</span></th>`;
+      html += `<th style="padding:4px 1px;text-align:center;font-weight:700;white-space:nowrap;width:calc(100% / 9)"><span style="font-size:9px">${dd.getMonth()+1}/${dd.getDate()}</span><br><span style="font-weight:400;color:var(--text3);font-size:9px">${days[dd.getDay()]}</span><br><span style="font-weight:700;color:var(--accent);font-size:8px">${cnt}</span></th>`;
     });
-    html += `<th style="padding:4px 2px;text-align:center;font-weight:700;width:30px">풀참</th></tr>`;
+    html += `<th style="padding:4px 2px;text-align:center;font-weight:700;width:calc(100% / 9)">풀참</th></tr>`;
+
+    // 필터 드롭다운 행
+    html += `<tr class="filter-row">`;
+    html += `<td style="width:calc(100% / 9)"></td>`;
+    dates.forEach((d, dateIdx) => {
+      html += `<td style="text-align:center;padding:2px;width:calc(100% / 9)">
+        <select style="width:95%;font-size:8px" onchange="filterByDate(this, ${dateIdx}, '${mondayStr}')">
+          <option value="">전체</option>
+          <option>완료</option>
+          <option>지각</option>
+          <option>참여</option>
+          <option>당직</option>
+          <option>프패</option>
+          <option>공게</option>
+          <option>봉사</option>
+          <option>노피드</option>
+          <option>투피드</option>
+          <option>확인증</option>
+        </select>
+      </td>`;
+    });
+    html += `<td style="width:calc(100% / 9)"></td></tr>`;
+
+    // 통계 행
+    html += `<tr style="background:#f9f9f9">`;
+    html += `<td style="width:calc(100% / 9)">📊</td>`;
+    dates.forEach(d => {
+      const stats = {};
+      Object.entries(memberResults).forEach(([n,md])=>{
+        const r = md[d] || '';
+        const key = (r==='시작'?'참여':r);
+        if(!key) return;
+        stats[key] = (stats[key]||0) + 1;
+      });
+      const statsText = Object.entries(stats).map(([k,v])=>`${k}${v}`).join(' ');
+      html += `<td style="font-size:7px;text-overflow:ellipsis;text-align:center;width:calc(100% / 9)">${statsText}</td>`;
+    });
+    html += `<td style="width:calc(100% / 9)"></td></tr>`;
 
     // 정렬: 인사팀 먼저, 그다음 가나다 ('관리자' 계정은 현황에서 제외 — 관리만 함)
     const sortedMembers = Object.entries(memberResults)
@@ -6523,8 +6576,8 @@ async function loadStatusGroup(gid) {
       }).length;
       const isFull = fullCount >= 7;
       const isAdminM = ADMIN_NAMES.includes(mname);
-      html += `<tr style="border-top:1px solid var(--border);${isAdminM?'background:#fff8f5':''}">`;
-      html += `<td style="padding:5px 3px;text-align:center;font-weight:${isAdminM?'800':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isAdminM?'var(--accent)':'inherit'}">${escH(mname)}</td>`;
+      html += `<tr id="statusRow_${mondayStr}_${mname.replace(/[^a-zA-Z0-9]/g,'_')}" style="border-top:1px solid var(--border);${isAdminM?'background:#fff8f5':''}">`;
+      html += `<td style="padding:5px 3px;text-align:center;font-weight:${isAdminM?'800':'600'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isAdminM?'var(--accent)':'inherit'};width:calc(100% / 9)">${escH(mname)}</td>`;
       dates.forEach(d => {
         let r = mdates[d] || '';
         if(r==='시작') r='참여';
@@ -6532,9 +6585,10 @@ async function loadStatusGroup(gid) {
         const label = isMiwan ? r.replace('·미완료','') : r;
         const bg = resultColor[r] || '#f1f5f9';
         const isDim = (r==='참여'||r===''||isMiwan);
-        const cellBg = !r ? '#f1f5f9' : (isDim ? bg+'18' : bg+'33');
-        const cellFg = !r ? '#ccc' : (isDim ? bg+'99' : bg);
+        const cellBg = !r ? '#ffffff' : (isDim ? bg+'18' : bg+'33');
+        const cellFg = !r ? '#ffffff' : (isDim ? bg+'99' : bg);
         const cellWeight = isDim ? '600' : '800';
+        const filterKey = (r==='참여'?'참여':r) || 'empty';
         if(CU?.role==='admin'){
           const editVal = isMiwan ? label : r; // 미완료 접미사 제거한 편집 기준값
           const stdOpts = ['','완료','당직','지각','프패','공게','봉사','노피드','투피드','확인증'];
@@ -6542,12 +6596,12 @@ async function loadStatusGroup(gid) {
           if(editVal && !stdOpts.includes(editVal)) optsHtml += `<option value="${escH(editVal)}" selected>${escH(editVal)}</option>`;
           optsHtml += stdOpts.map(o=>`<option value="${o}" ${editVal===o?'selected':''}>${o||'-'}</option>`).join('');
           const nm = mname.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-          html += `<td style="padding:3px 1px;text-align:center"><select onchange="selectAttResult('${gid}','${mondayStr}','${nm}','${d}',this)" style="width:100%;height:24px;border:none;border-radius:5px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:9px;text-align:center;text-align-last:center;-webkit-appearance:none;appearance:none;padding:0;cursor:pointer">${optsHtml}</select></td>`;
+          html += `<td data-filter="${filterKey}" style="padding:3px 1px;text-align:center;width:calc(100% / 9)"><select onchange="selectAttResult('${gid}','${mondayStr}','${nm}','${d}',this)" style="width:100%;height:24px;border:none;border-radius:5px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:9px;text-align:center;text-align-last:center;-webkit-appearance:none;appearance:none;padding:0;cursor:pointer">${optsHtml}</select></td>`;
         } else {
-          html += `<td style="padding:3px 1px;text-align:center"><span style="display:inline-block;padding:2px 1px;border-radius:5px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:9px;width:100%;box-sizing:border-box;overflow:hidden;white-space:nowrap;text-align:center">${label||'-'}</span></td>`;
+          html += `<td data-filter="${filterKey}" style="padding:3px 1px;text-align:center;width:calc(100% / 9)"><span style="display:inline-block;padding:2px 1px;border-radius:5px;background:${cellBg};color:${cellFg};font-weight:${cellWeight};font-size:9px;width:100%;box-sizing:border-box;overflow:hidden;white-space:nowrap;text-align:center">${label||'-'}</span></td>`;
         }
       });
-      html += `<td style="padding:5px 2px;text-align:center;font-weight:800;font-size:10px;color:${isFull?'var(--green)':'var(--text3)'}">${isFull?'✅':(fullCount+'/7')}</td>`;
+      html += `<td style="padding:5px 2px;text-align:center;font-weight:800;font-size:10px;color:${isFull?'var(--green)':'var(--text3)'};width:calc(100% / 9)">${isFull?'✅':(fullCount+'/7')}</td>`;
       html += `</tr>`;
     });
     html += `</table></div>`;
@@ -6557,7 +6611,53 @@ async function loadStatusGroup(gid) {
   el.innerHTML = html || '<div class="empty">데이터 없음</div>';
 }
 
-// ── 개근 주식 지급 ──
+// ── 현황판 날짜별 필터링 (동적 행 정렬) ──
+function filterByDate(select, dateIdx, mondayStr) {
+  const filterValue = select.value;
+  const table = select.closest('table');
+  const rows = Array.from(table.querySelectorAll('tr'))
+    .filter(row => row.id && row.id.startsWith(`statusRow_${mondayStr}`));
+
+  if (!filterValue) {
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('td[data-filter]');
+      if (cells[dateIdx]) cells[dateIdx].style.opacity = '1';
+    });
+  } else {
+    const matchingRows = [];
+    const otherRows = [];
+    const originalOrder = new Map();
+
+    rows.forEach((row, idx) => {
+      originalOrder.set(row, idx);
+      const cells = row.querySelectorAll('td[data-filter]');
+      const targetCell = cells[dateIdx];
+      if (!targetCell) return;
+
+      const cellFilter = targetCell.getAttribute('data-filter');
+      if (cellFilter === filterValue) {
+        matchingRows.push(row);
+        targetCell.style.opacity = '1';
+      } else {
+        otherRows.push(row);
+        targetCell.style.opacity = '0.2';
+      }
+    });
+
+    otherRows.sort((a, b) => originalOrder.get(a) - originalOrder.get(b));
+    const sortedRows = [...matchingRows, ...otherRows];
+
+    const filterRow = table.querySelector('.filter-row');
+    let prev = filterRow;
+
+    sortedRows.forEach(row => {
+      prev.parentNode.insertBefore(row, prev.nextElementSibling);
+      prev = row;
+    });
+  }
+}
+
+
 let _payoutData = null; // {gid, mondayStr, label, members[]}
 async function openFullAttPayout(gid, mondayStr, label, membersJson){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
