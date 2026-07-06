@@ -1267,7 +1267,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.투표제목' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.스피너제거' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3804,7 +3804,6 @@ async function toggleVoteDetail(vid){
   if(el.style.display==='none'){
     el.style.display='block';
     window._openVotes[vid]=true;
-    el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
     const v = await dbGet(`votes/${vid}`);
     try{ el.innerHTML = await renderVoteCard(vid, v); }
     catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
@@ -6497,7 +6496,6 @@ async function loadStatusGroup(gid) {
 
   const el = document.getElementById('statusContent');
   if(!el) return;
-  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
   const [votes, attendance, crewMembers, attManual] = await Promise.all([
     dbGet('votes'),
@@ -7655,7 +7653,6 @@ async function searchDeletedVotes(){
   const name = document.getElementById('delVoteSearchName').value.trim();
   const resultEl = document.getElementById('delVoteSearchResult');
   if(!name){ showToast('닉네임을 입력하세요'); return; }
-  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try{
     const allVotes = await dbGet('votes');
     const hits = [];
