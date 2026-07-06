@@ -1203,7 +1203,7 @@ async function checkAutoVote(){
 
     // 시작 투표 자동 생성
     if(sch.startTime && hhmm === sch.startTime){
-      const title = `${dateLabel} 출근`;
+      const title = `${dateLabel} 출근 투표`;
       const guardKey = `start_${gid}_${todayStr2}`;
       if(localStorage.getItem('autoVoteDone_'+guardKey)) continue;
       localStorage.setItem('autoVoteDone_'+guardKey,'1');   // 같은 기기 즉시 차단
@@ -1221,7 +1221,7 @@ async function checkAutoVote(){
 
     // 완료 투표 자동 생성
     if(sch.endTime && hhmm === sch.endTime){
-      const title = `${dateLabel} 퇴근`;
+      const title = `${dateLabel} 퇴근 투표`;
       const guardKey = `end_${gid}_${todayStr2}`;
       if(localStorage.getItem('autoVoteDone_'+guardKey)) continue;
       localStorage.setItem('autoVoteDone_'+guardKey,'1');
@@ -1583,7 +1583,6 @@ function goTab(tab){
 
   const mb=document.getElementById('mainBody');
   if(!mb)return;
-  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
 
   const headers={
     notice:['📢 공지사항','공지 및 피드'],
@@ -3704,6 +3703,18 @@ async function loadDeptPage(gid){
     let resCount = v2.imageUpload 
       ? Object.keys(v2.images||{}).filter(k=>{const imgs=v2.images[k];return imgs&&imgs.length>0&&imgs[0]?.url!=='연차';}).length + Object.keys(v2.images||{}).filter(k=>{const imgs=v2.images[k];return imgs&&imgs.length>0&&imgs[0]?.url==='연차';}).length
       : Object.keys(v2.responses||{}).length;
+    // 이미지 투표이고 아직 이미지 0개면 → 같은 날 시작 투표 참여자수로 대체
+    if(v2.imageUpload && resCount===0){
+      const titleKey=(v2.title||'');
+      const startVote2 = list.find(([_,sv])=>{
+        if(!(sv.title||'').includes('출근')&&!(sv.title||'').includes('시작')) return false;
+        const t1=(sv.title||'').match(/(\d+)월\s*(\d+)일/);
+        const t2=titleKey.match(/(\d+)월\s*(\d+)일/);
+        if(t1&&t2) return t1[1]===t2[1]&&t1[2]===t2[2]&&sv.group===v2.group;
+        return false;
+      });
+      if(startVote2) resCount = Object.keys(startVote2[1].responses||{}).length;
+    }
     // 완료 투표: 연차/당직자도 자동 포함
     if((v2.title||'').includes('완료')||(v2.title||'').includes('퇴근')){
       const startVote = list.find(([_,v])=>v.title===(v2.title||'').replace('퇴근','출근'));
@@ -4028,6 +4039,11 @@ async function renderVoteCard(vid,v){
       html+=`<button onclick="toggleNickBtn('${vid}','${collapseId}','${nick.replace(/'/g,'\\\'')}')" style="width:100%;padding:8px 4px;border-radius:20px;${btnStyle}font-size:11px;font-weight:700;cursor:pointer;line-height:1.5;text-align:center">`;
       html+=`${escH(nick)}<br><span style="font-size:9px">${label}</span>`;
       html+=`</button>`;
+      // 관리자 확인 버튼
+      if(isAdmin){
+        const confirmed = !!(v.adminConfirm && v.adminConfirm[sanitizedNick]);
+        html+=`<button onclick="toggleAdminConfirm('${vid}','${sanitizedNick}')" style="width:100%;padding:7px 4px;border-radius:10px;border:none;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;${confirmed?'background:#5DB88A;color:white':'background:#f1f5f9;color:#94a3b8'}">${confirmed?'✅ 확인완료':'☑ 확인'}</button>`;
+      }
       html+=`<div id="${collapseId}" style="display:none;margin-top:6px">`;
       const isMe = nick===myKey || nick===(CU?.name||'');
       if(isMe && !isClosed && canUpload){
@@ -5259,6 +5275,15 @@ async function adminCancelMemberVote(vid, memberName){
   if(!confirm(`${memberName}님의 투표를 취소할까요?`)) return;
   await cancelVoteFor(vid, memberName, memberName);
 }
+
+async function toggleAdminConfirm(vid, nickKey){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const current = await dbGet(`votes/${vid}/adminConfirm/${nickKey}`);
+  await dbSet(`votes/${vid}/adminConfirm/${nickKey}`, !current);
+  // 현재 열린 투표 상세 새로고침
+  const el = document.getElementById(`voteDetail_${vid}`);
+  if(el && el.style.display!=='none') toggleVoteDetail(vid);
+}
 // 취소 이력 삭제 (관리자 전용)
 async function deleteCancelLog(vid, ck){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
@@ -6268,12 +6293,12 @@ async function openVoteModal(vid, defaultGroup, voteType){
     const days=['일','월','화','수','목','금','토'];
     const dateLabel=`${today.getMonth()+1}월 ${today.getDate()}일 ${days[today.getDay()]}요일`;
     if(voteType==='start'){
-      document.getElementById('voteTitle').value=`${dateLabel} 출근`;
+      document.getElementById('voteTitle').value=`${dateLabel} 출근 투표`;
       document.getElementById('voteTime').value=defaultStartTime;
       _editOptList=['오늘 출근할게요 (참여)','오늘 연차 쓸게요 (프패)','오늘 당직이에요 (당직)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
       if(gName==='시크릿') _editOptList=_editOptList.filter(o=>!o.includes('당직'));
     } else if(voteType==='end'){
-      document.getElementById('voteTitle').value=`${dateLabel} 퇴근`;
+      document.getElementById('voteTitle').value=`${dateLabel} 퇴근 투표`;
       document.getElementById('voteTime').value=defaultEndTime;
       _editOptList=['퇴근할게요 (완료)','열정페이 (봉사)','재능기부 (노피드)','오늘 일당 두배닷✨ (투피드)'];
     } else {
