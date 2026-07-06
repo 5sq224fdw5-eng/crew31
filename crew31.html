@@ -2688,6 +2688,10 @@ async function deleteSales(key){
 }
 
 async function loadWarn(){
+  const mb=document.getElementById('mainBody');
+  if(!mb)return;
+  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  const isAdmin=CU?.role==='admin';
   await checkWarnReset();
   const [gameMembers, reasonsRaw] = await Promise.all([ gameGet('members'), dbGet('warnReasons') ]);
   if(!gameMembers){ mb.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div>오락실 연결 실패</div>'; return; }
