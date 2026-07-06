@@ -1267,7 +1267,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.스피너제거' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.로딩속도개선' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -1619,8 +1619,10 @@ async function loadNoticePage(){
   const mb=document.getElementById('mainBody');
   const isAdmin=CU?.role==='admin';
 
-  const notices=await dbGet('notices');
-  const noticeComments=await dbGet('noticeComments');
+  const [notices, noticeComments] = await Promise.all([
+    dbGet('notices'),
+    dbGet('noticeComments')
+  ]);
   _cachedData.notices=notices;_cachedData.noticeComments=noticeComments;
   // 공지를 봤으므로 빨간불 끄기
   try{
@@ -3603,7 +3605,10 @@ async function loadDeptPage(gid){
   }
   
   const isAdmin=CU?.role==='admin';
-  const votes=await dbGetVotesForGroup(gid);
+  const [votes, _preloadedNotices] = await Promise.all([
+    dbGetVotesForGroup(gid),
+    isAdmin ? Promise.resolve(null) : dbGet('notices')
+  ]);
   let rawList=votes
     ?Object.entries(votes)
       .filter(([k,v])=>!v.deleted&&(v.group===gid||v.group==='all'))
@@ -3654,7 +3659,7 @@ async function loadDeptPage(gid){
   html+=`<div style="padding:14px 0">`;
   // ── 공지 슬라이드 배너 (사원만 표시, 이 그룹 + 전체 공지) ──
   if(!isAdmin) try{
-    const allNotices = await dbGet('notices');
+    const allNotices = _preloadedNotices;
     const noticeList = allNotices
       ? Object.entries(allNotices)
           .filter(([k,n])=>n && !n.deleted && (!n.group || n.group==='all' || n.group===gid))
