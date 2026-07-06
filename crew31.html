@@ -1267,7 +1267,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.로딩속도개선' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.즉시렌더캐시' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -1615,9 +1615,37 @@ function goTab(tab){
 // ══════════════════════════════════════════════
 // ── NOTICE ──
 // ══════════════════════════════════════════════
+function _buildNoticeHTML(notices, noticeComments){
+  const isAdmin=CU?.role==='admin';
+  const list=notices?Object.entries(notices).filter(([k,n])=>{
+    if(n.deleted) return false;
+    if(!_currentDept) return !n.group || n.group==='all'; // 그룹 미선택: 전체 공지만
+    return !n.group || n.group==='all' || n.group===_currentDept; // 그룹 선택: 전체+해당 그룹
+  }).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)):[];
+
+  let html='<div style="padding:14px 0 80px">';
+  if(isAdmin){
+    html+=`<div style="padding:0 14px 12px;display:flex;gap:8px">`;
+    html+=`<button onclick="openNoticeModal('feed')" style="flex:1;background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">📢 공지 작성</button>`;
+    html+=`<button onclick="goTab('home')" style="flex:1;background:#fde8eb;color:#f87286;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🗳️ 투표 만들기</button>`;
+    html+=`</div>`;
+  }
+  if(list.length===0){
+    return html+'<div class="empty"><div class="empty-icon">📭</div>공지가 없습니다</div></div>';
+  }
+  list.forEach(([nid,n])=>{ html+=renderNoticeCard(nid,n,noticeComments); });
+  html+='</div>';
+  return html;
+}
+
 async function loadNoticePage(){
   const mb=document.getElementById('mainBody');
-  const isAdmin=CU?.role==='admin';
+  const _tabAtCall=_currentTab;
+
+  // 캐시가 있으면 네트워크 기다리지 않고 즉시 화면부터 그림 (탭 전환 체감 지연 제거)
+  if(_cachedData.notices){
+    mb.innerHTML=_buildNoticeHTML(_cachedData.notices, _cachedData.noticeComments||{});
+  }
 
   const [notices, noticeComments] = await Promise.all([
     dbGet('notices'),
@@ -1631,30 +1659,9 @@ async function loadNoticePage(){
     const dot=document.getElementById('noticeDot'); if(dot) dot.style.display='none';
   }catch(e){}
 
-  const list=notices?Object.entries(notices).filter(([k,n])=>{
-    if(n.deleted) return false;
-    if(!_currentDept) return !n.group || n.group==='all'; // 그룹 미선택: 전체 공지만
-    return !n.group || n.group==='all' || n.group===_currentDept; // 그룹 선택: 전체+해당 그룹
-  }).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)):[];
-
-  let html='<div style="padding:14px 0 80px">';
-
-  // 관리자 버튼 영역
-  if(isAdmin){
-    html+=`<div style="padding:0 14px 12px;display:flex;gap:8px">`;
-    html+=`<button onclick="openNoticeModal('feed')" style="flex:1;background:#FF85C1;color:white;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">📢 공지 작성</button>`;
-    html+=`<button onclick="goTab('home')" style="flex:1;background:#fde8eb;color:#f87286;border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer">🗳️ 투표 만들기</button>`;
-    html+=`</div>`;
-  }
-
-  if(list.length===0){
-    mb.innerHTML=html+'<div class="empty"><div class="empty-icon">📭</div>공지가 없습니다</div></div>';
-    return;
-  }
-
-  list.forEach(([nid,n])=>{ html+=renderNoticeCard(nid,n,noticeComments); });
-  html+='</div>';
-  mb.innerHTML=html;
+  // 그 사이 다른 탭으로 이동했으면 최신 데이터로 덮어쓰지 않음
+  if(_currentTab!==_tabAtCall || _currentTab!=='notice') return;
+  mb.innerHTML=_buildNoticeHTML(notices, noticeComments);
 }
 
 function renderNoticeCard(nid,n,allComments){
@@ -3603,12 +3610,11 @@ async function loadDeptPage(gid){
     mb.innerHTML=`<div class="empty" style="padding:60px 20px"><div class="empty-icon">🔒</div><div style="margin:10px 0 16px;color:var(--text3)">${escH(gLock.name||'')} 그룹은 잠겨있습니다.</div><button onclick="openGroupEntryLockModal('${gid}','unlock')" style="padding:10px 20px;background:var(--accent);color:white;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer">🔓 비밀번호 입력</button></div>`;
     return;
   }
-  
+
   const isAdmin=CU?.role==='admin';
-  const [votes, _preloadedNotices] = await Promise.all([
-    dbGetVotesForGroup(gid),
-    isAdmin ? Promise.resolve(null) : dbGet('notices')
-  ]);
+
+  // ── 실제 렌더 로직 (캐시/최신 데이터 공용) ──
+  const _render = (votes, _preloadedNotices) => {
   let rawList=votes
     ?Object.entries(votes)
       .filter(([k,v])=>!v.deleted&&(v.group===gid||v.group==='all'))
@@ -3689,7 +3695,8 @@ async function loadDeptPage(gid){
     html+=`</div>`;
   }
   if(list.length===0){
-    mb.innerHTML=html+'<div class="empty"><div class="empty-icon">📋</div>이 부서의 투표가 없습니다</div></div>';_restoreScroll();return;
+    mb.innerHTML=html+'<div class="empty"><div class="empty-icon">📋</div>이 부서의 투표가 없습니다</div></div>';
+    return;
   }
   // 내가 시작 투표에서 연차(프패) 쓴 날짜 모음 → 완료 도장에 사용
   const myNameForLeave = CU?.name||'';
@@ -3764,6 +3771,25 @@ async function loadDeptPage(gid){
   html+='</div>'; // padding:14px div
   html+='</div>'; // 그룹 색 배경 div
   mb.innerHTML=html;
+  };
+
+  // 캐시가 있으면 네트워크 기다리지 않고 즉시 화면부터 그림 (탭 전환 체감 지연 제거)
+  const _cacheKey='dept_'+gid;
+  if(_cachedData[_cacheKey]){
+    _render(_cachedData[_cacheKey].votes, _cachedData[_cacheKey].notices);
+    _restoreScroll();
+  }
+
+  const [votes, _preloadedNotices] = await Promise.all([
+    dbGetVotesForGroup(gid),
+    isAdmin ? Promise.resolve(null) : dbGet('notices')
+  ]);
+  _cachedData[_cacheKey]={votes, notices:_preloadedNotices};
+
+  // 그 사이 다른 그룹/탭으로 이동했으면 최신 데이터로 덮어쓰지 않음
+  if(_currentDept!==gid || _currentTab!=='home') return;
+
+  _render(votes, _preloadedNotices);
   _restoreScroll();
   }catch(e){console.error('loadDeptPage error',e);const _mb=document.getElementById('mainBody');if(_mb)_mb.innerHTML='<div style="padding:20px;color:red">오류: '+e.message+'</div>';}
 }
