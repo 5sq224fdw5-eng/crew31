@@ -1267,7 +1267,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.하트핑크고정' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.투표제목' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -2311,7 +2311,7 @@ function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrol
 // ══════════════════════════════════════════════
 async function loadMembersPage(){
 const mb=document.getElementById('mainBody');
-mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+
 const isAdmin=CU?.role==='admin';
 
 const gameMembers=await gameGet('members');
@@ -2580,7 +2580,7 @@ async function checkWarnReset(){
 // ══════════════════════════════════════════════
 async function loadSalesPage(){
   const mb=document.getElementById('mainBody');
-  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+
   const isAdmin=CU?.role==='admin';
   const myName=CU?.name||'';
 
@@ -2689,7 +2689,7 @@ async function deleteSales(key){
 async function loadWarn(){
   const mb=document.getElementById('mainBody');
   if(!mb)return;
-  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+
   const isAdmin=CU?.role==='admin';
   await checkWarnReset();
   const [gameMembers, reasonsRaw] = await Promise.all([ gameGet('members'), dbGet('warnReasons') ]);
@@ -2894,7 +2894,7 @@ async function showWarnPopup(detail){
 // ══════════════════════════════════════════════
 async function loadLeave(){
   const mb=document.getElementById('mainBody');
-  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+
   const isAdmin=CU?.role==='admin';
 
   const [gameMembers, rawPrizes, allMemberLeave, allLeaveLog] = await Promise.all([
@@ -3601,7 +3601,7 @@ async function loadDeptPage(gid){
     mb.innerHTML=`<div class="empty" style="padding:60px 20px"><div class="empty-icon">🔒</div><div style="margin:10px 0 16px;color:var(--text3)">${escH(gLock.name||'')} 그룹은 잠겨있습니다.</div><button onclick="openGroupEntryLockModal('${gid}','unlock')" style="padding:10px 20px;background:var(--accent);color:white;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer">🔓 비밀번호 입력</button></div>`;
     return;
   }
-  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  
   const isAdmin=CU?.role==='admin';
   const votes=await dbGetVotesForGroup(gid);
   let rawList=votes
@@ -6464,7 +6464,7 @@ function getWeekLabel(mondayStr) {
 async function loadStatus() {
   const mb = document.getElementById('mainBody');
   if(CU?.role!=='admin'){ mb.innerHTML='<div class="empty" style="padding:60px 20px"><div class="empty-icon">🔒</div>관리자 전용 메뉴입니다</div>'; return; }
-  mb.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
   setMainHeader('📋 현황', '주차별 출근 현황',
     `<button class="btn-sm pri" onclick="showStatusView('week')">주차별</button>`
   );
@@ -7381,7 +7381,7 @@ async function downloadWeekExcel(gid, mondayStr) {
 async function loadSettings(){
   const mb=document.getElementById('mainBody');
   if(CU?.role!=='admin'){ mb.innerHTML='<div class="empty" style="padding:60px 20px"><div class="empty-icon">🔒</div>관리자 전용 메뉴입니다</div>'; return; }
-  mb.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+
 
   // 데이터 미리 로드
   const [groupMembersData, autoSch, templates, gameMembers2, leaveQuotaData] = await Promise.all([
