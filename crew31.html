@@ -1267,7 +1267,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.캐시변수오류수정' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.이미지참여자수수정' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3737,9 +3737,20 @@ async function loadDeptPage(gid){
             .filter(([_,idx])=>{ const o=(_svOpts[idx]||''); return o.includes('연차')||o.includes('당직'); })
             .map(([nm])=>nm)
         );
-        const _curRespSet = new Set(Object.keys(v2.responses||{}));
-        _leaveNames.forEach(nm=>_curRespSet.add(nm));
-        resCount = _curRespSet.size;
+        if(v2.imageUpload){
+          // 이미지 투표: 업로드한 사람 수(resCount)는 그대로 두고, 업로드 안 한 연차/당직자만 더해줌
+          const _uploadedKeys = new Set(Object.keys(v2.images||{}).filter(k=>{const imgs=v2.images[k];return imgs&&imgs.length>0;}));
+          let _extra=0;
+          _leaveNames.forEach(nm=>{
+            const sanitized = nm.replace(/[.#$/\[\]\s]/g,'_');
+            if(!_uploadedKeys.has(sanitized) && !_uploadedKeys.has(nm)) _extra++;
+          });
+          resCount = resCount + _extra;
+        } else {
+          const _curRespSet = new Set(Object.keys(v2.responses||{}));
+          _leaveNames.forEach(nm=>_curRespSet.add(nm));
+          resCount = _curRespSet.size;
+        }
       }
     }
     const isEnd2 = (v2.title||'').includes('완료')||(v2.title||'').includes('퇴근')||v2.imageUpload;
