@@ -1267,7 +1267,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.즉시렌더캐시' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.확인버튼접힘수정' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3773,21 +3773,11 @@ async function loadDeptPage(gid){
   mb.innerHTML=html;
   };
 
-  // 캐시가 있으면 네트워크 기다리지 않고 즉시 화면부터 그림 (탭 전환 체감 지연 제거)
-  const _cacheKey='dept_'+gid;
-  if(_cachedData[_cacheKey]){
-    _render(_cachedData[_cacheKey].votes, _cachedData[_cacheKey].notices);
-    _restoreScroll();
-  }
-
   const [votes, _preloadedNotices] = await Promise.all([
     dbGetVotesForGroup(gid),
     isAdmin ? Promise.resolve(null) : dbGet('notices')
   ]);
   _cachedData[_cacheKey]={votes, notices:_preloadedNotices};
-
-  // 그 사이 다른 그룹/탭으로 이동했으면 최신 데이터로 덮어쓰지 않음
-  if(_currentDept!==gid || _currentTab!=='home') return;
 
   _render(votes, _preloadedNotices);
   _restoreScroll();
@@ -5310,9 +5300,12 @@ async function toggleAdminConfirm(vid, nickKey){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   const current = await dbGet(`votes/${vid}/adminConfirm/${nickKey}`);
   await dbSet(`votes/${vid}/adminConfirm/${nickKey}`, !current);
-  // 현재 열린 투표 상세 새로고침
+  // 현재 열린 투표 상세를 접지 않고 그 자리에서 최신 내용으로만 다시 그림
   const el = document.getElementById(`voteDetail_${vid}`);
-  if(el && el.style.display!=='none') toggleVoteDetail(vid);
+  if(el && el.style.display!=='none'){
+    try{ const v = await dbGet(`votes/${vid}`); el.innerHTML = await renderVoteCard(vid, v); }
+    catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
+  }
 }
 // 취소 이력 삭제 (관리자 전용)
 async function deleteCancelLog(vid, ck){
@@ -6527,6 +6520,8 @@ async function loadStatusGroup(gid) {
 
   const el = document.getElementById('statusContent');
   if(!el) return;
+  // 무거운 전체 조회라 완전히 빈 화면으로 두면 멈춘 것처럼 보임 → 가벼운 문구만 표시(스피너 아님)
+  el.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text3);font-size:12px">불러오는 중...</div>';
 
   const [votes, attendance, crewMembers, attManual] = await Promise.all([
     dbGet('votes'),
