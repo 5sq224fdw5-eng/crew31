@@ -4572,11 +4572,27 @@ async function submitTupide2(vid){
   const linkId=document.getElementById(`linkId_${vid}`)?.value.trim()||'';
   const url2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
   if(!url2){ showToast('2번째 링크를 입력하세요'); return; }
+
+  // ★ 핵심 수정: 링크만 저장하고 끝나던 버그 → 실제 선택지(투피드)도 같이 저장해야
+  //   "선택지는 참여인데 링크는 투피드" 같은 불일치가 안 생김.
+  const v = await dbGet(`votes/${vid}`);
+  const myKey = CU?.name||CU?.key||'admin';
+  const pending = window._pendingVote ? window._pendingVote[vid] : undefined;
+  let tupideIdx = pending;
+  if(tupideIdx===undefined){
+    tupideIdx = (v?.options||[]).findIndex(o=>{ const t=(o||'').toLowerCase(); return t.includes('투피드')||t.includes('두배'); });
+  }
+  if(tupideIdx!==undefined && tupideIdx>=0 && v?.responses?.[myKey]!==tupideIdx){
+    await castVote(vid, tupideIdx);
+    if(window._pendingVote) delete window._pendingVote[vid];
+    if(window._castVoteOK===false) return; // 정원초과 등으로 막혔으면 링크도 저장하지 않음
+  }
+
   const l1 = (await dbGet(`votes/${vid}/links/${key}_1`)) || (await dbGet(`votes/${vid}/links/${key}`)) || {};
   const displayNick = l1.nick || linkId || nick;
   const ex2 = await dbGet(`votes/${vid}/links/${key}_2`);
   await dbSet(`votes/${vid}/links/${key}_2`, { nick:displayNick, url:cleanUrl(url2), type:'tupide', time:ex2?.time||Date.now() });
-  showToast('✅ 2번째 링크 제출됨!');
+  showToast('✅ 투피드로 변경 + 2번째 링크 제출됨!');
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
