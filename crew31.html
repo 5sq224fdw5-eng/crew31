@@ -1267,7 +1267,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.확인버튼접힘수정' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.캐시변수오류수정' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3777,8 +3777,6 @@ async function loadDeptPage(gid){
     dbGetVotesForGroup(gid),
     isAdmin ? Promise.resolve(null) : dbGet('notices')
   ]);
-  _cachedData[_cacheKey]={votes, notices:_preloadedNotices};
-
   _render(votes, _preloadedNotices);
   _restoreScroll();
   }catch(e){console.error('loadDeptPage error',e);const _mb=document.getElementById('mainBody');if(_mb)_mb.innerHTML='<div style="padding:20px;color:red">오류: '+e.message+'</div>';}
