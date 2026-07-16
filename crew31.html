@@ -4166,8 +4166,11 @@ async function renderVoteCard(vid,v){
     }
     if(totalCount===0) totalCount = startVoters.length;
 
-    window._voteGal = window._voteGal || {};
+        window._voteGal = window._voteGal || {};
     window._voteGal[vid] = [];  // 이 투표의 전체 사진(모든 참여자, 순번대로) — 전체화면 연속 슬라이드용
+    if(isAdmin){
+      html+=`<div style="padding:0 0 8px;display:flex;justify-content:flex-end"><button onclick="refreshVoteCard('${vid}')" style="background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);border-radius:20px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">🔄 전체 새로고침</button></div>`;
+    }
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 0">`;
     startVoters.forEach((nick, idx)=>{
       const isLeave = leaveSet.has(nick);
@@ -4213,10 +4216,10 @@ async function renderVoteCard(vid,v){
       html+=`<button onclick="toggleNickBtn('${vid}','${collapseId}','${nick.replace(/'/g,'\\\'')}')" style="width:100%;padding:8px 4px;border-radius:20px;${btnStyle}font-size:11px;font-weight:700;cursor:pointer;line-height:1.5;text-align:center">`;
       html+=`${escH(nick)}<br><span style="font-size:9px">${label}</span>`;
       html+=`</button>`;
-      // 관리자 확인 버튼
+        // 관리자 확인 버튼
       if(isAdmin){
         const confirmed = !!(v.adminConfirm && v.adminConfirm[sanitizedNick]);
-        html+=`<button onclick="toggleAdminConfirm('${vid}','${sanitizedNick}')" style="width:100%;padding:7px 4px;border-radius:10px;border:none;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;${confirmed?'background:#5DB88A;color:white':'background:#f1f5f9;color:#94a3b8'}">${confirmed?'✅ 확인완료':'☑ 확인'}</button>`;
+        html+=`<button id="confirmBtn_${vid}_${sanitizedNick}" onclick="toggleAdminConfirm('${vid}','${sanitizedNick}')" style="width:100%;padding:7px 4px;border-radius:10px;border:none;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;${confirmed?'background:#5DB88A;color:white':'background:#f1f5f9;color:#94a3b8'}">${confirmed?'✅ 확인완료':'☑ 확인'}</button>`;
       }
       html+=`<div id="${collapseId}" style="display:none;margin-top:6px"></div>`;
       // 이 참여자 사진을 투표 통합 갤러리에 순번대로 추가 (전체화면에서 다음 사람으로 계속 슬라이드)
@@ -4225,7 +4228,7 @@ async function renderVoteCard(vid,v){
         const _big = x.url.includes('/upload/') ? x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/') : x.url;
         window._voteGal[vid].push({url:_big, nick:nick});
       });
-      html+=`</div></div>`;
+      html+=`</div>`;
     });
     html+=`</div>`;
 
@@ -4856,11 +4859,13 @@ async function renderNickPanel(vid, collapseId, nick){
   // 클릭한 닉네임 본인의 사진만 조회 (내 사진으로 폴백하지 않음)
   const imgs = imgsSan || imgsRaw || [];
   const realImgs = imgs.filter(img=>img?.url&&img.url!=='연차');
-  const isMe = nick===(CU?.name||'') || sanitized===myKey;
+    const isMe = nick===(CU?.name||'') || sanitized===myKey;
   const isAdmin2 = CU?.role==='admin';
-  const canManage = isMe || isAdmin2; // ★ 사원은 본인 것만, 관리자는 전체 인원에 대해 추가/삭제 가능
+  const canManage = isMe || isAdmin2;
   const nickEsc = nick.replace(/'/g,"\\'");
   const inputId = `imgInput_${vid}_${sanitized}`;
+  window._imgEditMode = window._imgEditMode || {};
+  const editMode = !!window._imgEditMode[collapseId];
 
   let html = '';
   if(canManage && !isClosed && realImgs.length===0){
@@ -4869,8 +4874,8 @@ async function renderNickPanel(vid, collapseId, nick){
   } else if(canManage && !isClosed && realImgs.length>0){
     html+=`<input type="file" id="${inputId}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this,'${nickEsc}')">`;
     html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
-    html+=`<button onclick="document.getElementById('${inputId}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">➕ 추가</button>`;
-    html+=`<button onclick="deleteImagesFor('${vid}','${nickEsc}','${collapseId}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">전체삭제</button>`;
+    html+=`<button onclick="document.getElementById('${inputId}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">📎 업로드</button>`;
+    html+=`<button onclick="toggleImageEditMode('${vid}','${collapseId}','${nickEsc}')" style="flex:1;background:${editMode?'#FF85C1':'var(--surface2)'};color:${editMode?'white':'var(--text2)'};border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">${editMode?'완료':'✏️ 수정'}</button>`;
     html+=`</div>`;
   }
   if(realImgs.length>0){
@@ -4880,8 +4885,8 @@ async function renderNickPanel(vid, collapseId, nick){
       const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
       html+=`<div style="position:relative;aspect-ratio:9/16;border-radius:8px;overflow:hidden">`;
       html+=`<div onclick="openSecretViewerByNick('${vid}','${nickEsc}',${imgIdx})" style="width:100%;height:100%;cursor:pointer"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
-      if(canManage && !isClosed){
-        html+=`<button onclick="event.stopPropagation();deleteOneImage('${vid}','${nickEsc}',${imgIdx},'${collapseId}')" title="이 사진만 삭제" style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,0.65);color:white;border:none;font-size:12px;font-weight:800;cursor:pointer;line-height:1;padding:0">✕</button>`;
+      if(canManage && !isClosed && editMode){
+        html+=`<button onclick="event.stopPropagation();deleteOneImage('${vid}','${nickEsc}',${imgIdx},'${collapseId}')" title="이 사진만 삭제" style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(255,60,60,0.9);color:white;border:none;font-size:12px;font-weight:800;cursor:pointer;line-height:1;padding:0">✕</button>`;
       }
       html+=`</div>`;
     });
@@ -5509,12 +5514,20 @@ async function adminCancelMemberVote(vid, memberName){
 async function toggleAdminConfirm(vid, nickKey){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   const current = await dbGet(`votes/${vid}/adminConfirm/${nickKey}`);
-  await dbSet(`votes/${vid}/adminConfirm/${nickKey}`, !current);
-  // 현재 열린 투표 상세를 접지 않고 그 자리에서 최신 내용으로만 다시 그림
+  const next = !current;
+  await dbSet(`votes/${vid}/adminConfirm/${nickKey}`, next);
+  const btn = document.getElementById(`confirmBtn_${vid}_${nickKey}`);
+  if(btn){
+    btn.textContent = next ? '✅ 확인완료' : '☑ 확인';
+    btn.style.background = next ? '#5DB88A' : '#f1f5f9';
+    btn.style.color = next ? 'white' : '#94a3b8';
+  }
+}
+async function refreshVoteCard(vid){
   const el = document.getElementById(`voteDetail_${vid}`);
-  if(el && el.style.display!=='none'){
-    try{ const v = await dbGet(`votes/${vid}`); el.innerHTML = await renderVoteCard(vid, v); }
-    catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
+  if(!el) return;
+  try{ const v = await dbGet(`votes/${vid}`); el.innerHTML = await renderVoteCard(vid, v); showToast('🔄 새로고침 완료'); }
+  catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
   }
 }
 // 취소 이력 삭제 (관리자 전용)
