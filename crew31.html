@@ -4905,7 +4905,11 @@ async function renderNickPanel(vid, collapseId, nick){
   }
   el.innerHTML = html;
 }
-
+function toggleImageEditMode(vid, collapseId, nick){
+  window._imgEditMode = window._imgEditMode || {};
+  window._imgEditMode[collapseId] = !window._imgEditMode[collapseId];
+  renderNickPanel(vid, collapseId, nick);
+}
 // 캡쳐 OCR → 시작투표 링크(아이디) 대조 → 누락(안 뜬 리포) URL 표시
 async function runRepostCheck(vid, nick){
   const sanitized = nick.replace(/[\.#$\/\[\]\s]/g,'_');
