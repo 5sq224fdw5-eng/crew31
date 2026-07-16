@@ -995,6 +995,110 @@ async function diagMissingVoter(){
   alert(out);
 }
 
+// 경고 기록 진단: 현재 warnReasons + 백업(warnReasonsArchive) 전체를 뒤져서 흔적을 찾음
+async function diagWarnRecords(){
+  const name = prompt('경고 기록을 찾을 사원 이름 (예: 불주먹)','');
+  if(!name) return;
+  const gameMembers = await gameGet('members') || {};
+  const gameKeys = Object.entries(gameMembers)
+    .filter(([k,m])=>{ const clean=(m.name||'').replace(/^\*/,''); return clean.endsWith(name); })
+    .map(([k])=>k);
+  if(gameKeys.length===0){ alert(`"${name}"에 해당하는 오락실 계정을 못 찾았어요. 이름을 확인해 주세요.`); return; }
+
+  let out = `[${name}] 경고 기록 진단\n(오락실 키: ${gameKeys.join(', ')})\n\n`;
+  let anyHit=false;
+
+  for(const gk of gameKeys){
+    const cur = warnArr(await dbGet(`warnReasons/${gk}`));
+    if(cur.length>0){
+      anyHit=true;
+      out += `■ 현재 warnReasons\n`;
+      cur.forEach(e=>{ out += `  ${e.date||''} [${e.type||'경고'}] ${e.reason||''} (등록: ${e.by||''})\n`; });
+      out += '\n';
+    }
+  }
+
+  const archive = await dbGet('warnReasonsArchive') || {};
+  for(const [cycle, data] of Object.entries(archive)){
+    for(const gk of gameKeys){
+      const arr = warnArr(data && data[gk]);
+      if(arr.length>0){
+        anyHit=true;
+        out += `■ 백업(주기 ${cycle})\n`;
+        arr.forEach(e=>{ out += `  ${e.date||''} [${e.type||'경고'}] ${e.reason||''} (등록: ${e.by||''})\n`; });
+        out += '\n';
+      }
+    }
+  }
+
+  const meta = await dbGet('warnMeta');
+  out += `현재 경고 주기: ${meta?meta.cycle:'-'} (마지막 리셋: ${meta&&meta.resetAt?new Date(meta.resetAt).toLocaleString('ko-KR'):'-'})\n`;
+
+  if(!anyHit) out += '\n⚠️ 어디에도 남은 기록이 없어요. 백업 기능이 이번에 새로 추가된 거라, 그 이전에 지워진 기록은 이 방법으로 복구가 안 될 수 있어요.\n아래 "경고 수동 등록"으로 다시 넣어줄 수 있어요.';
+  alert(out);
+}
+
+// 사라진 경고를 날짜 지정해서 수동으로 다시 등록 (복구용)
+// 경고 일괄 복구: 여러 명을 한 번에 "이름,날짜,사유" 형식으로 붙여넣어 등록
+function openWarnBulkRestore(){
+  let m=document.getElementById('warnBulkModal');
+  if(!m){ m=document.createElement('div'); m.id='warnBulkModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10005;display:flex;align-items:center;justify-content:center;padding:20px'; document.body.appendChild(m); }
+  m.innerHTML = `<div style="background:var(--surface,#fff);border-radius:18px;max-width:420px;width:100%;padding:20px;max-height:88vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:900;margin-bottom:8px">⚠️ 경고 일괄 복구</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.6">한 줄에 한 명씩, <b>이름,날짜,사유</b> 형식으로 붙여넣어줘.<br>사유는 생략 가능. 예시:<br><span style="color:#999">불주먹,2026-07-07,지각<br>알잘딱,2026-07-07</span></div>
+    <textarea id="warnBulkInput" rows="10" placeholder="이름,날짜,사유" style="width:100%;box-sizing:border-box;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-family:monospace;resize:vertical"></textarea>
+    <div id="warnBulkResult" style="font-size:12px;color:var(--text2);margin-top:8px;white-space:pre-wrap"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="document.getElementById('warnBulkModal').remove()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">닫기</button>
+      <button onclick="submitWarnBulkRestore()" style="flex:1;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer">일괄 등록</button>
+    </div>
+  </div>`;
+  m.style.display='flex';
+}
+async function submitWarnBulkRestore(){
+  const raw=(document.getElementById('warnBulkInput')?.value||'').trim();
+  if(!raw){ showToast('내용을 입력하세요'); return; }
+  const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const gameMembers = await gameGet('members') || {};
+  const resultEl=document.getElementById('warnBulkResult');
+  let ok=0; const fail=[];
+  for(const line of lines){
+    const parts=line.split(',').map(p=>p.trim());
+    const name=parts[0], date=parts[1]||getKSTDate(), reason=parts[2]||'(사유 미입력, 복구 등록)';
+    if(!name) continue;
+    const hit = Object.entries(gameMembers).find(([k,m])=>{ const clean=(m.name||'').replace(/^\*/,''); return clean.endsWith(name); });
+    if(!hit){ fail.push(name); continue; }
+    const gameKey=hit[0];
+    const cur = warnArr(await dbGet(`warnReasons/${gameKey}`));
+    cur.push({type:'경고', date, reason, by:CU?.name||'admin', t:Date.now()});
+    await dbSet(`warnReasons/${gameKey}`, cur);
+    ok++;
+  }
+  let msg = `✅ ${ok}명 등록 완료`;
+  if(fail.length) msg += `\n⚠️ 못 찾음: ${fail.join(', ')}`;
+  if(resultEl) resultEl.textContent = msg;
+  showToast(`✅ ${ok}명 경고 복구 등록됨`);
+  loadWarn();
+}
+
+async function addWarnBackdated(){
+  const name = prompt('경고를 다시 등록할 사원 이름','');
+  if(!name) return;
+  const gameMembers = await gameGet('members') || {};
+  const hit = Object.entries(gameMembers).find(([k,m])=>{ const clean=(m.name||'').replace(/^\*/,''); return clean.endsWith(name); });
+  if(!hit){ alert('오락실에서 해당 이름을 찾지 못했어요'); return; }
+  const gameKey = hit[0];
+  const date = prompt('경고 날짜 (예: 2026-07-07)', getKSTDate());
+  if(!date) return;
+  const reason = prompt('경고 사유','');
+  if(reason===null) return;
+  const cur = warnArr(await dbGet(`warnReasons/${gameKey}`));
+  cur.push({type:'경고', date, reason:(reason||'').trim()||'(사유 미입력, 복구 등록)', by:CU?.name||'admin', t:Date.now()});
+  await dbSet(`warnReasons/${gameKey}`, cur);
+  showToast(`✅ ${name} ${date} 경고 다시 등록됨 (현재 ${warnCount(cur)}회)`);
+  loadWarn();
+}
+
 async function diagAttendance(){
   const name = prompt('이름 (예: 불주먹)','');
   if(!name) return;
@@ -1267,7 +1371,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.이미지참여자수수정' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.이미지부분수정' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -2557,7 +2661,7 @@ function filterLeaveList(q){
 //   경고 횟수 = 사유 배열 길이.  warnMeta/cycle 로 25일 리셋.
 // ══════════════════════════════════════════════
 function getWarnCycle(d){
-  d = d || new Date();
+  if(!d){ d=new Date(); d.setHours(d.getHours()+9); } // 기기 시간대와 무관하게 KST 기준으로 통일
   let y=d.getFullYear(), m=d.getMonth();
   if(d.getDate()<25){ m-=1; if(m<0){m=11;y-=1;} }
   return `${y}-${String(m+1).padStart(2,'0')}`;
@@ -2573,8 +2677,49 @@ function warnCount(events){
 async function checkWarnReset(){
   try{
     const cur=getWarnCycle();
-    const meta=await dbGet('warnMeta');
+    // 주기 문자열이 이상하면(버그로 엉뚱한 값) 절대 진행하지 않음
+    if(!/^\d{4}-\d{2}$/.test(cur)) return false;
+
+    // ★ 핵심 수정: 네트워크 실패로 못 읽은 것과 "원래 없음"을 구분해야 함.
+    //   기존엔 읽기 실패 시에도 dbGet이 null을 반환해서 "주기 정보 없음"으로 오인 →
+    //   순간적인 통신 오류 한 번에 전체 경고 기록이 삭제되는 사고가 있었음.
+    let meta=null, fetchOk=false;
+    try{
+      const r=await fetch(`${DB}/warnMeta.json`);
+      if(r.ok){ meta=await r.json(); fetchOk=true; }
+    }catch(e){}
+    if(!fetchOk) return false; // 읽기 실패 → 리셋하지 않고 그냥 넘어감 (오삭제 방지)
+
     if(!meta || meta.cycle!==cur){
+      // ★ 추가 안전장치 1: 마지막 리셋이 최근(20일 이내)이었다면 절대 다시 리셋 안 함.
+      //   기기 시계 오류·중복 호출 등으로 "새 주기"로 잘못 판단되는 것을 막는 마지막 방어선.
+      //   (정상적인 25일 리셋은 한 달에 한 번만 일어나므로 20일 미만 재리셋은 무조건 이상 상황)
+      if(meta && meta.resetAt && (Date.now()-meta.resetAt) < 20*24*60*60*1000){
+        console.warn('checkWarnReset: 20일 이내 재리셋 시도 차단', {meta, cur});
+        return false;
+      }
+
+      // 지우기 전에 이전 주기 데이터를 반드시 백업 — 백업이 확인되지 않으면 절대 삭제하지 않음
+      let backupOk = true;
+      try{
+        const prevReasons = await dbGet('warnReasons');
+        if(prevReasons){
+          const archiveKey = (meta&&meta.cycle)||('unknown_'+Date.now());
+          const r2 = await fetch(`${DB}/warnReasonsArchive/${archiveKey}.json`,{method:'PUT',body:JSON.stringify(prevReasons)});
+          backupOk = !!(r2 && r2.ok);
+          if(backupOk){
+            // 백업이 실제로 저장됐는지 다시 읽어서 재확인 (덮어쓰기 요청만 성공하고 실제로는 비었을 극단적 상황 대비)
+            const verify = await dbGet(`warnReasonsArchive/${archiveKey}`);
+            backupOk = !!verify;
+          }
+        }
+      }catch(e){ backupOk=false; }
+
+      if(!backupOk){
+        console.warn('checkWarnReset: 백업 실패 → 이번엔 삭제하지 않고 다음 기회에 재시도');
+        return false; // ★ 백업 실패 시 삭제 자체를 하지 않음 (데이터 유실 방지 최우선)
+      }
+
       await dbSet('warnReasons', null);
       await dbSet('warnings', null);   // 구버전 정리
       await dbSet('warnLog', null);    // 구버전 정리
@@ -4073,34 +4218,13 @@ async function renderVoteCard(vid,v){
         const confirmed = !!(v.adminConfirm && v.adminConfirm[sanitizedNick]);
         html+=`<button onclick="toggleAdminConfirm('${vid}','${sanitizedNick}')" style="width:100%;padding:7px 4px;border-radius:10px;border:none;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;${confirmed?'background:#5DB88A;color:white':'background:#f1f5f9;color:#94a3b8'}">${confirmed?'✅ 확인완료':'☑ 확인'}</button>`;
       }
-      html+=`<div id="${collapseId}" style="display:none;margin-top:6px">`;
-      const isMe = nick===myKey || nick===(CU?.name||'');
-      if(isMe && !isClosed && canUpload){
-        html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-        if(uploadCount>0){
-          html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
-          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">수정</button>`;
-          html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
-          html+=`</div>`;
-        } else {
-          html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
-        }
-      }
+      html+=`<div id="${collapseId}" style="display:none;margin-top:6px"></div>`;
       // 이 참여자 사진을 투표 통합 갤러리에 순번대로 추가 (전체화면에서 다음 사람으로 계속 슬라이드)
       const _galSorted = [...imgs].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
       _galSorted.forEach(x=>{
         const _big = x.url.includes('/upload/') ? x.url.replace('/upload/','/upload/q_auto,f_auto,w_800/') : x.url;
         window._voteGal[vid].push({url:_big, nick:nick});
       });
-      if(imgs.length>0){
-        const sorted = _galSorted;
-        html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
-        sorted.forEach((img,imgIdx)=>{
-          const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
-          html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openSecretViewerByNick('${vid}','${nick.replace(/'/g,'\\\'')}',${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
-        });
-        html+=`</div>`;
-      }
       html+=`</div></div>`;
     });
     html+=`</div>`;
@@ -4634,20 +4758,57 @@ function cleanUrl(url){
   return url;
 }
 
-async function deleteMyImages(vid){
-  if(!confirm('업로드한 사진을 전부 삭제할까요?')) return;
-  const myKey = (CU?.name||'').replace(/[\.\#\$\/\[\]\s]/g,'_');
-  await dbDelete(`votes/${vid}/images/${myKey}`);
+// 사진 전체삭제: 관리자는 누구든, 사원은 본인 것만
+async function deleteImagesFor(vid, nick, collapseId){
+  const isAdmin2 = CU?.role==='admin';
+  if(!isAdmin2 && nick!==(CU?.name||'')){ showToast('본인 게시물만 삭제할 수 있어요'); return; }
+  if(!confirm(`${nick===(CU?.name||'')?'업로드한':nick+' 님이 업로드한'} 사진을 전부 삭제할까요?`)) return;
+  const key = nick.replace(/[\.\#\$\/\[\]\s]/g,'_');
+  await dbDelete(`votes/${vid}/images/${key}`);
   // 출석 기록도 삭제
   const v = await dbGet(`votes/${vid}`);
   if(v && v.group && v.date){
     const attDate = getTitleDate(v);
     const mondayStr = getWeekKey(attDate);
-    await dbDelete(`attendance/${v.group}/${mondayStr}/${CU?.name||myKey}/${attDate}`);
+    await dbDelete(`attendance/${v.group}/${mondayStr}/${nick}/${attDate}`);
   }
   showToast('🗑️ 사진 삭제됨');
+  if(collapseId){ await renderNickPanel(vid, collapseId, nick); }
   if(_currentTab==='home')loadHome();
   else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
+async function deleteMyImages(vid){ return deleteImagesFor(vid, CU?.name||''); }
+
+// 사진 1장만 삭제: 관리자는 누구든, 사원은 본인 것만
+async function deleteOneImage(vid, nick, imgIdx, collapseId){
+  const isAdmin2 = CU?.role==='admin';
+  if(!isAdmin2 && nick!==(CU?.name||'')){ showToast('본인 게시물만 삭제할 수 있어요'); return; }
+  if(!confirm('이 사진을 삭제할까요?')) return;
+  const key = nick.replace(/[\.\#\$\/\[\]\s]/g,'_');
+  const cur = (await dbGet(`votes/${vid}/images/${key}`)) || (await dbGet(`votes/${vid}/images/${nick}`)) || [];
+  // 화면에 보이는 순서(연차 마커 제외 + 업로드시간순)와 같은 기준으로 대상 사진을 찾음
+  const real = cur.filter(x=>x?.url && x.url!=='연차');
+  const sortedReal = [...real].sort((a,b)=>(a.uploadedAt||0)-(b.uploadedAt||0));
+  const target = sortedReal[imgIdx];
+  if(!target){ showToast('삭제할 사진을 찾을 수 없어요'); return; }
+  const idxInCur = cur.findIndex(x=>x && x.url===target.url && x.uploadedAt===target.uploadedAt);
+  if(idxInCur<0){ showToast('삭제할 사진을 찾을 수 없어요'); return; }
+  const next = [...cur]; next.splice(idxInCur,1);
+  if(next.filter(x=>x?.url&&x.url!=='연차').length===0){
+    // 남은 실제 사진이 없으면 전체삭제와 동일하게 출석 기록도 정리
+    await dbDelete(`votes/${vid}/images/${key}`);
+    const v = await dbGet(`votes/${vid}`);
+    if(v && v.group && v.date){
+      const attDate = getTitleDate(v);
+      const mondayStr = getWeekKey(attDate);
+      await dbDelete(`attendance/${v.group}/${mondayStr}/${nick}/${attDate}`);
+    }
+  } else {
+    await dbSet(`votes/${vid}/images/${key}`, next);
+  }
+  showToast('🗑️ 사진 1장 삭제됨');
+  if(collapseId){ await renderNickPanel(vid, collapseId, nick); }
+  else { if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept); }
 }
 
 // 관리자: 시크릿 저장 개수 직접 입력(수동 충족 처리)
@@ -4673,6 +4834,14 @@ async function toggleNickBtn(vid, collapseId, nick){
     el.style.display = 'none';
     return;
   }
+  el.style.display = 'block';
+  await renderNickPanel(vid, collapseId, nick);
+}
+
+// 닉네임 펼침 패널 내용 렌더링 (열 때 + 사진 추가/삭제 후 그 자리에서 새로고침할 때 공용으로 씀)
+async function renderNickPanel(vid, collapseId, nick){
+  const el = document.getElementById(collapseId);
+  if(!el) return;
   // 마감 여부, 이미지 동시 조회
   const myKey = (CU?.name||'').replace(/[\.#$\/\[\]\s]/g,'_');
   const sanitized = nick.replace(/[\.#$\/\[\]\s]/g,'_');
@@ -4688,17 +4857,20 @@ async function toggleNickBtn(vid, collapseId, nick){
   const imgs = imgsSan || imgsRaw || [];
   const realImgs = imgs.filter(img=>img?.url&&img.url!=='연차');
   const isMe = nick===(CU?.name||'') || sanitized===myKey;
+  const isAdmin2 = CU?.role==='admin';
+  const canManage = isMe || isAdmin2; // ★ 사원은 본인 것만, 관리자는 전체 인원에 대해 추가/삭제 가능
+  const nickEsc = nick.replace(/'/g,"\\'");
+  const inputId = `imgInput_${vid}_${sanitized}`;
 
-  el.style.display = 'block';
   let html = '';
-  if(isMe && !isClosed && realImgs.length===0){
-    html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
-    html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
-  } else if(isMe && !isClosed && realImgs.length>0){
-    html+=`<input type="file" id="imgInput_${vid}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this)">`;
+  if(canManage && !isClosed && realImgs.length===0){
+    html+=`<input type="file" id="${inputId}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this,'${nickEsc}')">`;
+    html+=`<button onclick="document.getElementById('${inputId}').click()" style="width:100%;background:#FF85C1;color:white;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px">📎 업로드</button>`;
+  } else if(canManage && !isClosed && realImgs.length>0){
+    html+=`<input type="file" id="${inputId}" accept="image/*,.heic,.heif" multiple style="display:none" onchange="uploadImages('${vid}',this,'${nickEsc}')">`;
     html+=`<div style="display:flex;gap:4px;margin-bottom:6px">`;
-    html+=`<button onclick="document.getElementById('imgInput_${vid}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">수정</button>`;
-    html+=`<button onclick="deleteMyImages('${vid}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">🗑️</button>`;
+    html+=`<button onclick="document.getElementById('${inputId}').click()" style="flex:1;background:var(--surface2);color:var(--text2);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">➕ 추가</button>`;
+    html+=`<button onclick="deleteImagesFor('${vid}','${nickEsc}','${collapseId}')" style="padding:6px 8px;background:rgba(255,92,92,0.1);color:var(--red);border:none;border-radius:8px;font-size:11px;cursor:pointer">전체삭제</button>`;
     html+=`</div>`;
   }
   if(realImgs.length>0){
@@ -4706,20 +4878,25 @@ async function toggleNickBtn(vid, collapseId, nick){
     html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">`;
     sorted.forEach((img,imgIdx)=>{
       const thumbUrl = img.url.includes('/upload/') ? img.url.replace('/upload/','/upload/q_auto,f_auto,w_400/') : img.url;
-      html+=`<div style="aspect-ratio:9/16;border-radius:8px;overflow:hidden;cursor:pointer" onclick="openSecretViewerByNick('${vid}','${nick.replace(/'/g,'\\\'')}',${imgIdx})"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+      html+=`<div style="position:relative;aspect-ratio:9/16;border-radius:8px;overflow:hidden">`;
+      html+=`<div onclick="openSecretViewerByNick('${vid}','${nickEsc}',${imgIdx})" style="width:100%;height:100%;cursor:pointer"><img src="${thumbUrl}" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>`;
+      if(canManage && !isClosed){
+        html+=`<button onclick="event.stopPropagation();deleteOneImage('${vid}','${nickEsc}',${imgIdx},'${collapseId}')" title="이 사진만 삭제" style="position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,0.65);color:white;border:none;font-size:12px;font-weight:800;cursor:pointer;line-height:1;padding:0">✕</button>`;
+      }
+      html+=`</div>`;
     });
     html+=`</div>`;
   }
   // 본인 또는 관리자: 캡쳐 OCR로 내가 아직 안 올린(안 뜬) 리포 찾기
-  if((isMe || CU?.role==='admin') && realImgs.length>0){
+  if((isMe || isAdmin2) && realImgs.length>0){
     const btnLabel = isMe ? '🔍 내 누락 확인 (안 올린 게시물 찾기)' : '🔍 누락 확인 (캡쳐 OCR)';
-    html+=`<button onclick="runRepostCheck('${vid}','${nick.replace(/'/g,"\\'")}')" style="width:100%;margin-top:6px;background:#E8F0FE;color:#3B6FD4;border:1.5px solid #B9D0F5;border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">${btnLabel}</button>`;
+    html+=`<button onclick="runRepostCheck('${vid}','${nickEsc}')" style="width:100%;margin-top:6px;background:#E8F0FE;color:#3B6FD4;border:1.5px solid #B9D0F5;border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">${btnLabel}</button>`;
   }
   // 관리자: 저장 개수 직접 입력 (OCR 자동인식 실패한 경우 등)
-  if(CU?.role==='admin'){
+  if(isAdmin2){
     const _sc = v && v.saveCount && (v.saveCount[sanitized]||v.saveCount[nick]);
     const _scLabel = _sc ? (_sc.status==='manual'?`현재 ${_sc.n}개(수동)`:_sc.status==='auto'?`자동 ${_sc.n}개`:_sc.status==='review'?'자동인식 실패':(_sc.n?(_sc.n+'개'):'미인식')) : '미인식';
-    html+=`<button onclick="adminSetSaveCount('${vid}','${sanitized}','${nick.replace(/'/g,"\\'")}')" style="width:100%;margin-top:6px;background:rgba(91,155,213,0.12);color:var(--blue);border:1.5px solid rgba(91,155,213,0.3);border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">🔢 개수 직접 입력 · ${_scLabel}</button>`;
+    html+=`<button onclick="adminSetSaveCount('${vid}','${sanitized}','${nickEsc}')" style="width:100%;margin-top:6px;background:rgba(91,155,213,0.12);color:var(--blue);border:1.5px solid rgba(91,155,213,0.3);border-radius:8px;padding:8px;font-size:11px;font-weight:700;cursor:pointer">🔢 개수 직접 입력 · ${_scLabel}</button>`;
   }
   el.innerHTML = html;
 }
@@ -5175,16 +5352,24 @@ async function getParticipantCount(v){
   }catch(e){ return 0; }
 }
 
-async function uploadImages(vid, input){
+async function uploadImages(vid, input, targetNick){
   const files = Array.from(input.files);
   if(!files.length) return;
   // 마감 체크
   const vCheck = await dbGet(`votes/${vid}`);
   if(vCheck?.closed){ showToast('마감된 투표입니다'); input.value=''; return; }
+
+  // ★ targetNick이 있으면 그 사람 몫으로 업로드 (관리자가 다른 사원 대신 첨부할 때 사용).
+  //   본인이 아닌데 관리자도 아니면 차단.
+  const uploadNick = targetNick || CU?.name || '';
+  const isAdmin3 = CU?.role==='admin';
+  if(targetNick && targetNick!==(CU?.name||'') && !isAdmin3){
+    showToast('본인 게시물에만 첨부할 수 있어요'); input.value=''; return;
+  }
+  if(!uploadNick){showToast('로그인 정보 오류');return;}
   showToast('⏳ 업로드 중...');
 
-  const myKey = (CU?.name || '').replace(/[\.\#\$\/\[\]\s]/g, '_');
-  if(!myKey){showToast('로그인 정보 오류');return;}
+  const myKey = uploadNick.replace(/[\.\#\$\/\[\]\s]/g, '_');
 
   // 만료 시간 계산 (다음날 오후 1시 10분)
   const now = new Date();
@@ -6702,9 +6887,10 @@ async function loadStatusGroup(gid) {
     ADMIN_NAMES.forEach(an=>{ if(!memberResults[an]) memberResults[an] = {}; });
 
     // 개근자(풀참) 미리 계산 — 헤더의 주식지급 버튼에서 쓰기 위해 멤버 루프보다 먼저 구함
+    // ★ '관리자' 로그인 계정 자체만 제외. 인사팀 닉네임(ADMIN_NAMES)도 풀참이면 화면 체크(✅)와 똑같이 지급 후보에 포함시킴.
     const _fullMembers = [];
     Object.entries(memberResults).forEach(([mname, mdates])=>{
-      if(mname==='관리자' || ADMIN_NAMES.includes(mname)) return;
+      if(mname==='관리자') return;
       const fc = dates.filter(d=>['완료','당직','공게','투피드','노피드','프패','확인증'].includes(mdates[d])).length;
       if(fc>=7) _fullMembers.push(mname);
     });
@@ -6940,9 +7126,26 @@ function copyPayoutNotice(){
   // 관리자가 수정한 최신 내용을 복사
   const ta=document.getElementById('payoutNotice');
   const txt = ta ? ta.value : (_payoutData?.noticeText||'');
-  navigator.clipboard.writeText(txt).then(()=>showToast('📋 공지문 복사됨')).catch(()=>{
-    if(ta){ ta.focus(); ta.select(); try{document.execCommand('copy');showToast('📋 공지문 복사됨');}catch(e){showToast('칸을 길게 눌러 복사하세요');} }
-  });
+  const fallbackCopy=()=>{
+    if(!ta){ showToast('복사 실패'); return; }
+    ta.focus(); ta.select();
+    try{
+      const ok=document.execCommand('copy');
+      showToast(ok?'📋 공지문 복사됨':'복사 실패 — 칸을 길게 눌러 복사하세요');
+    }catch(e){ showToast('칸을 길게 눌러 복사하세요'); }
+  };
+  // ★ 핵심 수정: navigator.clipboard가 없는 브라우저/웹뷰에서는 아래 호출 자체가
+  //   즉시 오류를 던지는데, 그 오류가 .catch()로 안 잡히고 조용히 죽어서
+  //   버튼을 눌러도 아무 반응이 없었음. try/catch로 완전히 감싸서 항상 대체 복사로 넘어가게 함.
+  try{
+    if(navigator.clipboard && typeof navigator.clipboard.writeText==='function'){
+      navigator.clipboard.writeText(txt).then(()=>showToast('📋 공지문 복사됨')).catch(fallbackCopy);
+    } else {
+      fallbackCopy();
+    }
+  }catch(e){
+    fallbackCopy();
+  }
 }
 function copyPayoutList(){
   if(!_payoutData) return;
@@ -7680,6 +7883,9 @@ async function loadSettings(){
       <button onclick="announceNewVersion()" style="width:100%;padding:11px;background:#5DB88A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📢 새 버전 알리기</button>
       <button onclick="diagMissingVoter()" style="width:100%;margin-top:8px;padding:11px;background:#FFB347;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🔍 표 누락 진단</button>
       <button onclick="diagAttendance()" style="width:100%;margin-top:8px;padding:11px;background:#C49BD8;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 출석기록 진단·정리</button>
+      <button onclick="diagWarnRecords()" style="width:100%;margin-top:8px;padding:11px;background:#FF8A8A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">⚠️ 경고 기록 진단(백업 포함 검색)</button>
+      <button onclick="addWarnBackdated()" style="width:100%;margin-top:8px;padding:11px;background:#5DB88A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">✍️ 경고 수동 등록(날짜 지정)</button>
+      <button onclick="openWarnBulkRestore()" style="width:100%;margin-top:8px;padding:11px;background:#7C9CDB;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 경고 일괄 복구(여러 명 한번에)</button>
     </div>
     ${settingAccordion('grp','🏢 그룹 관리',grpHtml)}
     ${settingAccordion('quota','🏖️ 연차 정원',quotaHtml)}
