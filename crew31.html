@@ -1371,7 +1371,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.이미지부분수정' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.그리드수정모드새로고침' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -4166,7 +4166,7 @@ async function renderVoteCard(vid,v){
     }
     if(totalCount===0) totalCount = startVoters.length;
 
-        window._voteGal = window._voteGal || {};
+    window._voteGal = window._voteGal || {};
     window._voteGal[vid] = [];  // 이 투표의 전체 사진(모든 참여자, 순번대로) — 전체화면 연속 슬라이드용
     if(isAdmin){
       html+=`<div style="padding:0 0 8px;display:flex;justify-content:flex-end"><button onclick="refreshVoteCard('${vid}')" style="background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);border-radius:20px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">🔄 전체 새로고침</button></div>`;
@@ -4216,7 +4216,7 @@ async function renderVoteCard(vid,v){
       html+=`<button onclick="toggleNickBtn('${vid}','${collapseId}','${nick.replace(/'/g,'\\\'')}')" style="width:100%;padding:8px 4px;border-radius:20px;${btnStyle}font-size:11px;font-weight:700;cursor:pointer;line-height:1.5;text-align:center">`;
       html+=`${escH(nick)}<br><span style="font-size:9px">${label}</span>`;
       html+=`</button>`;
-        // 관리자 확인 버튼
+      // 관리자 확인 버튼
       if(isAdmin){
         const confirmed = !!(v.adminConfirm && v.adminConfirm[sanitizedNick]);
         html+=`<button id="confirmBtn_${vid}_${sanitizedNick}" onclick="toggleAdminConfirm('${vid}','${sanitizedNick}')" style="width:100%;padding:7px 4px;border-radius:10px;border:none;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;${confirmed?'background:#5DB88A;color:white':'background:#f1f5f9;color:#94a3b8'}">${confirmed?'✅ 확인완료':'☑ 확인'}</button>`;
@@ -4859,9 +4859,9 @@ async function renderNickPanel(vid, collapseId, nick){
   // 클릭한 닉네임 본인의 사진만 조회 (내 사진으로 폴백하지 않음)
   const imgs = imgsSan || imgsRaw || [];
   const realImgs = imgs.filter(img=>img?.url&&img.url!=='연차');
-    const isMe = nick===(CU?.name||'') || sanitized===myKey;
+  const isMe = nick===(CU?.name||'') || sanitized===myKey;
   const isAdmin2 = CU?.role==='admin';
-  const canManage = isMe || isAdmin2;
+  const canManage = isMe || isAdmin2; // ★ 사원은 본인 것만, 관리자는 전체 인원에 대해 추가/삭제 가능
   const nickEsc = nick.replace(/'/g,"\\'");
   const inputId = `imgInput_${vid}_${sanitized}`;
   window._imgEditMode = window._imgEditMode || {};
@@ -4905,11 +4905,14 @@ async function renderNickPanel(vid, collapseId, nick){
   }
   el.innerHTML = html;
 }
+
+// [수정] 버튼: 사진 위 삭제(✕) 표시를 켜고 끔 (실수로 삭제하는 것 방지용 확인 단계)
 function toggleImageEditMode(vid, collapseId, nick){
   window._imgEditMode = window._imgEditMode || {};
   window._imgEditMode[collapseId] = !window._imgEditMode[collapseId];
   renderNickPanel(vid, collapseId, nick);
 }
+
 // 캡쳐 OCR → 시작투표 링크(아이디) 대조 → 누락(안 뜬 리포) URL 표시
 async function runRepostCheck(vid, nick){
   const sanitized = nick.replace(/[\.#$\/\[\]\s]/g,'_');
@@ -5520,6 +5523,8 @@ async function toggleAdminConfirm(vid, nickKey){
   const current = await dbGet(`votes/${vid}/adminConfirm/${nickKey}`);
   const next = !current;
   await dbSet(`votes/${vid}/adminConfirm/${nickKey}`, next);
+  // ★ 핵심 수정: 카드 전체를 다시 그리면 펼쳐놓은 다른 사람들 사진 패널이 다 접혀서
+  //   한 명씩 확인할 때마다 매번 다시 펼쳐야 했음. 이제 이 버튼만 즉시 바꾸고 끝냄.
   const btn = document.getElementById(`confirmBtn_${vid}_${nickKey}`);
   if(btn){
     btn.textContent = next ? '✅ 확인완료' : '☑ 확인';
@@ -5527,12 +5532,12 @@ async function toggleAdminConfirm(vid, nickKey){
     btn.style.color = next ? 'white' : '#94a3b8';
   }
 }
+// 관리자: 이 투표 카드 전체를 수동으로 한 번에 새로고침 (참여율·개수 등 최신화)
 async function refreshVoteCard(vid){
   const el = document.getElementById(`voteDetail_${vid}`);
   if(!el) return;
   try{ const v = await dbGet(`votes/${vid}`); el.innerHTML = await renderVoteCard(vid, v); showToast('🔄 새로고침 완료'); }
   catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
-  }
 }
 // 취소 이력 삭제 (관리자 전용)
 async function deleteCancelLog(vid, ck){
