@@ -718,14 +718,25 @@ function fmtDate(ts){if(!ts)return '';const d=new Date(ts);return d.toLocaleDate
 function getKSTDate(){const d=new Date();d.setHours(d.getHours()+9);return d.toISOString().slice(0,10);}
 
 // ── DB ──
+// 읽기 캐시(다운로드 절감): 같은 경로 반복 읽기를 짧게(4초) 캐시. 쓰기 발생 시 즉시 비움 -> 항상 최신.
+const _dbCache=new Map();
+const _DB_CACHE_TTL=4000;
+function _dbCacheClear(){ _dbCache.clear(); }
 async function dbGet(p){
-  try{
-    const controller=new AbortController();
-    const t=setTimeout(()=>controller.abort(),8000);
-    const r=await fetch(`${DB}/${p}.json`,{signal:controller.signal});
-    clearTimeout(t);
-    return await r.json();
-  }catch{return null;}
+  const now=Date.now();
+  const hit=_dbCache.get(p);
+  if(hit && (now-hit.t)<_DB_CACHE_TTL) return await hit.pr;
+  const pr=(async()=>{
+    try{
+      const controller=new AbortController();
+      const t=setTimeout(()=>controller.abort(),8000);
+      const r=await fetch(`${DB}/${p}.json`,{signal:controller.signal});
+      clearTimeout(t);
+      return await r.json();
+    }catch{return null;}
+  })();
+  _dbCache.set(p,{t:now,pr});
+  return await pr;
 }
 // 다운로드 절감: createdAt 기준 최근 N개만 받기 (전체 대신)
 // 인덱스 없어도 동작하도록 limitToLast만 사용 (서버가 마지막 N개 키만 전송)
@@ -763,6 +774,7 @@ async function dbGetVotesForGroup(gid){
   return Object.assign({}, (a===undefined?{}:a), (b===undefined?{}:b));
 }
 async function dbSet(p,d,retry=0){
+  _dbCacheClear();
   try{
     const res=await fetch(`${DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});
     if(!res.ok && retry<2){ await new Promise(r=>setTimeout(r,500)); return dbSet(p,d,retry+1); }
@@ -771,8 +783,8 @@ async function dbSet(p,d,retry=0){
     console.error('dbSet error',p,e);
   }
 }
-async function dbDelete(p){try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
-async function dbPush(p,d){try{const r=await fetch(`${DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
+async function dbDelete(p){_dbCacheClear();try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
+async function dbPush(p,d){_dbCacheClear();try{const r=await fetch(`${DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 async function dbDel(p){try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
 async function gameGet(p){try{const r=await fetch(`${GAME_DB}/${p}.json`);return await r.json();}catch{return null;}}
 async function gameSet(p,d){try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});}catch{}}
