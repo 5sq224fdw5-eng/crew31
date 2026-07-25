@@ -352,8 +352,13 @@ document.addEventListener('keydown',e=>{
         <svg viewBox="0 0 24 24"><path fill="rgba(255,210,228,0.6)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         <span class="hfLbl" style="color:#D6457E">맞팔</span>
       </div>
+      <!-- 당직 전달사항 (관리자·인사팀 전용, enterApp에서 표시 여부 결정) -->
+      <div class="hfHeart hfAct" id="dutyHeart" style="transition-delay:.12s;display:none" onclick="document.getElementById('heartFab').classList.remove('open');openDutyHandoverManual()">
+        <svg viewBox="0 0 24 24"><path fill="rgba(255,220,150,0.7)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="hfLbl" style="color:#D6457E">전달사항</span>
+      </div>
       <!-- 관리자 (자격 있을 때만 enterApp에서 표시) -->
-      <div class="hfHeart hfAct" id="adminHeart" style="transition-delay:.12s;display:none">
+      <div class="hfHeart hfAct" id="adminHeart" style="transition-delay:.16s;display:none">
         <svg viewBox="0 0 24 24"><path fill="rgba(255,245,249,0.6)" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         <span class="hfLbl" id="adminSwitchLbl" style="color:#D6457E">관리자</span>
       </div>
@@ -956,6 +961,78 @@ async function clearScheduledPopup(){
   showToast('🗑️ 예약 공지 삭제됨'); loadSettings&&loadSettings();
 }
 
+// ── 당직 전달사항 (관리자·인사팀 전용, 하트 바로가기에서 열람+수정) ──
+// 저장: crew31  dutyHandover = {content, updatedAt, updatedBy}
+function _canEditDutyHandover(){
+  return CU?.role==='admin' || (CU?.role==='member' && _ADMIN_SWITCH_NAMES.includes(CU?.name));
+}
+async function checkDutyHandoverPopup(){
+  try{
+    if(CU?.role!=='admin') return;
+    const d = await dbGet('dutyHandover');
+    if(!d || !d.content || !d.content.trim()) return;
+    const sig = `${d.updatedAt||''}|${d.content.length}`;
+    let seen=''; try{ seen = sessionStorage.getItem('dutyHandoverSeen')||''; }catch(e){}
+    if(seen===sig) return; // 이번 세션에서 이미 본 내용이면 다시 안 뜸 (내용 바뀌면 다시 뜸)
+    try{ sessionStorage.setItem('dutyHandoverSeen', sig); }catch(e){}
+    showDutyHandoverPopup(d);
+  }catch(e){ console.warn('checkDutyHandoverPopup',e); }
+}
+// 하트 바로가기에서 수동으로 열 때
+async function openDutyHandoverManual(){
+  try{
+    const d = await dbGet('dutyHandover') || {};
+    showDutyHandoverPopup(d);
+  }catch(e){ showToast('불러오기 실패'); }
+}
+window._dutyHandoverCache = {};
+function showDutyHandoverPopup(d, editMode){
+  window._dutyHandoverCache = d || {};
+  const canEdit = _canEditDutyHandover();
+  let m = document.getElementById('dutyHandoverModal');
+  if(!m){ m=document.createElement('div'); m.id='dutyHandoverModal'; m.style.cssText='position:fixed;inset:0;background:rgba(45,20,30,0.35);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:10001;display:flex;align-items:center;justify-content:center;padding:24px'; document.body.appendChild(m); }
+  const updated = d.updatedAt ? new Date(d.updatedAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+  const header = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:22px">📌</span>
+      <span style="font-size:16px;font-weight:900;color:var(--text)">당직 전달사항</span>
+    </div>`;
+
+  let body;
+  if(editMode){
+    body = `
+      <textarea id="dutyHandoverEditInput" placeholder="예: 오늘 시크릿 그룹 000님 연차 처리 부탁드려요" style="width:100%;box-sizing:border-box;min-height:110px;padding:12px;border-radius:14px;border:1px solid var(--border);font-size:14px;background:rgba(255,255,255,0.6);color:var(--text);resize:vertical;margin-bottom:14px">${escH(d.content||'')}</textarea>
+      <div style="display:flex;gap:8px">
+        <button onclick="showDutyHandoverPopup(window._dutyHandoverCache,false)" style="flex:1;padding:13px;border:none;border-radius:16px;background:rgba(0,0,0,0.06);color:var(--text2);font-size:15px;font-weight:700;cursor:pointer">취소</button>
+        <button onclick="saveDutyHandover()" style="flex:1;padding:13px;border:none;border-radius:16px;background:linear-gradient(135deg,#FF85C1,#A78BFA);color:white;font-size:15px;font-weight:800;cursor:pointer">저장</button>
+      </div>`;
+  } else if(!d.content || !d.content.trim()){
+    body = `
+      <div style="font-size:13px;color:var(--text3);margin-bottom:18px">아직 등록된 전달사항이 없어요.</div>
+      ${canEdit?`<button onclick="showDutyHandoverPopup(window._dutyHandoverCache,true)" style="width:100%;padding:13px;border:none;border-radius:16px;background:linear-gradient(135deg,#FF85C1,#A78BFA);color:white;font-size:15px;font-weight:800;cursor:pointer">✏️ 작성하기</button>`
+        :`<button onclick="document.getElementById('dutyHandoverModal').style.display='none'" style="width:100%;padding:13px;border:none;border-radius:16px;background:rgba(0,0,0,0.06);color:var(--text2);font-size:15px;font-weight:700;cursor:pointer">닫기</button>`}`;
+  } else {
+    body = `
+      <div style="font-size:14px;color:var(--text2);line-height:1.7;white-space:pre-wrap;margin-bottom:16px;word-break:break-word">${escH(d.content)}</div>
+      ${updated?`<div style="font-size:11px;color:var(--text3);margin-bottom:18px">${escH(d.updatedBy||'')} · ${updated}</div>`:''}
+      <div style="display:flex;gap:8px">
+        ${canEdit?`<button onclick="showDutyHandoverPopup(window._dutyHandoverCache,true)" style="flex:1;padding:13px;border:none;border-radius:16px;background:rgba(0,0,0,0.06);color:var(--text2);font-size:15px;font-weight:700;cursor:pointer">✏️ 수정</button>`:''}
+        <button onclick="document.getElementById('dutyHandoverModal').style.display='none'" style="flex:${canEdit?'1':'1'};padding:13px;border:none;border-radius:16px;background:linear-gradient(135deg,#FF85C1,#A78BFA);color:white;font-size:15px;font-weight:800;cursor:pointer">확인했어요</button>
+      </div>`;
+  }
+
+  m.innerHTML = `<div style="background:rgba(255,255,255,0.85);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:26px;padding:28px 24px;max-width:340px;width:100%;box-shadow:0 16px 44px rgba(255,133,193,0.28);border:1px solid rgba(255,255,255,0.6)">${header}${body}</div>`;
+  m.style.display='flex';
+}
+// 관리자·인사팀: 하트 팝업 안에서 바로 저장 (내용 바뀌면 세션 기록 초기화 → 다음 진입 때 다시 뜸)
+async function saveDutyHandover(){
+  const val=(document.getElementById('dutyHandoverEditInput')?.value||'').trim();
+  const d = {content:val, updatedAt:Date.now(), updatedBy:CU?.name||'관리자'};
+  await dbSet('dutyHandover', d);
+  try{ sessionStorage.removeItem('dutyHandoverSeen'); }catch(e){}
+  showToast(val?'✅ 당직 전달사항 저장됨':'🗑️ 당직 전달사항 삭제됨');
+  showDutyHandoverPopup(d, false);
+}
+
 // (관리자) 새 버전 알리기 — 배너 표시 + 구독한 전원에게 푸시 발송
 async function announceNewVersion(){
   if(!confirm('지금 버전을 "새 버전"으로 알릴까요?\n앱을 연 사람에게 배너가 뜨고, 알림 켠 전원에게 푸시가 발송됩니다.\n(GitHub에 새 파일을 먼저 올렸는지 확인하세요)')) return;
@@ -1371,7 +1448,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.그리드수정모드새로고침' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.취소제한해제' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -1394,13 +1471,26 @@ async function enterApp(){
   // 새 버전 배너 체크
   setTimeout(checkUpdateBanner, 1200);
   setTimeout(checkScheduledPopup, 1600);
+  setTimeout(checkDutyHandoverPopup, 1700);
   // 새 공지 빨간불 체크
   setTimeout(checkNoticeDot, 1400);
 
   // 관리자 탭 표시
   document.querySelectorAll('.admin-tab').forEach(el=>{
-    el.style.display = CU.role==='admin' ? 'flex' : 'none';
+    if(CU.role==='admin'){
+      el.style.display='flex';
+      el.style.alignItems='center';
+      el.style.justifyContent='center';
+    } else {
+      el.style.display='none';
+    }
   });
+  // 당직 전달사항 하트 — 관리자 또는 인사팀(관리자 전환 가능 명단)만 표시, 일반 사원은 안 보임
+  const _dutyHeartEl = document.getElementById('dutyHeart');
+  if(_dutyHeartEl){
+    const _canSeeDuty = CU.role==='admin' || (CU.role==='member' && _ADMIN_SWITCH_NAMES.includes(CU.name));
+    _dutyHeartEl.style.display = _canSeeDuty ? '' : 'none';
+  }
 
   calY=new Date().getFullYear();calM=new Date().getMonth();calSel=todayStr;
   try{await loadGroups();}catch(e){console.error('loadGroups error',e);}
@@ -4520,6 +4610,9 @@ async function renderVoteCard(vid,v){
   if(sortedLinks.length>0){
     html+=`<button onclick="copyAllLinks('${vid}')" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
   }
+  if(isAdmin){
+    html+=`<button onclick="adminClearCanceledFlag('${vid}')" style="width:100%;margin-top:6px;padding:8px;background:rgba(93,184,138,0.12);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:#3a9e72">🔓 닉네임으로 취소제한 해제 (노피드만 가능 → 전체 선택지 가능)</button>`;
+  }
   html+=`</div>`; // border-top div 닫기
   } // isEndVote 조건 끝
   // 템플릿 멤버 참여 현황
@@ -4710,7 +4803,7 @@ async function submitTupide2(vid){
     tupideIdx = (v?.options||[]).findIndex(o=>{ const t=(o||'').toLowerCase(); return t.includes('투피드')||t.includes('두배'); });
   }
   if(tupideIdx!==undefined && tupideIdx>=0 && v?.responses?.[myKey]!==tupideIdx){
-    await castVote(vid, tupideIdx);
+    await castVote(vid, tupideIdx, true);
     if(window._pendingVote) delete window._pendingVote[vid];
     if(window._castVoteOK===false) return; // 정원초과 등으로 막혔으면 링크도 저장하지 않음
   }
@@ -5540,16 +5633,40 @@ async function refreshVoteCard(vid){
   catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
 }
 // 취소 이력 삭제 (관리자 전용)
+// 취소 이력이 이미 지워져서 nick을 못 찾을 때를 대비 — 닉네임 직접 입력으로 선택제한 해제
+async function adminClearCanceledFlag(vid){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const nick = prompt('선택 제한(재능기부만 가능)을 풀어줄 사원 닉네임을 입력하세요');
+  if(nick===null) return;
+  const trimmed = nick.trim();
+  if(!trimmed){ showToast('닉네임을 입력하세요'); return; }
+  const cur = await dbGet(`votes/${vid}/canceled/${trimmed}`);
+  if(!cur){ showToast(`${trimmed}님은 제한된 상태가 아니에요`); return; }
+  await dbDelete(`votes/${vid}/canceled/${trimmed}`);
+  showToast(`✅ ${trimmed}님 선택 제한 해제됨 (모든 선택지 가능)`);
+  if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+}
 async function deleteCancelLog(vid, ck){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
-  if(!confirm('이 취소 이력을 삭제할까요?')) return;
-  try{ await dbDelete(`votes/${vid}/cancelLog/${ck}`); showToast('🗑️ 취소 이력 삭제됨'); }catch(e){ showToast('삭제 실패'); }
+  if(!confirm('이 취소 이력을 삭제할까요?\n(그 사원의 "재능기부만 가능" 제한도 함께 풀립니다)')) return;
+  try{
+    // ★ 핵심 수정: 취소 이력(cancelLog)만 지우고 실제 선택제한 플래그(canceled/{닉네임})는
+    //   그대로 남아있어서, 관리자가 이력을 지워도 사원 화면엔 계속 "노피드만 가능"으로 잠겨있던 버그
+    const entry = await dbGet(`votes/${vid}/cancelLog/${ck}`);
+    await dbDelete(`votes/${vid}/cancelLog/${ck}`);
+    if(entry && entry.nick){ await dbDelete(`votes/${vid}/canceled/${entry.nick}`); }
+    showToast('🗑️ 취소 이력 삭제됨 (선택 제한도 해제됨)');
+  }catch(e){ showToast('삭제 실패'); }
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 async function clearCancelLog(vid){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
-  if(!confirm('이 투표의 취소 이력을 전부 삭제할까요?')) return;
-  try{ await dbDelete(`votes/${vid}/cancelLog`); showToast('🗑️ 취소 이력 전체 삭제됨'); }catch(e){ showToast('삭제 실패'); }
+  if(!confirm('이 투표의 취소 이력을 전부 삭제할까요?\n(전원의 "재능기부만 가능" 제한도 함께 풀립니다)')) return;
+  try{
+    await dbDelete(`votes/${vid}/cancelLog`);
+    await dbDelete(`votes/${vid}/canceled`);
+    showToast('🗑️ 취소 이력 전체 삭제됨 (선택 제한도 모두 해제됨)');
+  }catch(e){ showToast('삭제 실패'); }
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
@@ -5943,7 +6060,7 @@ async function submitVote(vid){
 
   // 1) 선택지 저장 (임시선택이 있을 때만)
   if(pending!==undefined){
-    await castVote(vid, optIdx);
+    await castVote(vid, optIdx, true);
     if(window._pendingVote) delete window._pendingVote[vid];
     // castVote가 정원초과·연차소진 등으로 막혔으면 → 링크 저장도, 완료 팝업도 하지 않음
     if(window._castVoteOK === false){
@@ -6195,7 +6312,7 @@ async function clearDrawHistory(){
   loadSettings && loadSettings();
 }
 
-async function castVote(vid,optIdx){
+async function castVote(vid,optIdx,skipRerender){
   // 이전 호출이 에러로 안 풀렸어도 3초 지나면 무시 (영구 잠김 방지)
   const nowTs = Date.now();
   if(window._castVoting && (nowTs - (window._castVotingAt||0)) < 3000) return;
@@ -6486,8 +6603,10 @@ async function castVote(vid,optIdx){
     }
   }
 
-  if(_currentTab==='home')loadHome();
-  else if(_currentTab==='dept')loadDeptPage(_currentDept);
+  if(!skipRerender){
+    if(_currentTab==='home')loadHome();
+    else if(_currentTab==='dept')loadDeptPage(_currentDept);
+  }
   window._castVoting = false;
 }
 async function toggleVoteClose(vid,close){
@@ -7191,6 +7310,9 @@ async function runStockPayout(){
     const payoutUpdates = {};  // "닉네임" -> 크루 지급기록(중복방지)
     const nowT = Date.now();
     const kd = new Date(); kd.setHours(kd.getHours()+9); const kstDate = kd.toISOString().slice(0,10); // 오락실과 동일 KST YYYY-MM-DD
+    // ★ 풀참 보상도 게임 화면의 "풀참" 사유와 동일하게 7일 후 자동소멸 기한을 걸어줌 (이전엔 여기서만 무기한이었음)
+    const expireDate = new Date(kd); expireDate.setDate(expireDate.getDate()+7);
+    const expiry = expireDate.toISOString().slice(0,10);
     const memo = `${label}차 풀참 보상`;   // 예: "6월 3주차 풀참 보상"
     let idx=0;
     for(const nm of members){
@@ -7198,11 +7320,12 @@ async function runStockPayout(){
       let hit = entries.find(([k,m])=>((m.name||'').replace(/^\*/,''))===(gName+nm));
       if(!hit) hit = entries.find(([k,m])=>((m.name||'').replace(/^\*/,''))===nm);
       if(!hit){ fail.push(nm); continue; }
-      const [gKey, gM] = hit;
+      const [gKey] = hit;
       if(paidRec[gKey] || paidRec[nm]) continue; // 이미 지급(게임키 또는 옛 닉네임 기준)
-      const cur = Number(gM.stock)||0;
-      stockUpdates[`${gKey}/stock`] = cur+1;
-      logUpdates[`${gKey}/payout_${nowT}_${idx}`] = { type:'give', amount:1, date:kstDate, time:nowT, memo };
+      // ★ 원자적 증가로 변경 — 이전엔 "현재 값 읽고 +1 해서 저장" 방식이라 오락실 쪽에서
+      //   동시에 지급/차감이 일어나면 서로 덮어써서 숫자가 씹히는 문제가 있었음
+      stockUpdates[`${gKey}/stock`] = {'.sv':{'increment':1}};
+      logUpdates[`${gKey}/payout_${nowT}_${idx}`] = { type:'give', amount:1, date:kstDate, time:nowT, memo, expiry, remaining:1 };
       payoutUpdates[gKey] = { nick:nm, at:nowT, by:CU.name, memo }; // 안전한 게임키로 기록(닉네임 특수문자 무관)
       done++; idx++;
     }
@@ -7773,9 +7896,7 @@ async function loadSettings(){
 
   // ── 3. 멤버 관리 (오락실 연동) ──
   let memberHtml = '';
-  memberHtml += `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">오락실 연동 그룹 전용</div>`;
-  memberHtml += `<button class="btn-pri" onclick="syncGameMembers()" style="width:100%;padding:12px">🔄 오락실 연동 멤버 동기화</button>`;
-  memberHtml += `<div id="syncResult" style="font-size:12px;color:var(--text3);margin-top:8px"></div>`;
+  memberHtml += `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">오락실 연동 그룹 전용 · 동기화 버튼은 위쪽 빠른작업 영역으로 옮겨졌어요</div>`;
   // 멤버 목록 + 닉네임 수정 (과거 데이터까지 옮기는 변경)
   const _memEntries = Object.entries(gm2).filter(([,m])=>m&&m.name).sort((a,b)=>a[1].name.localeCompare(b[1].name,'ko'));
   if(_memEntries.length>0){
@@ -7897,18 +8018,23 @@ async function loadSettings(){
     }
   }
 
+  let _diagHtml = '';
+  _diagHtml += `<button onclick="diagMissingVoter()" style="width:100%;padding:11px;background:#FFB347;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🔍 표 누락 진단</button>`;
+  _diagHtml += `<button onclick="diagAttendance()" style="width:100%;margin-top:8px;padding:11px;background:#C49BD8;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 출석기록 진단·정리</button>`;
+  _diagHtml += `<button onclick="diagWarnRecords()" style="width:100%;margin-top:8px;padding:11px;background:#FF8A8A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">⚠️ 경고 기록 진단(백업 포함 검색)</button>`;
+  _diagHtml += `<button onclick="addWarnBackdated()" style="width:100%;margin-top:8px;padding:11px;background:#5DB88A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">✍️ 경고 수동 등록(날짜 지정)</button>`;
+  _diagHtml += `<button onclick="openWarnBulkRestore()" style="width:100%;margin-top:8px;padding:11px;background:#7C9CDB;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 경고 일괄 복구(여러 명 한번에)</button>`;
+
   mb.innerHTML = `<div style="padding-bottom:60px">
     <div style="margin-bottom:10px;background:white;border-radius:14px;padding:12px 14px">
       <div style="font-size:13px;font-weight:800;color:var(--text2);margin-bottom:6px">📲 앱 업데이트</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">홈 화면에 추가한 앱이 옛 화면으로 보이거나 반응이 없으면 눌러주세요. 캐시를 비우고 최신 버전을 다시 불러옵니다.</div>
       <button onclick="hardUpdate()" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🔄 내 폰 강제 업데이트</button>
       <button onclick="announceNewVersion()" style="width:100%;padding:11px;background:#5DB88A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📢 새 버전 알리기</button>
-      <button onclick="diagMissingVoter()" style="width:100%;margin-top:8px;padding:11px;background:#FFB347;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🔍 표 누락 진단</button>
-      <button onclick="diagAttendance()" style="width:100%;margin-top:8px;padding:11px;background:#C49BD8;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 출석기록 진단·정리</button>
-      <button onclick="diagWarnRecords()" style="width:100%;margin-top:8px;padding:11px;background:#FF8A8A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">⚠️ 경고 기록 진단(백업 포함 검색)</button>
-      <button onclick="addWarnBackdated()" style="width:100%;margin-top:8px;padding:11px;background:#5DB88A;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">✍️ 경고 수동 등록(날짜 지정)</button>
-      <button onclick="openWarnBulkRestore()" style="width:100%;margin-top:8px;padding:11px;background:#7C9CDB;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📋 경고 일괄 복구(여러 명 한번에)</button>
+      <button onclick="syncGameMembers()" style="width:100%;margin-top:8px;padding:11px;background:#5B9BD5;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">🔄 오락실 연동 멤버 동기화</button>
+      <div id="syncResultTop" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
     </div>
+    ${settingAccordion('diag','🛠️ 진단 도구',_diagHtml)}
     ${settingAccordion('grp','🏢 그룹 관리',grpHtml)}
     ${settingAccordion('quota','🏖️ 연차 정원',quotaHtml)}
     ${settingAccordion('popup','📢 예약 공지 팝업',_popupHtml)}
@@ -8166,7 +8292,9 @@ async function deleteGroup(gid){
 
 async function syncGameMembers(){
   const resultEl=document.getElementById('syncResult');
+  const resultElTop=document.getElementById('syncResultTop');
   if(resultEl) resultEl.textContent='동기화 중...';
+  if(resultElTop) resultElTop.textContent='동기화 중...';
   try{
     const [gameMembers, crewMembers] = await Promise.all([
       gameGet('members'),
@@ -8204,10 +8332,12 @@ async function syncGameMembers(){
     const msg=`✅ ${added}명 추가됨, ${skipped}명 중복 스킵`;
     showToast(msg);
     if(resultEl) resultEl.textContent=msg;
+    if(resultElTop) resultElTop.textContent=msg;
     if(added>0) loadSettings();
   }catch(e){
     showToast('오류: '+e.message);
     if(resultEl) resultEl.textContent='오류: '+e.message;
+    if(resultElTop) resultElTop.textContent='오류: '+e.message;
   }
 }
 
