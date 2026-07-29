@@ -4064,16 +4064,18 @@ async function loadHeaderWeeklyAtt(){
   try{
     const myKey = CU.name||'';
     const mondayStr = getWeekKey(todayStr);
-    const allAtt = await dbGet(`attendance`) || {};
+    // 이번 주만 그룹별로 병렬 읽기 (attendance 전체 대신 → 기록이 몇 달 누적돼도 안 느려짐)
+    const gEntries = Object.entries(groups);
+    const weeks = await Promise.all(gEntries.map(([gid])=>dbGet(`attendance/${gid}/${mondayStr}`)));
     el.innerHTML = '';
-    for(const [gid,g] of Object.entries(groups)){
-      const weekData = allAtt[gid]?.[mondayStr] || {};
+    gEntries.forEach(([gid,g],i)=>{
+      const weekData = weeks[i] || {};
       const myDays = Object.keys(weekData[myKey]||{}).filter(d=>weekData[myKey][d]);
       const total = 7;
       const cnt = myDays.length;
       const c = g.color||'var(--accent)';
       el.innerHTML += `<span style="background:rgba(255,255,255,0.25);color:white;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap">${(g.name||'')[0]} ${cnt}/${total}</span>`;
-    }
+    });
   }catch(e){}
 }
 
