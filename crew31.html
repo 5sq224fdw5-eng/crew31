@@ -755,6 +755,18 @@ async function dbGetRecent(p, limit=15){
 // 해당 그룹 + 'all' 투표만 인덱스 쿼리로 받게 한다.
 // votes/group 인덱스가 없거나 쿼리 오류면 자동으로 기존 전체읽기로 폴백 -> 절대 안 깨짐.
 async function dbGetVotesForGroup(gid){
+  // 1순위: 최근 2주 투표만 createdAt 인덱스로 받기 (그룹 전체 이력 대신 → 빠르고, 몇 달 쌓여도 안 느려짐).
+  //        모든 그룹의 최근 2주치를 받고, 화면(_render)에서 gid/all + 2주로 필터됨.
+  try{
+    const cutoff = Date.now() - 14*24*60*60*1000;
+    const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`;
+    const controller=new AbortController();
+    const t=setTimeout(()=>controller.abort(),8000);
+    const r=await fetch(url,{signal:controller.signal});
+    clearTimeout(t);
+    if(r.ok){ const j=await r.json(); return j||{}; }
+  }catch{}
+  // 2순위 폴백: createdAt 인덱스 없음/오류 → 그룹 인덱스(그룹+all, 전체 이력)
   const q = async (g)=>{
     try{
       const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"group"')}&equalTo=${encodeURIComponent('"'+g+'"')}`;
