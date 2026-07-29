@@ -3862,9 +3862,12 @@ async function loadDeptPage(gid){
 
   // ── 실제 렌더 로직 (캐시/최신 데이터 공용) ──
   const _render = (votes, _preloadedNotices) => {
+  // 최근 2주만 표시(속도 개선): 오래된 투표는 화면에서 제외. 데이터 자체는 그대로 둠.
+  const _RECENT_MS = 14*24*60*60*1000;
+  const _cutoff = Date.now() - _RECENT_MS;
   let rawList=votes
     ?Object.entries(votes)
-      .filter(([k,v])=>!v.deleted&&(v.group===gid||v.group==='all'))
+      .filter(([k,v])=>!v.deleted&&(v.group===gid||v.group==='all')&&(v.createdAt||0)>=_cutoff)
       .sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0))
     :[];
   // ── 중복 투표 표 합치기 (같은 그룹+제목) ── 데이터는 그대로 두고, 화면 표시용으로만 응답/링크/이미지를 병합
