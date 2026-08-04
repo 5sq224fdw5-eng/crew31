@@ -8096,8 +8096,8 @@ async function loadSettings(){
     ${settingAccordion('lock','🔐 잠금 설정',lockHtml)}
     ${settingAccordion('member','👥 멤버 관리',memberHtml)}
     <div style="margin:10px 0;padding:12px;background:rgba(255,107,157,0.08);border:1px solid rgba(255,107,157,0.35);border-radius:12px">
-      <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">🔧 쭈니맘 부계정 합치기 (일회용)</div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:8px">★좋아요쭈니맘 · ★댓글쭈니맘 · ★시크릿쭈니맘 의 인트라넷 계정·기록을 <b>★쭈니맘</b> 하나로 합칩니다.<br>실행 시 <b>백업 JSON이 먼저 자동 다운로드</b>돼요.</div>
+      <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">🔧 쭈니맘 부계정 정리 (일회용)</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:8px"><b>쭈니맘부</b>의 인트라넷 데이터(투표·출근)를 <b>★쭈니맘</b>으로 옮기고, 비어있는 ★쭈니맘 중복 계정을 정리합니다.<br>오락실 이름(★좋아요쭈니맘 등)도 <b>좋아요★쭈니맘</b> 형식으로 통일해요.<br>실행 시 <b>백업 JSON이 먼저 자동 다운로드</b>돼요.</div>
       <button onclick="mergeJjunimamSub()" style="width:100%;padding:10px;background:linear-gradient(135deg,#FF6B9D,#A78BFA);color:white;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer">🔧 백업 후 합치기 실행</button>
     </div>
     ${settingAccordion('auto','🤖 자동화',autoHtml)}
@@ -8445,14 +8445,14 @@ async function editMemberName(key,current){
 
 // 멤버 닉네임 변경: 이름에 oldNick이 들어간 모든 키를, oldNick→newNick만 치환한 새 키로 이동.
 // 별표·그룹 접두사 등 형태는 그대로 유지됨. memberNewFull = members에 저장할 정식 이름.
-// ── 일회용: 쭈니맘 부계정 3개 → ★쭈니맘 하나로 합치기 (백업 자동 다운로드 포함) ──
+// ── 일회용: 쭈니맘부(데이터 보유) → ★쭈니맘 이동 + 빈 ★쭈니맘 중복 정리 (백업 자동 다운로드) ──
 async function mergeJjunimamSub(){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
-  const TARGET = '★쭈니맘';
-  const OLD = ['★좋아요쭈니맘','★댓글쭈니맘','★시크릿쭈니맘'];
-  if(!confirm(`쭈니맘 부계정 합치기\n\n${OLD.join('\n')}\n → ${TARGET}\n\n인트라넷 계정/출근/투표 기록을 ${TARGET} 하나로 합칩니다.\n먼저 백업 JSON이 자동 다운로드됩니다.\n\n계속할까요?`)) return;
+  const TARGET = '★쭈니맘';           // 최종 로그인 이름
+  const SOURCE = '쭈니맘부';           // 실제 데이터가 들어있는 옛 이름
+  if(!confirm(`쭈니맘 부계정 정리\n\n"${SOURCE}"의 인트라넷 데이터(투표·출근)를\n"${TARGET}"(으)로 옮기고,\n비어있는 ${TARGET} 중복 계정을 정리합니다.\n\n먼저 백업 JSON이 자동 다운로드됩니다.\n계속할까요?`)) return;
   try{
-    // 1) 백업 (인트라넷 전체 스냅샷 다운로드)
+    // 1) 백업
     showToast('🔄 백업 다운로드 중...');
     const snap = await (await fetch(`${DB}.json`)).json();
     const blob = new Blob([JSON.stringify(snap,null,2)], {type:'application/json'});
@@ -8462,40 +8462,42 @@ async function mergeJjunimamSub(){
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
     await new Promise(r=>setTimeout(r, 1000));
-    if(!confirm('백업 파일이 다운로드됐나요?\n\n[확인]을 누르면 합치기를 시작합니다.\n(다운로드 안 됐으면 [취소])')){ showToast('취소됨'); return; }
+    if(!confirm('백업 파일이 다운로드됐나요?\n\n[확인]을 누르면 정리를 시작합니다.\n(다운로드 안 됐으면 [취소])')){ showToast('취소됨'); return; }
 
-    // 2) 인트라넷 members에서 대상 키 찾기
+    // 2) members에서 대상 키 찾기
     const mems = await dbGet('members') || {};
-    const targets = [];
-    for(const k in mems){ if(mems[k] && OLD.includes(mems[k].name)) targets.push({key:k, name:mems[k].name}); }
-    if(targets.length===0){ showToast('⚠️ 합칠 부계정을 못 찾음 (이미 합쳐졌거나 이름이 다름)'); return; }
-
-    // 3) 각 옛 이름의 인트라넷 기록(출근·투표)을 ★쭈니맘으로 이동
-    showToast('🔄 기록 이동 중... (닫지 마세요)');
-    let totalMoved = 0;
-    for(const t of targets){
-      const moved = await migrateMemberName(t.key, t.name, TARGET, TARGET);
-      totalMoved += (moved || 0);
+    let sourceKey = null;                 // 쭈니맘부 (데이터 보유) — 남겨서 ★쭈니맘으로 개명
+    const emptyStarKeys = [];             // 빈 ★쭈니맘들 (삭제 대상)
+    for(const k in mems){
+      const nm = mems[k] && mems[k].name;
+      if(nm === SOURCE) sourceKey = k;
+      else if(nm === TARGET) emptyStarKeys.push(k);
     }
+    if(!sourceKey){ showToast(`⚠️ "${SOURCE}" 계정을 못 찾음 (이미 정리됐거나 이름이 다름)`); return; }
 
-    // 4) 인트라넷 members 정리 — 하나만 ★쭈니맘으로 남기고 나머지 삭제
-    for(let i=1; i<targets.length; i++){ await dbDelete(`members/${targets[i].key}`); }
-    await dbSet(`members/${targets[0].key}/name`, TARGET);
+    // 3) 쭈니맘부 데이터(투표·출근)를 ★쭈니맘으로 이동 + members 이름 개명
+    showToast('🔄 데이터 이동 중... (닫지 마세요)');
+    const moved = await migrateMemberName(sourceKey, SOURCE, TARGET, TARGET);
 
-    // 5) 오락실(루트) 이름 교정: ★시크릿쭈니맘 → 시크릿★쭈니맘 (그룹 인식되게, 이름 필드만)
+    // 4) 비어있던 ★쭈니맘 중복 계정 삭제 (데이터는 이미 sourceKey로 이동됨)
+    for(const k of emptyStarKeys){ await dbDelete(`members/${k}`); }
+
+    // 5) 오락실(루트) 이름 통일: ★좋아요쭈니맘→좋아요★쭈니맘, ★댓글쭈니맘→댓글★쭈니맘, ★시크릿쭈니맘→시크릿★쭈니맘
     let gnFixed = 0;
     try{
+      const fixMap = {'★좋아요쭈니맘':'좋아요★쭈니맘','★댓글쭈니맘':'댓글★쭈니맘','★시크릿쭈니맘':'시크릿★쭈니맘'};
       const gmems = await (await fetch(`${GAME_DB}/members.json`)).json() || {};
       for(const gk in gmems){
-        if(gmems[gk] && gmems[gk].name === '★시크릿쭈니맘'){
-          await fetch(`${GAME_DB}/members/${gk}/name.json`, {method:'PUT', body:JSON.stringify('시크릿★쭈니맘')});
+        const gn = gmems[gk] && gmems[gk].name;
+        if(gn && fixMap[gn]){
+          await fetch(`${GAME_DB}/members/${gk}/name.json`, {method:'PUT', body:JSON.stringify(fixMap[gn])});
           gnFixed++;
         }
       }
     }catch(e){}
 
     _dbCacheClear && _dbCacheClear();
-    showToast(`✅ 완료! 기록 ${totalMoved}건 이동${gnFixed?`, 오락실 시크릿 이름 교정`:''}. 이제 인트라넷에 "${TARGET}"으로 로그인하세요.`);
+    showToast(`✅ 완료! 데이터 ${moved||0}건 → ${TARGET} 이동, 빈 계정 ${emptyStarKeys.length}개 삭제${gnFixed?`, 오락실 이름 ${gnFixed}개 통일`:''}. 이제 "${TARGET}"으로 로그인하세요.`);
     if(typeof loadSettings==='function') loadSettings();
   }catch(e){
     showToast('❌ 실패: '+(e.message||'')+' — 다운받은 백업으로 복구하세요');
