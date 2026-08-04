@@ -5415,28 +5415,55 @@ async function copyPartialLinks(vid){
   const { lines, dateHeader } = _buildVoteLinkLines(v);
   if(lines.length===0){showToast('복사할 내용 없음');return;}
   const total = lines.length;
-  const raw = prompt(`복사할 번호 범위 (총 ${total}개)\n\n예) 1-20  →  1~20번\n예) 5     →  5번만\n예) 10-   →  10번부터 끝까지`, `1-${total}`);
-  if(raw===null) return; // 취소
-  const s = raw.trim();
+  window._partialCopyData = { lines, dateHeader, total };
+  const old=document.getElementById('partialCopyModal'); if(old) old.remove();
+  const m=document.createElement('div');
+  m.id='partialCopyModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:10002;display:flex;align-items:center;justify-content:center;padding:24px';
+  m.innerHTML=`<div style="background:#fff;border-radius:16px;padding:18px;max-width:340px;width:100%;box-sizing:border-box">
+    <div style="font-size:14px;font-weight:800;color:#333;margin-bottom:4px">✂️ 부분 복사</div>
+    <div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:10px">총 ${total}개 · 복사할 번호 범위 입력<br>예) <b>1-20</b> · <b>5</b> · <b>10-</b> (10번부터 끝까지)</div>
+    <input id="partialCopyRange" value="1-${total}" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:15px;outline:none">
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="document.getElementById('partialCopyModal').remove()" style="flex:1;padding:10px;border:none;border-radius:10px;background:#f0f0f0;color:#666;font-weight:700;font-size:13px;cursor:pointer">닫기</button>
+      <button onclick="_doPartialCopy()" style="flex:2;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#FF6B9D,#A78BFA);color:#fff;font-weight:800;font-size:13px;cursor:pointer">📋 이 범위 복사</button>
+    </div>
+  </div>`;
+  m.onclick=(e)=>{ if(e.target===m) m.remove(); };
+  document.body.appendChild(m);
+  setTimeout(()=>{ const i=document.getElementById('partialCopyRange'); if(i){ i.focus(); i.select(); } }, 60);
+}
+
+async function _doPartialCopy(){
+  const data = window._partialCopyData;
+  if(!data){ showToast('데이터 없음 — 다시 시도'); return; }
+  const { lines, dateHeader, total } = data;
+  const inp = document.getElementById('partialCopyRange');
+  const s = (inp ? inp.value : '').trim();
   let start, end;
   const m = s.match(/^(\d+)\s*-\s*(\d+)?$/);
-  if(m){
-    start = parseInt(m[1],10);
-    end = m[2]!==undefined ? parseInt(m[2],10) : total;
-  } else if(/^\d+$/.test(s)){
-    start = end = parseInt(s,10);
-  } else {
-    showToast('형식이 올바르지 않아요 (예: 1-20)');
-    return;
-  }
+  if(m){ start=parseInt(m[1],10); end=(m[2]!==undefined&&m[2]!=='')?parseInt(m[2],10):total; }
+  else if(/^\d+$/.test(s)){ start=end=parseInt(s,10); }
+  else { showToast('형식이 올바르지 않아요 (예: 1-20)'); return; }
   if(start<1) start=1;
   if(end>total) end=total;
   if(start>end){ showToast('범위가 올바르지 않아요'); return; }
   const picked = lines.slice(start-1, end);
   if(picked.length===0){ showToast('해당 범위에 내용 없음'); return; }
   const text = (dateHeader?`${dateHeader}\n\n`:'') + picked.join('\n');
-  await navigator.clipboard.writeText(text);
-  showToast(`✂️ ${start}~${end}번 복사됨 (${picked.length}개)`);
+  let ok=false;
+  try{ await navigator.clipboard.writeText(text); ok=true; }
+  catch(e){
+    try{
+      const ta=document.createElement('textarea'); ta.value=text;
+      ta.style.cssText='position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      ok=document.execCommand('copy'); ta.remove();
+    }catch(e2){ ok=false; }
+  }
+  const modal=document.getElementById('partialCopyModal'); if(modal) modal.remove();
+  if(ok) showToast(`✂️ ${start}~${end}번 복사됨 (${picked.length}개)`);
+  else showToast('복사 실패 — Safari/Chrome 브라우저에서 열어주세요');
 }
 
 async function saveAdminComment(vid){
