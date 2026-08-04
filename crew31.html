@@ -4648,6 +4648,7 @@ async function renderVoteCard(vid,v){
   // 관리자 일괄복사 + 댓글
   if(sortedLinks.length>0){
     html+=`<button onclick="copyAllLinks('${vid}')" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">📋 링크 전체 복사</button>`;
+    html+=`<button onclick="copyPartialLinks('${vid}')" style="width:100%;margin-top:6px;padding:8px;background:var(--surface2);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">✂️ 부분 복사 (번호 범위)</button>`;
   }
   if(isAdmin){
     html+=`<button onclick="adminClearCanceledFlag('${vid}')" style="width:100%;margin-top:6px;padding:8px;background:rgba(93,184,138,0.12);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:#3a9e72">🔓 닉네임으로 취소제한 해제 (노피드만 가능 → 전체 선택지 가능)</button>`;
@@ -5317,10 +5318,8 @@ async function adminDeleteLink(vid, linkKey){
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
-async function copyAllLinks(vid){
-  const v = await dbGet(`votes/${vid}`);
-  if(!v){showToast('링크 없음');return;}
-  // 화면 목록과 동일한 순서/넘버링 재현 (열정페이·노피드·연차 + 링크 그룹핑)
+// 링크 목록 → 화면과 동일한 번호/포맷의 줄 배열 생성 (전체/부분 복사 공용)
+function _buildVoteLinkLines(v){
   const respTimes = v.responseTimes || {};
   const bonusVoters=[];
   if(v.responses && v.options){
@@ -5346,11 +5345,9 @@ async function copyAllLinks(vid){
   const grouped={};
   sortedLinks.forEach(l=>{const nick=l.nick||'';if(!grouped[nick])grouped[nick]={nick,links:[],firstTime:l.time||0};grouped[nick].links.push(l);});
 
-  // 링크를 낸 사람은 bonus 줄에서 제외 (링크 줄에 [연차] 등으로 표시되므로 중복 방지)
   const linkNicks = new Set(Object.keys(grouped));
   const bonusFiltered = bonusVoters.filter(b=>!linkNicks.has(b.nick));
 
-  // 닉네임별 선택지 → 유형 라벨 매핑 (투피드/연차 표시용)
   function _optTextOf(nick){
     if(!v.responses||!v.options) return '';
     const idx=v.responses[nick];
@@ -5361,7 +5358,6 @@ async function copyAllLinks(vid){
     const t=_optTextOf(nick);
     if(t.includes('투피드')||t.includes('두배')) return '투피드';
     if(t.includes('프패')||t.includes('연차')||t.includes('프리패스')) return '연차';
-    // 선택지 정보가 없으면 링크 개수로 보조 판단(투피드는 보통 링크 2개)
     if((links?.length||0)>=2) return '투피드';
     return '';
   }
@@ -5370,7 +5366,7 @@ async function copyAllLinks(vid){
     ...bonusFiltered.map(b=>({type:'bonus',nick:b.nick,label:b.type,time:b.time||0})),
     ...Object.values(grouped).map(g=>({type:'link',nick:g.nick,links:g.links,time:g.firstTime}))
   ].sort((a,b)=>a.time-b.time);
-  if(allEntries.length===0){showToast('복사할 내용 없음');return;}
+
   let num=1;
   const lines=[];
   allEntries.forEach(entry=>{
@@ -5400,9 +5396,47 @@ async function copyAllLinks(vid){
       dateHeader = dateStr;
     }
   }
+  return { lines, dateHeader };
+}
+
+async function copyAllLinks(vid){
+  const v = await dbGet(`votes/${vid}`);
+  if(!v){showToast('링크 없음');return;}
+  const { lines, dateHeader } = _buildVoteLinkLines(v);
+  if(lines.length===0){showToast('복사할 내용 없음');return;}
   const text = (dateHeader?`${dateHeader}\n\n`:'') + lines.join('\n');
   await navigator.clipboard.writeText(text);
   showToast('📋 전체 복사됨');
+}
+
+async function copyPartialLinks(vid){
+  const v = await dbGet(`votes/${vid}`);
+  if(!v){showToast('링크 없음');return;}
+  const { lines, dateHeader } = _buildVoteLinkLines(v);
+  if(lines.length===0){showToast('복사할 내용 없음');return;}
+  const total = lines.length;
+  const raw = prompt(`복사할 번호 범위 (총 ${total}개)\n\n예) 1-20  →  1~20번\n예) 5     →  5번만\n예) 10-   →  10번부터 끝까지`, `1-${total}`);
+  if(raw===null) return; // 취소
+  const s = raw.trim();
+  let start, end;
+  const m = s.match(/^(\d+)\s*-\s*(\d+)?$/);
+  if(m){
+    start = parseInt(m[1],10);
+    end = m[2]!==undefined ? parseInt(m[2],10) : total;
+  } else if(/^\d+$/.test(s)){
+    start = end = parseInt(s,10);
+  } else {
+    showToast('형식이 올바르지 않아요 (예: 1-20)');
+    return;
+  }
+  if(start<1) start=1;
+  if(end>total) end=total;
+  if(start>end){ showToast('범위가 올바르지 않아요'); return; }
+  const picked = lines.slice(start-1, end);
+  if(picked.length===0){ showToast('해당 범위에 내용 없음'); return; }
+  const text = (dateHeader?`${dateHeader}\n\n`:'') + picked.join('\n');
+  await navigator.clipboard.writeText(text);
+  showToast(`✂️ ${start}~${end}번 복사됨 (${picked.length}개)`);
 }
 
 async function saveAdminComment(vid){
