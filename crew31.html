@@ -789,9 +789,11 @@ async function dbSet(p,d,retry=0){
   try{
     const res=await fetch(`${DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});
     if(!res.ok && retry<2){ await new Promise(r=>setTimeout(r,500)); return dbSet(p,d,retry+1); }
+    return !!(res && res.ok);
   }catch(e){
     if(retry<2){ await new Promise(r=>setTimeout(r,500)); return dbSet(p,d,retry+1); }
     console.error('dbSet error',p,e);
+    return false;
   }
 }
 async function dbDelete(p){_dbCacheClear();try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
@@ -4341,6 +4343,12 @@ async function renderVoteCard(vid,v){
       if(isAdmin){
         const confirmed = !!(v.adminConfirm && v.adminConfirm[sanitizedNick]);
         html+=`<button id="confirmBtn_${vid}_${sanitizedNick}" onclick="toggleAdminConfirm('${vid}','${sanitizedNick}')" style="width:100%;padding:7px 4px;border-radius:10px;border:none;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;${confirmed?'background:#5DB88A;color:white':'background:#f1f5f9;color:#94a3b8'}">${confirmed?'✅ 확인완료':'☑ 확인'}</button>`;
+      } else {
+        // 사원: 관리자가 확인완료한 항목은 상태만 표시(누를 수 없음)
+        const confirmed = !!(v.adminConfirm && v.adminConfirm[sanitizedNick]);
+        if(confirmed){
+          html+=`<div style="width:100%;padding:7px 4px;border-radius:10px;font-size:11px;font-weight:700;margin-top:4px;text-align:center;background:#5DB88A;color:white;box-sizing:border-box">✅ 확인완료</div>`;
+        }
       }
       html+=`<div id="${collapseId}" style="display:none;margin-top:6px"></div>`;
       // 이 참여자 사진을 투표 통합 갤러리에 순번대로 추가 (전체화면에서 다음 사람으로 계속 슬라이드)
@@ -4756,33 +4764,35 @@ async function submitVoteLinkNew(vid, silent, preData){
   const displayNick=nick;
   const displayId=linkId;
   const isTupide=type==='tupide';
+  let _ok=true;
 
   if(isTupide){
     const url1 = preData ? (preData.url1||'') : (document.getElementById(`linkUrl_${vid}_1`)?.value.trim());
     const note1= preData ? (preData.note1||'') : (document.getElementById(`linkNote_${vid}_1`)?.value.trim()||'');
     const url2 = preData ? (preData.url2||'') : (document.getElementById(`linkUrl_${vid}_2`)?.value.trim());
     const note2= preData ? (preData.note2||'') : (document.getElementById(`linkNote_${vid}_2`)?.value.trim()||'');
-    if(!url1&&!url2){ if(!silent) showToast('링크를 입력하세요'); return;}
+    if(!url1&&!url2){ if(!silent) showToast('링크를 입력하세요'); return true;}
     if(url1){
       const ex1=await dbGet(`votes/${vid}/links/${key}_1`);
-      await dbSet(`votes/${vid}/links/${key}_1`,{nick:displayNick,id:displayId,url:cleanUrl(url1),note:note1,type,time:ex1?.time||Date.now()});
+      if(!(await dbSet(`votes/${vid}/links/${key}_1`,{nick:displayNick,id:displayId,url:cleanUrl(url1),note:note1,type,time:ex1?.time||Date.now()})))_ok=false;
     }
     if(url2){
       const ex2=await dbGet(`votes/${vid}/links/${key}_2`);
-      await dbSet(`votes/${vid}/links/${key}_2`,{nick:displayNick,id:displayId,url:cleanUrl(url2),note:note2,type,time:ex2?.time||(Date.now()+1)});
+      if(!(await dbSet(`votes/${vid}/links/${key}_2`,{nick:displayNick,id:displayId,url:cleanUrl(url2),note:note2,type,time:ex2?.time||(Date.now()+1)})))_ok=false;
     }
   } else {
     const url = preData ? (preData.url||'') : (document.getElementById(`linkUrl_${vid}`)?.value.trim());
     const note= preData ? (preData.note||'') : (document.getElementById(`linkNote_${vid}`)?.value.trim()||'');
-    if(!url){ if(!silent) showToast('URL을 입력하세요'); return;}
+    if(!url){ if(!silent) showToast('URL을 입력하세요'); return true;}
     const ex=await dbGet(`votes/${vid}/links/${key}`);
-    await dbSet(`votes/${vid}/links/${key}`,{nick:displayNick,id:displayId,url:cleanUrl(url),note,type,time:ex?.time||Date.now()});
+    if(!(await dbSet(`votes/${vid}/links/${key}`,{nick:displayNick,id:displayId,url:cleanUrl(url),note,type,time:ex?.time||Date.now()})))_ok=false;
   }
   if(!silent){
     showToast('✅ 링크 제출됨!');
     if(_currentTab==='home')loadHome();
     else if(_currentTab==='dept')loadDeptPage(_currentDept);
   }
+  return _ok;
 }
 
 async function submitVoteLink(vid, isTupide=false){
@@ -6100,7 +6110,12 @@ async function submitVote(vid){
   }
   // 2) 링크 저장 (미리 읽어둔 preData 사용 — DOM이 사라져도 안전)
   if(!isBonusOnly && preData){
-    await submitVoteLinkNew(vid, true, preData);
+    const _linkOk = await submitVoteLinkNew(vid, true, preData);
+    if(!_linkOk){
+      showToast('⚠️ 링크 저장 실패 — 네트워크 확인 후 링크만 다시 제출해주세요 (선택지는 저장됨)');
+      if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+      return;
+    }
   }
   const _gn = groups[v?.group]?.name || '';
   showSubmitDonePopup(_gn, _voteKindOf(v), 0);
@@ -8080,6 +8095,11 @@ async function loadSettings(){
     `)}
     ${settingAccordion('lock','🔐 잠금 설정',lockHtml)}
     ${settingAccordion('member','👥 멤버 관리',memberHtml)}
+    <div style="margin:10px 0;padding:12px;background:rgba(255,107,157,0.08);border:1px solid rgba(255,107,157,0.35);border-radius:12px">
+      <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">🔧 쭈니맘 부계정 합치기 (일회용)</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:8px">★좋아요쭈니맘 · ★댓글쭈니맘 · ★시크릿쭈니맘 의 인트라넷 계정·기록을 <b>★쭈니맘</b> 하나로 합칩니다.<br>실행 시 <b>백업 JSON이 먼저 자동 다운로드</b>돼요.</div>
+      <button onclick="mergeJjunimamSub()" style="width:100%;padding:10px;background:linear-gradient(135deg,#FF6B9D,#A78BFA);color:white;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer">🔧 백업 후 합치기 실행</button>
+    </div>
     ${settingAccordion('auto','🤖 자동화',autoHtml)}
   </div>`;
 }
@@ -8425,6 +8445,62 @@ async function editMemberName(key,current){
 
 // 멤버 닉네임 변경: 이름에 oldNick이 들어간 모든 키를, oldNick→newNick만 치환한 새 키로 이동.
 // 별표·그룹 접두사 등 형태는 그대로 유지됨. memberNewFull = members에 저장할 정식 이름.
+// ── 일회용: 쭈니맘 부계정 3개 → ★쭈니맘 하나로 합치기 (백업 자동 다운로드 포함) ──
+async function mergeJjunimamSub(){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const TARGET = '★쭈니맘';
+  const OLD = ['★좋아요쭈니맘','★댓글쭈니맘','★시크릿쭈니맘'];
+  if(!confirm(`쭈니맘 부계정 합치기\n\n${OLD.join('\n')}\n → ${TARGET}\n\n인트라넷 계정/출근/투표 기록을 ${TARGET} 하나로 합칩니다.\n먼저 백업 JSON이 자동 다운로드됩니다.\n\n계속할까요?`)) return;
+  try{
+    // 1) 백업 (인트라넷 전체 스냅샷 다운로드)
+    showToast('🔄 백업 다운로드 중...');
+    const snap = await (await fetch(`${DB}.json`)).json();
+    const blob = new Blob([JSON.stringify(snap,null,2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `crew31-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+    await new Promise(r=>setTimeout(r, 1000));
+    if(!confirm('백업 파일이 다운로드됐나요?\n\n[확인]을 누르면 합치기를 시작합니다.\n(다운로드 안 됐으면 [취소])')){ showToast('취소됨'); return; }
+
+    // 2) 인트라넷 members에서 대상 키 찾기
+    const mems = await dbGet('members') || {};
+    const targets = [];
+    for(const k in mems){ if(mems[k] && OLD.includes(mems[k].name)) targets.push({key:k, name:mems[k].name}); }
+    if(targets.length===0){ showToast('⚠️ 합칠 부계정을 못 찾음 (이미 합쳐졌거나 이름이 다름)'); return; }
+
+    // 3) 각 옛 이름의 인트라넷 기록(출근·투표)을 ★쭈니맘으로 이동
+    showToast('🔄 기록 이동 중... (닫지 마세요)');
+    let totalMoved = 0;
+    for(const t of targets){
+      const moved = await migrateMemberName(t.key, t.name, TARGET, TARGET);
+      totalMoved += (moved || 0);
+    }
+
+    // 4) 인트라넷 members 정리 — 하나만 ★쭈니맘으로 남기고 나머지 삭제
+    for(let i=1; i<targets.length; i++){ await dbDelete(`members/${targets[i].key}`); }
+    await dbSet(`members/${targets[0].key}/name`, TARGET);
+
+    // 5) 오락실(루트) 이름 교정: ★시크릿쭈니맘 → 시크릿★쭈니맘 (그룹 인식되게, 이름 필드만)
+    let gnFixed = 0;
+    try{
+      const gmems = await (await fetch(`${GAME_DB}/members.json`)).json() || {};
+      for(const gk in gmems){
+        if(gmems[gk] && gmems[gk].name === '★시크릿쭈니맘'){
+          await fetch(`${GAME_DB}/members/${gk}/name.json`, {method:'PUT', body:JSON.stringify('시크릿★쭈니맘')});
+          gnFixed++;
+        }
+      }
+    }catch(e){}
+
+    _dbCacheClear && _dbCacheClear();
+    showToast(`✅ 완료! 기록 ${totalMoved}건 이동${gnFixed?`, 오락실 시크릿 이름 교정`:''}. 이제 인트라넷에 "${TARGET}"으로 로그인하세요.`);
+    if(typeof loadSettings==='function') loadSettings();
+  }catch(e){
+    showToast('❌ 실패: '+(e.message||'')+' — 다운받은 백업으로 복구하세요');
+  }
+}
 async function migrateMemberName(key, oldNick, newNick, memberNewFull){
   // 한글 NFC/NFD(조합형/분해형) 차이를 흡수하기 위해 비교는 항상 NFC로 정규화해서 한다.
   const nrm = (s)=> (typeof s==='string' ? s.normalize('NFC') : s);
