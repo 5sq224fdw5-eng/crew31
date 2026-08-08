@@ -709,6 +709,7 @@ async function persistSession(){
   try{ localStorage.setItem('crew31User',s); }catch{}
   try{ sessionStorage.setItem('crew31User',s); }catch{}
   try{ document.cookie = `crew31User=${encodeURIComponent(s)};max-age=2592000;path=/`; }catch{}
+  try{ if(window._origMember){ const os=JSON.stringify(window._origMember); localStorage.setItem('crew31Orig',os); sessionStorage.setItem('crew31Orig',os); } else { localStorage.removeItem('crew31Orig'); sessionStorage.removeItem('crew31Orig'); } }catch{}
   try{ await dbSet(`sessions/${getSessionKey()}`,{user:CU,t:Date.now()}); }catch{}
 }
 
@@ -1296,6 +1297,9 @@ async function doLogin(role){
       if(!entry){showToast('등록되지 않은 이름입니다');return;}
       CU={name,role:'member',key:entry[0]};
     }
+    // 새 로그인은 '전환'이 아니므로 관리자 전환 흔적 초기화
+    window._origMember=null;
+    try{ localStorage.removeItem('crew31Orig'); sessionStorage.removeItem('crew31Orig'); }catch{}
     // 로그인 시 이 기기에 '새 세션 ID'를 발급 → 이전 사용자의 서버세션과 완전히 분리
     try{
       const newId=(Date.now().toString(36)+Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10));
@@ -1485,6 +1489,13 @@ async function enterApp(){
   // 주간 참여 현황 헤더 표시 (정의가 뒤쪽 스크립트 블록 → 발화 시점에 평가하도록 화살표+가드)
   setTimeout(()=>{ if(typeof loadHeaderWeeklyAtt==='function') loadHeaderWeeklyAtt(); }, 1000);
   if(roleEl) roleEl.textContent = userRole;
+  // 새로고침/백그라운드 복귀 후에도 '사원 복귀' 버튼 유지: 저장된 원래 사원 정보 복원
+  if(!window._origMember && CU && CU.role==='admin'){
+    try{
+      const _o = localStorage.getItem('crew31Orig') || sessionStorage.getItem('crew31Orig');
+      if(_o){ const _om=JSON.parse(_o); if(_om && _ADMIN_SWITCH_NAMES.includes(_om.name)) window._origMember=_om; }
+    }catch{}
+  }
   // 인사팀 계정 → 관리자 전환 (하트 FAB 내 '관리자' 하트)
   const _swHeart=document.getElementById('adminHeart');
   const _swLbl=document.getElementById('adminSwitchLbl');
@@ -7104,6 +7115,29 @@ async function loadStatusGroup(gid) {
 
   window._statusWeeksCache = window._statusWeeksCache || {};
   window._statusWeeksCache[gid] = weeks;
+
+  // 시크릿 그룹: 오락실에서 '시크릿'으로 시작하는 멤버 전원을 매주 표시 (참여 안 해도 명단 고정)
+  if(gName && gName.indexOf('시크릿')>=0){
+    try{
+      const gm = await gameGet('members') || {};
+      const roster = new Set();
+      Object.values(gm).forEach(m=>{
+        if(!m || !m.name) return;
+        const bare = String(m.name).replace(/[*★]/g,'');   // 별표 제거
+        if(bare.startsWith('시크릿')){
+          const nick = bare.replace(/^시크릿/,'').trim();    // '시크릿' 접두어 제거 → 순수 닉
+          if(nick) roster.add(nick);
+        }
+      });
+      if(roster.size){
+        Object.keys(weeks).forEach(mondayStr=>{
+          roster.forEach(nick=>{
+            if(!weeks[mondayStr].members[nick]) weeks[mondayStr].members[nick] = {};
+          });
+        });
+      }
+    }catch(e){}
+  }
 
   if(Object.keys(weeks).length === 0) {
     el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div>${gName} 데이터 없음</div>`;
