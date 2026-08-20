@@ -759,7 +759,7 @@ async function dbGetVotesForGroup(gid){
   // 1순위: 최근 2주 투표만 createdAt 인덱스로 받기 (그룹 전체 이력 대신 -> 빠르고, 몇 달 쌓여도 안 느려짐).
   //        모든 그룹의 최근 2주치를 받고, 화면(_render)에서 gid/all + 2주로 필터됨.
   try{
-    const cutoff = Date.now() - 14*24*60*60*1000;
+    const cutoff = Date.now() - 5*24*60*60*1000;
     const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`;
     const controller=new AbortController();
     const t=setTimeout(()=>controller.abort(),8000);
@@ -800,7 +800,13 @@ async function dbSet(p,d,retry=0){
 async function dbDelete(p){_dbCacheClear();try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
 async function dbPush(p,d){_dbCacheClear();try{const r=await fetch(`${DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 async function dbDel(p){try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
-async function gameGet(p){try{const r=await fetch(`${GAME_DB}/${p}.json`);return await r.json();}catch{return null;}}
+const _gameGetCache=new Map();
+async function gameGet(p){
+  const now=Date.now();const hit=_gameGetCache.get(p);
+  if(hit && (now-hit.t)<4000) return await hit.pr;
+  const pr=(async()=>{try{const r=await fetch(`${GAME_DB}/${p}.json`);return await r.json();}catch{return null;}})();
+  _gameGetCache.set(p,{t:now,pr});return await pr;
+}
 async function gameSet(p,d){try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});}catch{}}
 async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 // 멀티경로 PATCH(merge): 여러 항목을 요청 1번으로 한꺼번에 갱신 (키에 / 넣으면 하위경로). 성공시 true.
@@ -3890,7 +3896,7 @@ async function loadDeptPage(gid){
   // ── 실제 렌더 로직 (캐시/최신 데이터 공용) ──
   const _render = (votes, _preloadedNotices) => {
   // 최근 2주만 표시(속도 개선): 오래된 투표는 화면에서 제외. 데이터 자체는 그대로 둠.
-  const _RECENT_MS = 14*24*60*60*1000;
+  const _RECENT_MS = 5*24*60*60*1000;
   const _cutoff = Date.now() - _RECENT_MS;
   let rawList=votes
     ?Object.entries(votes)
