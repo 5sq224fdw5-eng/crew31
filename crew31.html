@@ -807,6 +807,46 @@ async function gameGet(p){
   const pr=(async()=>{try{const r=await fetch(`${GAME_DB}/${p}.json`);return await r.json();}catch{return null;}})();
   _gameGetCache.set(p,{t:now,pr});return await pr;
 }
+
+async function cleanExpiredVoteImages(){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  if(!confirm('만료된 인증 이미지를 투표에서 제거합니다.\n먼저 백업 JSON이 자동 다운로드됩니다.\n계속할까요?')) return;
+  try{
+    showToast('🔄 백업 다운로드 중...');
+    const votes = await dbGet('votes') || {};
+    const blob=new Blob([JSON.stringify(votes,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`votes-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    await new Promise(r=>setTimeout(r,1000));
+    if(!confirm('백업 파일이 다운로드됐나요?\n[확인]을 누르면 정리를 시작합니다.')){ showToast('취소됨'); return; }
+    const now=Date.now();
+    let removed=0; const updates={};
+    for(const vid in votes){
+      const v=votes[vid]; if(!v||!v.images) continue;
+      for(const nick in v.images){
+        const arr=v.images[nick]; if(!Array.isArray(arr)) continue;
+        const kept=arr.filter(x=>{
+          if(!x) return false;
+          if(x.url==='연차') return true;
+          if(x.expireAt && x.expireAt<now){ removed++; return false; }
+          return true;
+        });
+        if(kept.length!==arr.length){ updates[`votes/${vid}/images/${nick}`] = kept.length?kept:null; }
+      }
+    }
+    const keys=Object.keys(updates);
+    if(keys.length===0){ showToast('만료된 이미지 없음'); return; }
+    // 큰 PATCH 방지: 300개씩 나눠서 적용
+    for(let i=0;i<keys.length;i+=300){
+      const chunk={}; keys.slice(i,i+300).forEach(k=>chunk[k]=updates[k]);
+      await fetch(`${DB}/.json`,{method:'PATCH',body:JSON.stringify(chunk)});
+    }
+    if(typeof _dbCacheClear==='function') _dbCacheClear();
+    showToast(`✅ 만료 이미지 ${removed}개 제거 완료 (${keys.length}곳)`);
+  }catch(e){ showToast('❌ 실패: '+(e.message||'')+' — 백업으로 복구하세요'); }
+}
+
 async function gameSet(p,d){try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});}catch{}}
 async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 // 멀티경로 PATCH(merge): 여러 항목을 요청 1번으로 한꺼번에 갱신 (키에 / 넣으면 하위경로). 성공시 true.
@@ -8196,6 +8236,11 @@ async function loadSettings(){
     `)}
     ${settingAccordion('lock','🔐 잠금 설정',lockHtml)}
     ${settingAccordion('member','👥 멤버 관리',memberHtml)}
+    <div style="margin:10px 0;padding:12px;background:rgba(93,184,138,0.1);border:1px solid rgba(93,184,138,0.4);border-radius:12px">
+      <div style="font-size:12px;font-weight:800;color:#3a9e72;margin-bottom:6px">🧹 만료 인증 이미지 정리 (요금 절감)</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:8px">만료일(expireAt) 지난 인증 이미지를 투표에서 제거해 데이터 크기를 줄입니다. 실행 시 <b>백업 JSON 자동 다운로드</b>.</div>
+      <button onclick="cleanExpiredVoteImages()" style="width:100%;padding:10px;background:linear-gradient(135deg,#5DB88A,#3a9e72);color:white;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer">🧹 백업 후 만료 이미지 정리</button>
+    </div>
     <div style="margin:10px 0;padding:12px;background:rgba(255,107,157,0.08);border:1px solid rgba(255,107,157,0.35);border-radius:12px">
       <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">🔧 쭈니맘 부계정 정리 (일회용)</div>
       <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:8px"><b>쭈니맘부</b>의 인트라넷 데이터(투표·출근)를 <b>★쭈니맘</b>으로 옮기고, 비어있는 ★쭈니맘 중복 계정을 정리합니다.<br>오락실 이름(★좋아요쭈니맘 등)도 <b>좋아요★쭈니맘</b> 형식으로 통일해요.<br>실행 시 <b>백업 JSON이 먼저 자동 다운로드</b>돼요.</div>
