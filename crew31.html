@@ -3337,6 +3337,10 @@ async function loadLeave(){
         html+=`<button onclick="quickPrize('${k}','${escH(realName)}','☕','투피드')" style="flex:1;padding:7px;background:rgba(255,179,71,0.12);color:var(--gold);border:none;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer">☕투피드</button>`;
         html+=`<button onclick="customPrize('${k}','${escH(realName)}')" style="flex:1;padding:7px;background:var(--surface2);color:var(--text2);border:none;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer">직접</button>`;
         html+=`</div>`;
+        // 출근확인증 사용 → 오늘 출석을 '확인증'으로 기록 (현황·풀참 자동 반영)
+        html+=`<div style="display:flex;gap:6px;margin-top:6px">`;
+        html+=`<button onclick="useAttendCert('${k}','${escH(realName)}','${gid}')" style="flex:1;padding:8px;background:rgba(255,133,193,0.14);color:#d1477f;border:1px solid rgba(255,133,193,0.4);border-radius:10px;font-size:11px;font-weight:800;cursor:pointer">📋 출근확인증 사용 (오늘 출석 인정)</button>`;
+        html+=`</div>`;
       }
 
       // 경품 + 수동연차 통합 내역 → 받음(+)/사용(-) 이벤트 타임라인 + 종류별 잔액 누적
@@ -3495,6 +3499,31 @@ async function togglePrizeUsed(memberKey, prizeIdx, newDeducted){
   await gameSet(`memberPrizes/${memberKey}`,arr);
   showToast(newDeducted?'✅ 사용완료 처리':'↩️ 미사용으로 변경');
   loadLeave();
+}
+
+// 출근확인증 사용 → 오늘 출석을 '확인증'으로 기록. 현황이 attendance를 우선 사용하므로 풀참에 자동 포함됨.
+async function useAttendCert(gameKey, realName, gid){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  if(!gid){ showToast('그룹 정보를 찾을 수 없어요'); return; }
+  const today = todayStr;
+  const wk = getWeekKey(today);
+  if(!confirm(`${realName} 님의 오늘(${today}) 출석을 '확인증'으로 인정할까요?\n현황·풀참에 자동 반영됩니다.`)) return;
+  try{
+    await dbSet(`attendance/${gid}/${wk}/${realName}/${today}`, '확인증');
+    // 보유한 '확인증' 경품 1개 사용 처리 (있으면 차감)
+    const raw = await gameGet(`memberPrizes/${gameKey}`);
+    const arr = Array.isArray(raw)?raw:(raw?Object.values(raw):[]);
+    const idx = arr.findIndex(p=>p&&!p.deducted&&String(p.name||'').includes('확인증'));
+    if(idx>=0){
+      arr[idx]={...arr[idx],deducted:true,usedDate:today,deductDate:today};
+      await gameSet(`memberPrizes/${gameKey}`,arr);
+      showToast('📋 출근확인증 사용 — 오늘 출석 확인증 처리 (경품 1개 차감)');
+    } else {
+      showToast('📋 오늘 출석 확인증 처리됨 (보유 확인증 경품 없음)');
+    }
+    if(typeof _dbCacheClear==='function') _dbCacheClear();
+    if(typeof loadLeave==='function') loadLeave();
+  }catch(e){ showToast('실패: '+(e.message||'')); }
 }
 
 // ══════════════════════════════════════════════
@@ -4815,7 +4844,9 @@ function showIgIdError(err){
 }
 async function submitVoteLinkNew(vid, silent, preData){
   const nick=CU?.name||'익명';
-  const key=CU?.key||'admin';
+  let key=CU?.key||'';
+  if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
+  if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
   // preData가 있으면 DOM 대신 그 값을 사용 (castVote가 화면을 다시 그려도 안전)
   const type = preData ? (preData.type||'normal') : (document.getElementById(`linkType_${vid}`)?.value||'normal');
   const linkId = preData ? (preData.id||'') : (document.getElementById(`linkId_${vid}`)?.value.trim()||'');
@@ -4855,7 +4886,9 @@ async function submitVoteLinkNew(vid, silent, preData){
 
 async function submitVoteLink(vid, isTupide=false){
   const nick=CU?.name||'익명';
-  const key=CU?.key||'admin';
+  let key=CU?.key||'';
+  if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
+  if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
   const linkId=document.getElementById(`linkId_${vid}`)?.value.trim()||'';
   const displayNick = linkId || nick;
   if(isTupide){
@@ -4887,7 +4920,9 @@ async function submitVoteLink(vid, isTupide=false){
 // 투피드 변경 시 2번째 링크만 추가 제출 (1번은 잠금 유지)
 async function submitTupide2(vid){
   const nick=CU?.name||'익명';
-  const key=CU?.key||'admin';
+  let key=CU?.key||'';
+  if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
+  if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
   const linkId=document.getElementById(`linkId_${vid}`)?.value.trim()||'';
   const url2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
   if(!url2){ showToast('2번째 링크를 입력하세요'); return; }
@@ -5894,7 +5929,9 @@ async function cancelVoteFor(vid, myKey, linkKey){
 
 async function _cancelVote_OLD(vid){
   const myKey=CU?.name||CU?.key||'admin';
-  const key=CU?.key||'admin';
+  let key=CU?.key||'';
+  if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
+  if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
   const v=await dbGet(`votes/${vid}`);
 
   let wasLeave=false, wasTupide=false;
@@ -6701,7 +6738,9 @@ async function castVote(vid,optIdx,skipRerender){
     }
     // 투피드 → 다른 선택지: 링크 삭제 (경품 정합은 아래 reconcileTupide에서 처리)
     if(wasTupide && !isTupideOpt){
-      const key=CU?.key||'admin';
+      let key=CU?.key||'';
+  if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
+  if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
       await dbDelete(`votes/${vid}/links/${key}_1`);
       await dbDelete(`votes/${vid}/links/${key}_2`);
       await dbDelete(`votes/${vid}/links/${key}`);
