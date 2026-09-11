@@ -1518,6 +1518,10 @@ async function logout(){
 }
 
 async function enterApp(){
+  // 세션 복원 등으로 이름이 비어 들어온 경우 members에서 복구 → 응답/링크가 '익명'으로 분리 저장되는 것 방지
+  if(CU && !CU.name && CU.key){
+    try{ const _m=await dbGet('members'); if(_m && _m[CU.key] && _m[CU.key].name){ CU.name=_m[CU.key].name; await persistSession(); } }catch(e){}
+  }
   document.getElementById('loginPage').style.display='none';
   document.getElementById('app').style.display='flex';
 
@@ -4843,7 +4847,9 @@ function showIgIdError(err){
   else showBigAlert('🚫','아이디 형식 오류','인스타그램 아이디는 영문·숫자·\n밑줄(_)·마침표(.)만 가능해요.\n(예: narin_a.to)');
 }
 async function submitVoteLinkNew(vid, silent, preData){
-  const nick=CU?.name||'익명';
+  let nick=CU?.name||'';
+  if(!nick && CU?.key){ try{ const _m=await dbGet('members'); nick=(_m&&_m[CU.key]&&_m[CU.key].name)||''; if(nick&&CU){CU.name=nick;} }catch(e){} }
+  if(!nick){ showToast('⚠️ 로그인 정보 확인이 필요해요 — 새로고침 후 다시 제출'); return; }
   let key=CU?.key||'';
   if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
   if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
@@ -4885,7 +4891,9 @@ async function submitVoteLinkNew(vid, silent, preData){
 }
 
 async function submitVoteLink(vid, isTupide=false){
-  const nick=CU?.name||'익명';
+  let nick=CU?.name||'';
+  if(!nick && CU?.key){ try{ const _m=await dbGet('members'); nick=(_m&&_m[CU.key]&&_m[CU.key].name)||''; if(nick&&CU){CU.name=nick;} }catch(e){} }
+  if(!nick){ showToast('⚠️ 로그인 정보 확인이 필요해요 — 새로고침 후 다시 제출'); return; }
   let key=CU?.key||'';
   if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
   if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
@@ -4919,7 +4927,9 @@ async function submitVoteLink(vid, isTupide=false){
 
 // 투피드 변경 시 2번째 링크만 추가 제출 (1번은 잠금 유지)
 async function submitTupide2(vid){
-  const nick=CU?.name||'익명';
+  let nick=CU?.name||'';
+  if(!nick && CU?.key){ try{ const _m=await dbGet('members'); nick=(_m&&_m[CU.key]&&_m[CU.key].name)||''; if(nick&&CU){CU.name=nick;} }catch(e){} }
+  if(!nick){ showToast('⚠️ 로그인 정보 확인이 필요해요 — 새로고침 후 다시 제출'); return; }
   let key=CU?.key||'';
   if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
   if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
