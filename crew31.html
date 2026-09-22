@@ -6050,6 +6050,7 @@ async function recomputeAttendance(gid, date, myKey){
     const allVotes = await dbGet('votes') || {};
     let startResult=null, endResult=null;
     let startVoteExists=false; // 그날 그룹에 시작투표가 존재하는지
+    let endVoteExists=false;   // 그날 그룹에 완료투표가 존재하는지
     for(const sv of Object.values(allVotes)){
       if(!sv || sv.deleted || sv.group!==gid) continue;
       let sdate = getTitleDate(sv) || sv.date;
@@ -6060,6 +6061,7 @@ async function recomputeAttendance(gid, date, myKey){
       const sIsStart=title.includes('시작')||title.includes('출근');
       const sIsEnd=!sIsStart && (title.includes('완료')||title.includes('퇴근')||title.includes('마감'));
       if(sIsStart) startVoteExists=true;
+      if(sIsEnd) endVoteExists=true;
       let r=(idx!==undefined&&idx!==null)?mapVoteResult((sv.options||[])[idx]||''):null;
       if(sIsEnd && sImgs.length>0 && !r) r='완료';
       if(sIsStart && r!==null) startResult=r;
@@ -6075,7 +6077,12 @@ async function recomputeAttendance(gid, date, myKey){
       const special=['봉사','노피드','투피드'].find(s=>s===endResult);
       finalResult=special||'완료';
     } else if(startResult||endResult){
-      finalResult='참여'; // 시작/완료 중 하나만 (둘 다 있어야 하는 날)
+      // 한 번만 하면 되는 특수선택지(노피드/봉사) → 그대로 확정 (노피드는 풀참 반영)
+      const _one=['노피드','봉사'].find(s=>s===startResult||s===endResult);
+      if(_one) finalResult=_one;
+      // 참여(출근)만 하고 완료투표 안 함 → 지각
+      else if(startResult && !endResult && endVoteExists) finalResult='지각';
+      else finalResult='참여'; // 시작/완료 중 하나만 (둘 다 있어야 하는 날)
     } else finalResult=null;
     if(finalResult) await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
     else await dbDelete(`attendance/${gid}/${mondayStr}/${myKey}/${date}`);
@@ -6531,7 +6538,7 @@ async function castVote(vid,optIdx,skipRerender){
   window._castVotingAt = nowTs;
   window._castVoteOK = true; // 기본 통과. 정원초과·연차소진 등 막는 지점에서만 false로 바꿈
   const myKey=CU?.name||CU?.key||'admin';
-  const _voteStartUser=CU?.name||CU?.key||'admin'; // 시작 시점 사용자 고정
+  const _voteStartUser=CU?.key||CU?.name||'admin'; // 시작 시점 사용자 고정 (안 바뀌는 key 우선)
   const v=await dbGet(`votes/${vid}`);
   if(!v){showToast('투표를 찾을 수없습니다');window._castVoting=false;return;}
   if(v.closed){showToast('마감된 투표입니다');window._castVoting=false;return;}
@@ -6758,9 +6765,10 @@ async function castVote(vid,optIdx,skipRerender){
   }
 
   // 저장 직전: 처리 중 로그인 사용자가 바뀌지 않았는지 확인 (세션 꼬임 방지)
-  const _nowUser=CU?.name||CU?.key||'admin';
+  const _nowUser=CU?.key||CU?.name||'admin';
   if(_nowUser!==_voteStartUser){
     showToast('⚠️ 로그인 정보가 바뀌었어요. 다시 로그인 후 투표해주세요');
+    window._castVoteOK=false;   // ★ 응답 저장 실패 → 링크도 저장 안 되게 (응답없는 고아 링크 방지)
     window._castVoting=false;
     return;
   }
@@ -7171,6 +7179,7 @@ async function loadStatusGroup(gid) {
     }
     const didStartV = {};      // 시작투표 참여
     const dutyStartV = {};     // 시작투표에서 당직 선택 (과거 데이터 '참여' 보정용)
+    const specialStartV = {};  // 시작투표에서 노피드/봉사/투피드 선택 → 현황에 그 값으로 확정
     if(votes){
       Object.values(votes).forEach(v=>{
         if(!v || v.deleted || v.group!==gid || !v.date) return;
@@ -7179,7 +7188,9 @@ async function loadStatusGroup(gid) {
         Object.entries(v.responses||{}).forEach(([mkey,idx])=>{
           const nm=keyToName[mkey]||mkey;
           didStartV[`${dd}__${nm}`]=true;
-          if(((v.options||[])[idx]||'').toLowerCase().includes('당직')) dutyStartV[`${dd}__${nm}`]=true;
+          const _sr = mapVoteResult((v.options||[])[idx]||'');
+          if(_sr==='당직') dutyStartV[`${dd}__${nm}`]=true;
+          if(_sr==='노피드'||_sr==='봉사'||_sr==='투피드') specialStartV[`${dd}__${nm}`]=_sr;
         });
       });
     }
@@ -7193,12 +7204,21 @@ async function loadStatusGroup(gid) {
           // 당직은 무조건 당직 (과거 '참여'로 저장된 데이터 보정) — 출근으로 집계
           if(dutyStartV[k]){ dmap[date]='당직'; return; }
           const noEndVote = !endExistsByDate[date]; // 그날 완료투표가 아예 없음
+          // 시작투표에서 노피드/봉사/투피드 선택 → 그 값으로 확정 (과거 '참여'로 저장된 것도 보정)
+          const _sp = specialStartV[k];
+          if(_sp){
+            if(_sp==='투피드' && !noEndVote && !didEndV[k]) dmap[date]='투피드·미완료'; // 투피드는 완료해야 인정
+            else dmap[date]=_sp;   // 노피드/봉사 및 완료한 투피드 → 그대로 (노피드는 풀참 반영)
+            return;
+          }
           if((val==='참여'||val==='시작')){
             if(!hasResp[k]){ delete dmap[date]; return; } // 취소 유령 → 빈칸
             // 시작투표 없는 날(옛 방식) 완료투표 응답자 → 완료
             if(!startExistsByDate[date] && didEndV[k]) dmap[date]='완료';
             // 시작+완료 둘 다 응답 → 완료 승격
             else if(didStartV[k] && didEndV[k]) dmap[date]='완료';
+            // 시작(참여)만 하고 완료투표 안 함 → 지각 (그날 완료투표가 있는데도 미완료)
+            else if(didStartV[k] && !didEndV[k] && !noEndVote) dmap[date]='지각';
           } else if(['봉사','투피드','노피드'].includes(val)){
             // 완료투표 있는 날인데 완료투표 미참여 → 미완료(연하게)
             if(!noEndVote && !didEndV[k]) dmap[date] = val+'·미완료';
@@ -7651,7 +7671,12 @@ async function recordAttendance(vid, optIdx, voterKey) {
       const special=['봉사','노피드','투피드'].find(s=>s===endResult);
       finalResult = special || '완료';
     } else if(startResult || endResult){
-      finalResult = '참여';                      // 둘 다 있는 날인데 하나만 → 미완료
+      // 한 번만 하면 되는 특수선택지(노피드/봉사)는 그대로 확정 → 노피드는 풀참 반영
+      const _one=['노피드','봉사'].find(s=>s===startResult||s===endResult);
+      if(_one) finalResult=_one;
+      // 참여(출근)만 하고 완료투표 안 함 → 지각
+      else if(startResult && !endResult && endVoteExists) finalResult='지각';
+      else finalResult = '참여';
     } else {
       finalResult = null;
     }
