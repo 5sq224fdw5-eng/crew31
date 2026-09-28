@@ -6079,10 +6079,8 @@ async function recomputeAttendance(gid, date, myKey){
     } else if(startResult||endResult){
       // 한 번만 하면 되는 특수선택지(노피드/봉사) → 그대로 확정 (노피드는 풀참 반영)
       const _one=['노피드','봉사'].find(s=>s===startResult||s===endResult);
-      if(_one) finalResult=_one;
-      // 참여(출근)만 하고 완료투표 안 함 → 지각
-      else if(startResult && !endResult && endVoteExists) finalResult='지각';
-      else finalResult='참여'; // 시작/완료 중 하나만 (둘 다 있어야 하는 날)
+      // 지각은 저장 안 함 → 현황 화면에서 완료투표 '마감 후'에만 자동 판정
+      finalResult = _one || '참여'; // 시작/완료 중 하나만 (둘 다 있어야 하는 날)
     } else finalResult=null;
     if(finalResult) await dbSet(`attendance/${gid}/${mondayStr}/${myKey}/${date}`, finalResult);
     else await dbDelete(`attendance/${gid}/${mondayStr}/${myKey}/${date}`);
@@ -7156,6 +7154,7 @@ async function loadStatusGroup(gid) {
     const didEndV = {};        // 완료투표(또는 이미지) 참여
     const startExistsByDate = {}; // 그 날짜에 시작투표가 존재하는지
     const endExistsByDate = {};   // 그 날짜에 완료투표가 존재하는지
+    const endOpenByDate = {};     // 그 날짜에 아직 진행 중(마감 전)인 완료투표가 있는지 → 있으면 지각 판정 보류
     if(votes){
       Object.values(votes).forEach(v=>{
         if(!v || v.deleted || v.group!==gid || !v.date) return;
@@ -7164,7 +7163,13 @@ async function loadStatusGroup(gid) {
         const isStart = t.includes('시작')||t.includes('출근');
         const isEnd = !isStart && (t.includes('완료')||t.includes('퇴근')||t.includes('마감')||v.imageUpload);
         if(isStart) startExistsByDate[dd]=true;
-        if(isEnd) endExistsByDate[dd]=true;
+        if(isEnd){
+          endExistsByDate[dd]=true;
+          // 완료투표 마감 시각(v.date+v.time) 아직 안 지났고 수동 마감도 아니면 → 진행중
+          const _dl = (v.date&&v.time) ? new Date(v.date+'T'+v.time).getTime() : 0;
+          const _closed = v.closed || (_dl && Date.now() > _dl);
+          if(!_closed) endOpenByDate[dd]=true;
+        }
         Object.keys(v.responses||{}).forEach(mkey=>{
           const nm=keyToName[mkey]||mkey;
           hasResp[`${dd}__${nm}`]=true;
@@ -7207,21 +7212,23 @@ async function loadStatusGroup(gid) {
           // 시작투표에서 노피드/봉사/투피드 선택 → 그 값으로 확정 (과거 '참여'로 저장된 것도 보정)
           const _sp = specialStartV[k];
           if(_sp){
-            if(_sp==='투피드' && !noEndVote && !didEndV[k]) dmap[date]='투피드·미완료'; // 투피드는 완료해야 인정
+            if(_sp==='투피드' && !noEndVote && !endOpenByDate[date] && !didEndV[k]) dmap[date]='투피드·미완료'; // 투피드는 완료해야 인정(마감 후에만 미완료 표시)
             else dmap[date]=_sp;   // 노피드/봉사 및 완료한 투피드 → 그대로 (노피드는 풀참 반영)
             return;
           }
-          if((val==='참여'||val==='시작')){
+          if((val==='참여'||val==='시작'||val==='지각')){
             if(!hasResp[k]){ delete dmap[date]; return; } // 취소 유령 → 빈칸
             // 시작투표 없는 날(옛 방식) 완료투표 응답자 → 완료
             if(!startExistsByDate[date] && didEndV[k]) dmap[date]='완료';
             // 시작+완료 둘 다 응답 → 완료 승격
             else if(didStartV[k] && didEndV[k]) dmap[date]='완료';
-            // 시작(참여)만 하고 완료투표 안 함 → 지각 (그날 완료투표가 있는데도 미완료)
-            else if(didStartV[k] && !didEndV[k] && !noEndVote) dmap[date]='지각';
+            // 시작(참여)만 하고 완료투표 안 함 → 지각. 단, 완료투표가 마감된 뒤에만(진행 중이면 보류)
+            else if(didStartV[k] && !didEndV[k] && !noEndVote && !endOpenByDate[date]) dmap[date]='지각';
+            // 그 외(완료투표 진행 중 / 완료함 등) → 참여로 (성급한 지각 잔존 방지)
+            else dmap[date]='참여';
           } else if(['봉사','투피드','노피드'].includes(val)){
-            // 완료투표 있는 날인데 완료투표 미참여 → 미완료(연하게)
-            if(!noEndVote && !didEndV[k]) dmap[date] = val+'·미완료';
+            // 완료투표 있는 날인데 완료투표 미참여 → 미완료(연하게). 단, 마감된 뒤에만(진행 중이면 보류)
+            if(!noEndVote && !endOpenByDate[date] && !didEndV[k]) dmap[date] = val+'·미완료';
           }
         });
       });
@@ -7673,10 +7680,8 @@ async function recordAttendance(vid, optIdx, voterKey) {
     } else if(startResult || endResult){
       // 한 번만 하면 되는 특수선택지(노피드/봉사)는 그대로 확정 → 노피드는 풀참 반영
       const _one=['노피드','봉사'].find(s=>s===startResult||s===endResult);
-      if(_one) finalResult=_one;
-      // 참여(출근)만 하고 완료투표 안 함 → 지각
-      else if(startResult && !endResult && endVoteExists) finalResult='지각';
-      else finalResult = '참여';
+      // 지각은 저장하지 않음 → 현황 화면에서 완료투표 '마감 후'에만 자동 판정(진행 중 오판 방지)
+      finalResult = _one || '참여';
     } else {
       finalResult = null;
     }
