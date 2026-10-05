@@ -1,3 +1,5 @@
+인트라넷 코드
+
 <!DOCTYPE html>
 
 <html lang="ko">
@@ -1530,7 +1532,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.연차차단1005' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.취소제한해제' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -3274,13 +3276,11 @@ async function loadLeave(){
     const stock=m.stock||0;
     const manualLeave=allMemberLeave?.[k]||0;
     const prizes=(allMemberPrizes[k]||[]).filter(p=>p&&(p.name||p.emoji));
+    // 경품 연차(미사용) 수 + 수동 연차 = 총 연차
+    const prizeLeaveCount=prizes.filter(p=>!p.deducted&&(p.name||'').includes('연차')).length;
+    const leave=manualLeave+prizeLeaveCount;
     // 수동 연차 사용/지급 로그 (사용일 표시용)
     const logRaw=allLeaveLog?.[k];
-    // 경품 연차(미사용·미만료) 수 + 수동 연차(만료분 제외) = 실제 잔여 연차 (오락실과 동일 기준)
-    let _expP=0; if(logRaw) Object.values(logRaw).forEach(l=>{ if(l&&l.type==='give'&&!l.deducted&&l.expiry&&_leaveIsExpired(l.expiry)) _expP+=(l.amount||0); });
-    const _usableManual=Math.max(0, manualLeave-_expP);
-    const prizeLeaveCount=prizes.filter(p=>!p.deducted&&(p.name||'').includes('연차')&&!_leaveIsExpired(p.expiry)&&!(p.expireAt&&Date.now()>p.expireAt)).length;
-    const leave=_usableManual+prizeLeaveCount;
     const leaveLogs=logRaw?Object.values(logRaw).sort((a,b)=>(b.time||0)-(a.time||0)):[];
     (byGroup[group||'기타']).push({key:k,realName:realName||cleanName,color,stock,leave,manualLeave,prizes,leaveLogs});
   });
@@ -6108,15 +6108,6 @@ async function _gameKeyFor(myKey, group){
 
 // 연차 현황: 수동(memberLeave 숫자) + 경품 연차(memberPrizes 중 이름에 '연차') 합산.
 // 가장 오래 적립된 출처를 판별해서 차감 순서를 정함.
-// 만료일(날짜 문자열 YYYY-MM-DD 등) 지났는지 — game.html과 동일 규칙
-function _leaveIsExpired(expiry){
-  if(!expiry) return false;
-  const m=String(expiry).match(/(\d{2,4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
-  if(!m) return false;
-  let y=+m[1]; if(y<100) y+=2000;
-  const exp=new Date(y,+m[2]-1,+m[3],23,59,59).getTime();
-  return Date.now()>exp;
-}
 async function _leaveInfo(gmKey){
   const [manualRaw, prizesRaw, logRaw] = await Promise.all([
     gameGet(`memberLeave/${gmKey}`),
@@ -6124,21 +6115,13 @@ async function _leaveInfo(gmKey){
     gameGet(`leaveLog/${gmKey}`)
   ]);
   const manual = manualRaw||0;
-  // 만료됐지만 아직 자동소진 안 된 수동연차(leaveLog give) 금액 → memberLeave에서 빼야 실제 잔여
-  let _expiredPending = 0;
-  if(logRaw){
-    Object.values(logRaw).forEach(l=>{
-      if(l && l.type==='give' && !l.deducted && l.expiry && _leaveIsExpired(l.expiry)) _expiredPending += (l.amount||0);
-    });
-  }
-  const usableManual = Math.max(0, manual - _expiredPending);
   const isArr = Array.isArray(prizesRaw);
   const prizeUnits = prizesRaw
     ? (isArr ? prizesRaw.map((p,i)=>({p,ref:i})) : Object.entries(prizesRaw).map(([k,p])=>({p,ref:k})))
     : [];
   const leavePrizes = prizeUnits
-    .filter(x=>x.p&&!x.p.deducted&&(x.p.name||'').includes('연차') && !_leaveIsExpired(x.p.expiry) && !(x.p.expireAt && Date.now()>x.p.expireAt))
-    .sort((a,b)=>(a.p.time||0)-(b.p.time||0)); // 오래된 순(만료분 제외)
+    .filter(x=>x.p&&!x.p.deducted&&(x.p.name||'').includes('연차'))
+    .sort((a,b)=>(a.p.time||0)-(b.p.time||0)); // 오래된 순
   const oldestPrizeTime = leavePrizes.length ? (leavePrizes[0].p.time||0) : Infinity;
   // 수동 연차 최초 적립 시각(give 로그 중 가장 이른 것). 기록 없으면 0(가장 오래된 것으로 간주)
   let manualRepTime = Infinity;
@@ -6149,8 +6132,7 @@ async function _leaveInfo(gmKey){
       if(gives.length) manualRepTime = Math.min(...gives.map(l=>l.time));
     }
   }
-  // total = 실제 쓸 수 있는 연차(만료분 제외) → 보유 체크·차단에 사용
-  return {manual, usableManual, isArr, prizesRaw, leavePrizes, oldestPrizeTime, manualRepTime, total: usableManual + leavePrizes.length};
+  return {manual, isArr, prizesRaw, leavePrizes, oldestPrizeTime, manualRepTime, total: manual + leavePrizes.length};
 }
 
 // 투피드 경품 정합: 같은 날(dayKey)·같은 그룹에서 이 멤버가 투피드를 고른 투표가
@@ -6650,14 +6632,6 @@ async function castVote(vid,optIdx,skipRerender){
       const clean=(m.name||'').replace(/^\*/,'');
       return clean===myKey;
     });
-    // 보조: ★부계정(그룹★닉) — 로그인이 ★닉 또는 닉일 때, 오락실 '그룹★닉'/'★닉'/'닉'을 ★경계로 안전하게 매칭
-    if(!hit){
-      const bare = myKey.replace(/^[★*]/,'');
-      if(bare) hit = entries.find(([k,m])=>{
-        const clean=(m.name||'').replace(/^\*/,'');
-        return clean===bare || clean==='★'+bare || clean.endsWith('★'+bare);
-      });
-    }
     return hit?hit[0]:null;
   }
 
@@ -6685,20 +6659,14 @@ async function castVote(vid,optIdx,skipRerender){
         window._castVoteOK=false; window._castVoting=false; return;
       }
     }catch(e){}
-    // ② 본인 보유 연차 확인 — 오락실 계정을 못 찾으면 연차 0으로 간주해 막음(이전엔 그냥 통과되던 버그)
+    // ② 본인 보유 연차 확인
     try{
       const gmKey=await _findGameKey();
-      if(!gmKey){
-        showBigAlert('🏖️','연차를 쓸 수 없어요','오락실에서 회원 정보를 찾지 못했어요.\n(닉네임이 오락실과 다르거나 미등록)\n보유 연차를 확인할 수 없어 연차 신청을 막았어요.\n인사팀에 문의해 주세요.');
-        window._castVoteOK=false; window._castVoting=false; return;
+      if(gmKey){
+        const info=await _leaveInfo(gmKey);
+        if(info.total<=0){showToast('⚠️ 보유 연차가 없어요. 다른 선택지를 골라주세요!');window._castVoteOK=false; window._castVoting=false;return;}
       }
-      const info=await _leaveInfo(gmKey);
-      if(info.total<=0){showToast('⚠️ 보유 연차가 없어요. 다른 선택지를 골라주세요!');window._castVoteOK=false; window._castVoting=false;return;}
-    }catch(e){
-      // 확인 중 오류 → 안전하게 막음(연차는 남발되면 안 되므로)
-      showToast('⚠️ 연차 확인 중 오류 — 잠시 후 다시 시도해주세요');
-      window._castVoteOK=false; window._castVoting=false; return;
-    }
+    }catch(e){}
   }
   if(isTupideOpt && !wasTupide){
     try{
