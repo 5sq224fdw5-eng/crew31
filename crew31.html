@@ -821,7 +821,7 @@ async function cleanExpiredVoteImages(){
     await new Promise(r=>setTimeout(r,1000));
     if(!confirm('백업 파일이 다운로드됐나요?\n[확인]을 누르면 정리를 시작합니다.')){ showToast('취소됨'); return; }
     const now=Date.now();
-    let removed=0; const updates={};
+    let removed=0; const updates={}; const _trashIds=[];
     for(const vid in votes){
       const v=votes[vid]; if(!v||!v.images) continue;
       for(const nick in v.images){
@@ -829,7 +829,7 @@ async function cleanExpiredVoteImages(){
         const kept=arr.filter(x=>{
           if(!x) return false;
           if(x.url==='연차') return true;
-          if(x.expireAt && x.expireAt<now){ removed++; return false; }
+          if(x.expireAt && x.expireAt<now){ removed++; if(x.publicId)_trashIds.push(x.publicId); return false; }
           return true;
         });
         if(kept.length!==arr.length){ updates[`votes/${vid}/images/${nick}`] = kept.length?kept:null; }
@@ -837,6 +837,8 @@ async function cleanExpiredVoteImages(){
     }
     const keys=Object.keys(updates);
     if(keys.length===0){ showToast('만료된 이미지 없음'); return; }
+    // Cloudinary 삭제 대기열에 올림 (워커가 실제 사진 삭제)
+    await _queueCloudinaryDelete(_trashIds);
     // 큰 PATCH 방지: 300개씩 나눠서 적용
     for(let i=0;i<keys.length;i+=300){
       const chunk={}; keys.slice(i,i+300).forEach(k=>chunk[k]=updates[k]);
@@ -847,6 +849,16 @@ async function cleanExpiredVoteImages(){
   }catch(e){ showToast('❌ 실패: '+(e.message||'')+' — 백업으로 복구하세요'); }
 }
 
+// Cloudinary 삭제 대기열 — 앱은 시크릿이 없어 Cloudinary 사진을 직접 못 지움.
+// 삭제 시 publicId를 여기(cldTrash)에 넣어두면, 매일 도는 워커가 보고 Cloudinary에서 실제 삭제함.
+async function _queueCloudinaryDelete(publicIds){
+  try{
+    const ids=[...new Set((publicIds||[]).filter(Boolean))];
+    for(const pid of ids){
+      await fetch(`${DB}/cldTrash.json`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({publicId:pid,at:Date.now()})});
+    }
+  }catch(e){}
+}
 async function gameSet(p,d){try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});}catch{}}
 async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 // 멀티경로 PATCH(merge): 여러 항목을 요청 1번으로 한꺼번에 갱신 (키에 / 넣으면 하위경로). 성공시 true.
@@ -5006,6 +5018,9 @@ async function deleteImagesFor(vid, nick, collapseId){
   if(!isAdmin2 && nick!==(CU?.name||'')){ showToast('본인 게시물만 삭제할 수 있어요'); return; }
   if(!confirm(`${nick===(CU?.name||'')?'업로드한':nick+' 님이 업로드한'} 사진을 전부 삭제할까요?`)) return;
   const key = nick.replace(/[\.\#\$\/\[\]\s]/g,'_');
+  // Cloudinary 삭제 대기열에 올림 (워커가 실제 사진 삭제)
+  const _delArr = (await dbGet(`votes/${vid}/images/${key}`)) || (await dbGet(`votes/${vid}/images/${nick}`)) || [];
+  await _queueCloudinaryDelete(_delArr.filter(x=>x&&x.url!=='연차').map(x=>x.publicId));
   await dbDelete(`votes/${vid}/images/${key}`);
   // 출석 기록도 삭제
   const v = await dbGet(`votes/${vid}`);
@@ -5035,6 +5050,8 @@ async function deleteOneImage(vid, nick, imgIdx, collapseId){
   if(!target){ showToast('삭제할 사진을 찾을 수 없어요'); return; }
   const idxInCur = cur.findIndex(x=>x && x.url===target.url && x.uploadedAt===target.uploadedAt);
   if(idxInCur<0){ showToast('삭제할 사진을 찾을 수 없어요'); return; }
+  // Cloudinary 삭제 대기열 (워커가 실제 사진 삭제)
+  if(target.publicId) await _queueCloudinaryDelete([target.publicId]);
   const next = [...cur]; next.splice(idxInCur,1);
   if(next.filter(x=>x?.url&&x.url!=='연차').length===0){
     // 남은 실제 사진이 없으면 전체삭제와 동일하게 출석 기록도 정리
