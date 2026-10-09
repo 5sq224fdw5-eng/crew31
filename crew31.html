@@ -1542,7 +1542,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.자동삭제1008' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.닉이관1009' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -8376,6 +8376,16 @@ async function loadSettings(){
       <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:8px"><b>쭈니맘부</b>의 인트라넷 데이터(투표·출근)를 <b>★쭈니맘</b>으로 옮기고, 비어있는 ★쭈니맘 중복 계정을 정리합니다.<br>오락실 이름(★좋아요쭈니맘 등)도 <b>좋아요★쭈니맘</b> 형식으로 통일해요.<br>실행 시 <b>백업 JSON이 먼저 자동 다운로드</b>돼요.</div>
       <button onclick="mergeJjunimamSub()" style="width:100%;padding:10px;background:linear-gradient(135deg,#FF6B9D,#A78BFA);color:white;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer">🔧 백업 후 합치기 실행</button>
     </div>
+    <div style="margin:10px 0;padding:12px;background:rgba(124,156,219,0.1);border:1px solid rgba(124,156,219,0.4);border-radius:12px">
+      <div style="font-size:12px;font-weight:800;color:#5b7cc2;margin-bottom:6px">🔁 닉네임 완전 이관 (양쪽 DB)</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:8px">오락실에서 이름을 바꿨는데 <b>인트라넷 투표·출석·연차가 예전 닉에 남은</b> 경우, 예전 닉의 모든 기록을 새 닉으로 옮기고 중복 로그인을 정리합니다.<br>실행 시 <b>백업 JSON 자동 다운로드</b>.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <input id="rnOld" placeholder="기존 닉 (예: 율이네)" style="flex:1;min-width:110px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:12px">
+        <input id="rnNew" placeholder="새 닉 (예: 축복이)" style="flex:1;min-width:110px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:12px">
+        <select id="rnGroup" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:12px"><option value="좋아요">좋아요</option><option value="댓글">댓글</option><option value="시크릿">시크릿</option><option value="">그룹없음</option></select>
+      </div>
+      <button onclick="migrateNickFull()" style="width:100%;padding:10px;background:linear-gradient(135deg,#5b7cc2,#7C9CDB);color:white;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer">🔁 백업 후 닉네임 이관</button>
+    </div>
     ${settingAccordion('auto','🤖 자동화',autoHtml)}
   </div>`;
 }
@@ -8722,6 +8732,88 @@ async function editMemberName(key,current){
 // 멤버 닉네임 변경: 이름에 oldNick이 들어간 모든 키를, oldNick→newNick만 치환한 새 키로 이동.
 // 별표·그룹 접두사 등 형태는 그대로 유지됨. memberNewFull = members에 저장할 정식 이름.
 // ── 일회용: 쭈니맘부(데이터 보유) → ★쭈니맘 이동 + 빈 ★쭈니맘 중복 정리 (백업 자동 다운로드) ──
+async function migrateNickFull(){
+  if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
+  const oldNick=(document.getElementById('rnOld')?.value||'').trim();
+  const newNick=(document.getElementById('rnNew')?.value||'').trim();
+  const group=(document.getElementById('rnGroup')?.value||'').trim();
+  if(!oldNick||!newNick){ showToast('기존/새 닉네임을 입력하세요'); return; }
+  if(oldNick===newNick){ showToast('두 닉네임이 같아요'); return; }
+  if(!confirm(`"${oldNick}" \u2192 "${newNick}" (으)로 모든 기록을 옮깁니다.\n먼저 백업 JSON이 자동 다운로드됩니다.\n계속할까요?`)) return;
+  try{
+    showToast('\ud83d\udd04 백업 준비 중...');
+    const [votes, attendance, attMan, crewMembers, gMembers] = await Promise.all([
+      dbGet('votes'), dbGet('attendance'), dbGet('attendanceManual'), dbGet('members'), gameGet('members')
+    ]);
+    const [gLeave, gPrizes] = await Promise.all([ gameGet('memberLeave'), gameGet('memberPrizes') ]);
+    const backup={oldNick,newNick,group,votes,attendance,attendanceManual:attMan,crew31Members:crewMembers,game:{members:gMembers,memberLeave:gLeave,memberPrizes:gPrizes}};
+    const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`rename-backup-${oldNick}-to-${newNick}-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    await new Promise(r=>setTimeout(r,1200));
+    if(!confirm('백업 파일이 다운로드됐나요?\n[확인]을 누르면 이관을 시작합니다.')){ showToast('취소됨'); return; }
+
+    const moved={responses:0,times:0,images:0,leaveUsed:0,saveCount:0,memos:0,canceled:0,adminConfirm:0,att:0,attMan:0,links:0};
+    const fields=[['responses','responses'],['responseTimes','times'],['images','images'],['leaveUsed','leaveUsed'],['saveCount','saveCount'],['memos','memos'],['canceled','canceled'],['adminConfirm','adminConfirm']];
+
+    // 1) 인트라넷 votes 이관 (닉으로 키 저장된 것들)
+    const vs=votes||{};
+    for(const vid in vs){
+      const v=vs[vid]; if(!v) continue;
+      for(const [field,cntKey] of fields){
+        const obj=v[field]; if(!obj || obj[oldNick]===undefined) continue;
+        if(obj[newNick]===undefined){ await dbSet(`votes/${vid}/${field}/${newNick}`, obj[oldNick]); moved[cntKey]++; }
+        await dbDelete(`votes/${vid}/${field}/${oldNick}`);
+      }
+      // 링크: 닉 폴백으로 저장된 것만 (멤버키 기반은 이름과 무관하므로 그대로 둠)
+      if(v.links){
+        for(const lk in v.links){
+          const base=lk.replace(/_[12]$/,''); const suf=(lk.match(/_[12]$/)||[''])[0];
+          if(base===oldNick){
+            const nlk=newNick+suf;
+            if(v.links[nlk]===undefined){ await dbSet(`votes/${vid}/links/${nlk}`, {...v.links[lk], nick:newNick}); moved.links++; }
+            await dbDelete(`votes/${vid}/links/${lk}`);
+          }
+        }
+      }
+    }
+
+    // 2) 출석 이관
+    for(const [path,cntKey,root] of [['attendance','att',attendance],['attendanceManual','attMan',attMan]]){
+      if(!root) continue;
+      for(const gid in root){
+        const weeks=root[gid]; if(!weeks) continue;
+        for(const wk in weeks){
+          const mem=weeks[wk]; if(!mem || mem[oldNick]===undefined) continue;
+          if(mem[newNick]===undefined){ await dbSet(`${path}/${gid}/${wk}/${newNick}`, mem[oldNick]); moved[cntKey]++; }
+          await dbDelete(`${path}/${gid}/${wk}/${oldNick}`);
+        }
+      }
+    }
+
+    // 3) 인트라넷 로그인 명단: 기존 멤버 이름만 new로(키 유지 → 링크 보존), 중복 new 로그인 제거
+    const cm=crewMembers||{};
+    let oldKey=null, dupNewKey=null;
+    for(const k in cm){ if(cm[k]&&cm[k].name===oldNick)oldKey=k; if(cm[k]&&cm[k].name===newNick)dupNewKey=k; }
+    if(oldKey) await dbSet(`members/${oldKey}/name`, newNick);
+    if(dupNewKey && dupNewKey!==oldKey) await dbDelete(`members/${dupNewKey}`);
+
+    // 4) 오락실 이름 변경 (연차/투피드는 같은 키라 자동 유지). 이미 new면 건드리지 않음.
+    const gm=gMembers||{};
+    const oldFull = group ? (group+oldNick) : oldNick;
+    const newFull = group ? (group+newNick) : newNick;
+    let gOldKey=null, gNewKey=null;
+    for(const k in gm){ const nm=(gm[k]&&gm[k].name||'').replace(/^\*/,''); if(nm===oldFull)gOldKey=k; if(nm===newFull)gNewKey=k; }
+    if(gOldKey && !gNewKey){ const star=(gm[gOldKey].name||'').startsWith('*')?'*':''; await gameSet(`members/${gOldKey}/name`, star+newFull); }
+
+    if(typeof _dbCacheClear==='function') _dbCacheClear();
+    try{ if(typeof _gameGetCache!=='undefined' && _gameGetCache.clear) _gameGetCache.clear(); }catch(e){}
+    showToast(`\u2705 이관 완료 (${oldNick}\u2192${newNick})`);
+    alert(`이관 완료! (${oldNick} \u2192 ${newNick})\n\n옮긴 내역:\n\u00b7 투표응답 ${moved.responses} / 응답시간 ${moved.times}\n\u00b7 이미지 ${moved.images} / 저장개수 ${moved.saveCount}\n\u00b7 연차사용 ${moved.leaveUsed} / 메모 ${moved.memos}\n\u00b7 출석 ${moved.att} / 수동출석 ${moved.attMan} / 링크 ${moved.links}\n\u00b7 취소 ${moved.canceled} / 확인 ${moved.adminConfirm}\n\n이제 ${newNick} 로그인에 데이터가 붙습니다.\n(${oldNick} 로그인은 더 이상 안 됩니다)\n문제 있으면 받은 백업으로 복구하세요.`);
+  }catch(e){ showToast('\u274c 이관 실패: '+(e.message||'')+' \u2014 백업으로 복구하세요'); }
+}
+
 async function mergeJjunimamSub(){
   if(CU?.role!=='admin'){ showToast('관리자 전용'); return; }
   const TARGET = '★쭈니맘';           // 최종 로그인 이름
