@@ -1542,7 +1542,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.닉이관1009' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.닉이관1009b' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -8746,13 +8746,23 @@ async function migrateNickFull(){
       dbGet('votes'), dbGet('attendance'), dbGet('attendanceManual'), dbGet('members'), gameGet('members')
     ]);
     const [gLeave, gPrizes] = await Promise.all([ gameGet('memberLeave'), gameGet('memberPrizes') ]);
-    const backup={oldNick,newNick,group,votes,attendance,attendanceManual:attMan,crew31Members:crewMembers,game:{members:gMembers,memberLeave:gLeave,memberPrizes:gPrizes}};
-    const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-    a.download=`rename-backup-${oldNick}-to-${newNick}-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-    await new Promise(r=>setTimeout(r,1200));
-    if(!confirm('백업 파일이 다운로드됐나요?\n[확인]을 누르면 이관을 시작합니다.')){ showToast('취소됨'); return; }
+    const backup={oldNick,newNick,group,at:Date.now(),votes,attendance,attendanceManual:attMan,crew31Members:crewMembers,game:{members:gMembers,memberLeave:gLeave,memberPrizes:gPrizes}};
+    // 1) Firebase에 백업 저장 (인앱 브라우저에서 파일 다운로드가 막혀도 서버에 확실히 남음)
+    const _bkKey = 'bk_'+new Date().toISOString().slice(0,19).replace(/[:T.]/g,'-');
+    let _bkSaved=false;
+    try{ await dbSet(`_renameBackups/${_bkKey}`, backup); _bkSaved=true; }catch(e){}
+    // 2) 파일 다운로드도 시도 (되면 보너스, 안 돼도 진행)
+    try{
+      const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download=`rename-backup-${oldNick}-to-${newNick}-${_bkKey}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    }catch(e){}
+    if(!_bkSaved){
+      if(!confirm('⚠️ 서버 백업 저장에 실패했어요. 그래도 이관을 진행할까요?\n(취소 권장 — 네트워크 확인 후 다시)')) { showToast('취소됨 (백업 실패)'); return; }
+    } else {
+      showToast('💾 서버에 백업 저장됨 — 이관 진행');
+    }
 
     const moved={responses:0,times:0,images:0,leaveUsed:0,saveCount:0,memos:0,canceled:0,adminConfirm:0,att:0,attMan:0,links:0};
     const fields=[['responses','responses'],['responseTimes','times'],['images','images'],['leaveUsed','leaveUsed'],['saveCount','saveCount'],['memos','memos'],['canceled','canceled'],['adminConfirm','adminConfirm']];
