@@ -722,7 +722,8 @@ function getKSTDate(){const d=new Date();d.setHours(d.getHours()+9);return d.toI
 // 읽기 캐시(다운로드 절감): 같은 경로 반복 읽기를 짧게(4초) 캐시. 쓰기 발생 시 즉시 비움 -> 항상 최신.
 const _dbCache=new Map();
 const _DB_CACHE_TTL=4000;
-function _dbCacheClear(){ _dbCache.clear(); }
+let _votesListCache={t:0,data:null};  // 리스트 로딩 중복 다운로드 방지(네비게이션용)
+function _dbCacheClear(){ _dbCache.clear(); _votesListCache={t:0,data:null}; }
 async function dbGet(p){
   const now=Date.now();
   const hit=_dbCache.get(p);
@@ -756,8 +757,11 @@ async function dbGetRecent(p, limit=15){
 // 해당 그룹 + 'all' 투표만 인덱스 쿼리로 받게 한다.
 // votes/group 인덱스가 없거나 쿼리 오류면 자동으로 기존 전체읽기로 폴백 -> 절대 안 깨짐.
 async function dbGetVotesForGroup(gid){
-  // 1순위: 최근 2주 투표만 createdAt 인덱스로 받기 (그룹 전체 이력 대신 -> 빠르고, 몇 달 쌓여도 안 느려짐).
-  //        모든 그룹의 최근 2주치를 받고, 화면(_render)에서 gid/all + 2주로 필터됨.
+  // ★ 다운로드 비용 핵심 ★ 화면은 최근 5일치만 보여주므로(아래 _render 필터), 받을 때도 그만큼만 받는다.
+  //   네비게이션 중 같은 데이터를 반복 다운로드하지 않도록 10초 캐시(쓰기 발생 시 _dbCacheClear로 즉시 비움).
+  if(_votesListCache.data && (Date.now()-_votesListCache.t)<10000) return _votesListCache.data;
+  let out=null;
+  // 1순위: createdAt 인덱스가 있으면 정확히 최근 5일치만(가장 적게 받음)
   try{
     const cutoff = Date.now() - 5*24*60*60*1000;
     const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`;
@@ -765,25 +769,24 @@ async function dbGetVotesForGroup(gid){
     const t=setTimeout(()=>controller.abort(),8000);
     const r=await fetch(url,{signal:controller.signal});
     clearTimeout(t);
-    if(r.ok){ const j=await r.json(); return j||{}; }
+    if(r.ok){ out = (await r.json())||{}; }
   }catch{}
-  const q = async (g)=>{
+  // 2순위(인덱스 없어도 동작 · 전체읽기 방지의 핵심): $key 기준 최근 300개만.
+  //   푸시키는 시간순 정렬이라 '최근 300개' = 최신 투표 300개. 인덱스 불필요, 전체 히스토리 절대 안 받음.
+  if(out===null){
     try{
-      const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"group"')}&equalTo=${encodeURIComponent('"'+g+'"')}`;
+      const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=300`;
       const controller=new AbortController();
       const t=setTimeout(()=>controller.abort(),8000);
       const r=await fetch(url,{signal:controller.signal});
       clearTimeout(t);
-      if(!r.ok) return undefined;      // 인덱스 없음/오류 -> 폴백 신호
-      const j=await r.json();
-      return j||{};                    // 성공(빈 결과 포함)
-    }catch{ return undefined; }
-  };
-  const [a,b] = await Promise.all([ q(gid), q('all') ]);
-  if(a===undefined && b===undefined){
-    return await dbGet('votes');       // 쿼리 자체 실패 -> 기존 방식으로 안전 폴백
+      if(r.ok){ out = (await r.json())||{}; }
+    }catch{}
   }
-  return Object.assign({}, (a===undefined?{}:a), (b===undefined?{}:b));
+  // 3순위: 위 두 개가 모두 네트워크 오류일 때만 최후의 전체읽기(기능 보장용, 정상 상황에선 안 탐)
+  if(out===null){ out = await dbGet('votes') || {}; }
+  _votesListCache={t:Date.now(), data:out};
+  return out;
 }
 async function dbSet(p,d,retry=0){
   _dbCacheClear();
@@ -1542,7 +1545,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.닉이관1009b' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.요금최적화1012' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -4658,6 +4661,7 @@ async function renderVoteCard(vid,v){
         html+=`<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">`;
         html+=`<span style="font-size:11px;color:var(--text3);min-width:20px">${num++}.</span>`;
         html+=`<span style="font-size:13px;font-weight:700;flex:1">${escH(entry.nick)}</span>`;
+        if(entry.time){ const _d=new Date(entry.time); html+=`<span style="font-size:11px;color:var(--text3);white-space:nowrap">${_d.getMonth()+1}/${_d.getDate()} ${String(_d.getHours()).padStart(2,'0')}:${String(_d.getMinutes()).padStart(2,'0')}</span>`; }
         html+=`<span style="background:${_bc};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${escH(_bl)}</span>`;
         if(isAdmin) html+=`<button onclick="adminEditResponse('${vid}','${escH(entry.nick)}')" style="flex-shrink:0;background:rgba(91,155,213,0.12);color:var(--blue);border:none;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ 변경</button>`;
         html+=`</div>`;
@@ -4676,6 +4680,7 @@ async function renderVoteCard(vid,v){
         html+=`<span style="font-size:11px;color:var(--text3)">${num++}.</span>`;
         html+=`<span style="font-size:13px;font-weight:700">${escH(firstLink.nick||'')}</span>`;
         if(firstLink.id) html+=`<span style="font-size:12px;color:var(--text3)">@${escH(firstLink.id)}</span>`;
+        { const _lt=entry.time||firstLink.time||0; if(_lt){ const _d=new Date(_lt); html+=`<span style="font-size:11px;color:var(--text3);white-space:nowrap">· ${_d.getMonth()+1}/${_d.getDate()} ${String(_d.getHours()).padStart(2,'0')}:${String(_d.getMinutes()).padStart(2,'0')}</span>`; } }
         html+=`</div>`;
         if(badgeText) html+=`<span style="background:${linkType==='tupide'?'#FF85C1':linkType==='leave'?'#FFB347':linkType==='duty'?'#7EC8E3':'#94a3b8'};color:white;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${badgeText}</span>`;
         html+=`</div>`;
@@ -5664,7 +5669,7 @@ async function countSavedPostsMulti(files){
 // 참여자 수 = 같은 그룹·날짜 시작투표 응답자 중 연차(프패) 제외
 async function getParticipantCount(v){
   try{
-    const allV=await dbGet('votes');
+    const allV=await dbGetVotesForGroup(v&&v.group);
     const t2=(v.title||'').match(/(\d+)월\s*(\d+)일/);
     const sv=Object.values(allV||{}).find(s=>{
       if(!s||s.deleted||s.group!==v.group)return false;
@@ -6066,7 +6071,7 @@ async function recomputeAttendance(gid, date, myKey){
   try{
     if(!gid||!date) return;
     const mondayStr = getWeekKey(date);
-    const allVotes = await dbGet('votes') || {};
+    const allVotes = await dbGetVotesForGroup(gid) || {};
     let startResult=null, endResult=null;
     let startVoteExists=false; // 그날 그룹에 시작투표가 존재하는지
     let endVoteExists=false;   // 그날 그룹에 완료투표가 존재하는지
@@ -6175,7 +6180,7 @@ async function _leaveInfo(gmKey){
 // → 시작/완료 둘 다 골라도 1개만 차감됨.
 async function reconcileTupide(group, dayKey, myKey){
   try{
-    const allV = await dbGet('votes') || {};
+    const allV = await dbGetVotesForGroup(group) || {};
     let active = false;
     for(const sv of Object.values(allV)){
       if(!sv || sv.deleted || sv.group!==group) continue;
@@ -6317,6 +6322,15 @@ async function submitVote(vid){
   }
   // 2) 링크 저장 (미리 읽어둔 preData 사용 — DOM이 사라져도 안전)
   if(!isBonusOnly && preData){
+    // ★ 안전장치: 선택지(응답)가 실제로 DB에 저장됐는지 확인 →
+    //   투피드/연차 제한 등으로 선택지가 저장 안 됐는데 링크만 남는 "유령 링크"를 원천 차단
+    let _respSaved=null;
+    try{ _respSaved = await dbGet(`votes/${vid}/responses/${myKey}`); }catch(e){ _respSaved=undefined; }
+    if(_respSaved===undefined || _respSaved===null){
+      showBigAlert('🚫','저장되지 않았어요','선택지가 저장되지 않아서\n링크도 저장하지 않았어요.\n\n보유 경품(투피드·연차)이 없거나\n투표 조건을 만족하지 못한 경우예요.\n다른 선택지로 다시 시도해 주세요.');
+      if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
+      return;
+    }
     const _linkOk = await submitVoteLinkNew(vid, true, preData);
     if(!_linkOk){
       showToast('⚠️ 링크 저장 실패 — 네트워크 확인 후 링크만 다시 제출해주세요 (선택지는 저장됨)');
@@ -6605,7 +6619,7 @@ async function castVote(vid,optIdx,skipRerender){
   //  참여→완료 / 투피드→투피드 / 노피드→노피드 / 봉사→봉사 / 연차·당직→완료투표 대상 아님
   if(CU?.role!=='admin' && _isEndVoteCast && v.imageUpload!==true){
     try{
-      const _allV = await dbGet('votes');
+      const _allV = await dbGetVotesForGroup(v.group);
       const _t2 = (v.title||'').match(/(\d+)월\s*(\d+)일/);
       const _startV = Object.values(_allV||{}).find(sv=>{
         if(!sv || sv.deleted || sv.group!==v.group) return false;
@@ -6685,7 +6699,7 @@ async function castVote(vid,optIdx,skipRerender){
       const gName = groups[v.group]?.name || '';
       const quotaData = await dbGet(`leaveQuota/${gName}`);
       const quota = (quotaData!==null && quotaData!==undefined) ? quotaData : getLeaveQuota(gName);
-      const allVotes = await dbGet('votes') || {};
+      const allVotes = await dbGetVotesForGroup(v.group) || {};
       const cnt = new Set();
       for(const sv of Object.values(allVotes)){
         if(!sv || sv.deleted || sv.group!==v.group) continue;
@@ -6720,15 +6734,21 @@ async function castVote(vid,optIdx,skipRerender){
   if(isTupideOpt && !wasTupide){
     try{
       const gmKey=await _findGameKey();
-      if(gmKey){
-        const prizesRaw=await gameGet(`memberPrizes/${gmKey}`);
-        const prizes=prizesRaw?(Array.isArray(prizesRaw)?prizesRaw:Object.values(prizesRaw)):[];
-        const hasUndeducted=prizes.some(p=>p&&!p.deducted&&(p.name||'').includes('투피드'));
-        const hasThisDay=prizes.some(p=>p&&p.deducted&&(p.name||'').includes('투피드')&&p.usedDate===usedDate);
-        // 미사용 경품도 없고, 그날 이미 차감된 것도 없으면 막기
-        if(!hasUndeducted && !hasThisDay){showToast('⚠️ 보유 투피드 경품이 없어요. 다른 선택지를 골라주세요!');window._castVoteOK=false; window._castVoting=false;return;}
+      if(!gmKey){
+        showBigAlert('☕','투피드를 쓸 수 없어요','오락실에서 회원 정보를 찾지 못했어요.\n(닉네임이 오락실과 다르거나 미등록)\n보유 투피드를 확인할 수 없어 막았어요.\n인사팀에 문의해 주세요.');
+        window._castVoteOK=false; window._castVoting=false; return;
       }
-    }catch(e){}
+      const prizesRaw=await gameGet(`memberPrizes/${gmKey}`);
+      const prizes=prizesRaw?(Array.isArray(prizesRaw)?prizesRaw:Object.values(prizesRaw)):[];
+      const _notExp=p=>!_leaveIsExpired(p.expiry) && !(p.expireAt && Date.now()>p.expireAt);  // 만료 제외
+      const hasUndeducted=prizes.some(p=>p&&!p.deducted&&(p.name||'').includes('투피드')&&_notExp(p));
+      const hasThisDay=prizes.some(p=>p&&p.deducted&&(p.name||'').includes('투피드')&&p.usedDate===usedDate);
+      // 미사용(미만료) 경품도 없고, 그날 이미 차감된 것도 없으면 막기
+      if(!hasUndeducted && !hasThisDay){showToast('⚠️ 보유 투피드 경품이 없어요. 다른 선택지를 골라주세요!');window._castVoteOK=false; window._castVoting=false;return;}
+    }catch(e){
+      showToast('⚠️ 투피드 확인 중 오류 — 잠시 후 다시 시도해주세요');
+      window._castVoteOK=false; window._castVoting=false; return;
+    }
   }
 
   // ── 차감 (신규로 연차 선택) ── 수동/경품 중 먼저 적립된 순으로 1일 차감
@@ -6831,7 +6851,7 @@ async function castVote(vid,optIdx,skipRerender){
     try{
       const curV = await dbGet(`votes/${vid}`);
       const titleDate = getTitleDate(curV||{});
-      const allVotes3 = await dbGet('votes');
+      const allVotes3 = await dbGetVotesForGroup(v&&v.group);
       if(allVotes3 && curV){
         const endVote = Object.values(allVotes3).find(sv=>
           !sv.deleted && sv.group===curV.group &&
@@ -8751,13 +8771,7 @@ async function migrateNickFull(){
     const _bkKey = 'bk_'+new Date().toISOString().slice(0,19).replace(/[:T.]/g,'-');
     let _bkSaved=false;
     try{ await dbSet(`_renameBackups/${_bkKey}`, backup); _bkSaved=true; }catch(e){}
-    // 2) 파일 다운로드도 시도 (되면 보너스, 안 돼도 진행)
-    try{
-      const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-      a.download=`rename-backup-${oldNick}-to-${newNick}-${_bkKey}.json`;
-      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-    }catch(e){}
+    // (파일 다운로드는 인앱 브라우저에서 이관을 방해해 제거 — 서버 백업으로 충분)
     if(!_bkSaved){
       if(!confirm('⚠️ 서버 백업 저장에 실패했어요. 그래도 이관을 진행할까요?\n(취소 권장 — 네트워크 확인 후 다시)')) { showToast('취소됨 (백업 실패)'); return; }
     } else {
