@@ -776,30 +776,46 @@ async function dbGetVotesForGroup(gid){
   // votesVer가 아직 없으면(최초) 한 번 초기화 → 이번 로드부터 바로 캐시 작동
   if(_ver==null){ _ver=Date.now(); try{ fetch(`${DB}/votesVer.json`,{method:'PUT',body:JSON.stringify(_ver)}); }catch{} }
   let out=null;
-  // 1순위: createdAt 인덱스가 있으면 정확히 최근 5일치만(가장 적게 받음)
-  try{
-    const cutoff = Date.now() - 5*24*60*60*1000;
-    const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`;
-    const controller=new AbortController();
-    const t=setTimeout(()=>controller.abort(),8000);
-    const r=await fetch(url,{signal:controller.signal});
-    clearTimeout(t);
-    if(r.ok){ out = (await r.json())||{}; }
-  }catch{}
-  // 2순위(인덱스 없어도 동작 · 전체읽기 방지의 핵심): $key 기준 최근 300개만.
-  //   푸시키는 시간순 정렬이라 '최근 300개' = 최신 투표 300개. 인덱스 불필요, 전체 히스토리 절대 안 받음.
-  if(out===null){
+  // ★★ 요약본 우선 ★★ 요약본이 준비됐으면(sumReady) 가벼운 voteSummary만 받음(투표당 ~1KB).
+  let _useSummary=false;
+  try{ _useSummary = localStorage.getItem('c31_sumReady')==='1'; }catch{}
+  if(!_useSummary){
+    try{ const rs=await fetch(`${DB}/meta/sumReady.json`); if(rs.ok){ const sv=await rs.json(); if(sv){ _useSummary=true; try{localStorage.setItem('c31_sumReady','1');}catch{} } } }catch{}
+  }
+  if(_useSummary){
+    // voteSummary 최근 400개만($key — 인덱스 불필요). 요약본은 작아서 400개도 가벼움.
     try{
-      const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=300`;
-      const controller=new AbortController();
-      const t=setTimeout(()=>controller.abort(),8000);
-      const r=await fetch(url,{signal:controller.signal});
-      clearTimeout(t);
+      const url = `${DB}/voteSummary.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=400`;
+      const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),8000);
+      const r=await fetch(url,{signal:controller.signal}); clearTimeout(t);
       if(r.ok){ out = (await r.json())||{}; }
     }catch{}
   }
-  // 3순위: 위 두 개가 모두 네트워크 오류일 때만 최후의 전체읽기(기능 보장용, 정상 상황에선 안 탐)
-  if(out===null){ out = await dbGet('votes') || {}; }
+  // 요약본 미준비/실패 → 원본(votes) 읽기(기존 방식) + 백그라운드로 요약본 생성(최초 1회 마이그레이션)
+  if(out===null){
+    let _raw=null;
+    // 1순위: createdAt 인덱스로 최근 5일치만
+    try{
+      const cutoff = Date.now() - 5*24*60*60*1000;
+      const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`;
+      const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),8000);
+      const r=await fetch(url,{signal:controller.signal}); clearTimeout(t);
+      if(r.ok){ _raw = (await r.json())||{}; }
+    }catch{}
+    // 2순위: $key 최근 300개(인덱스 불필요)
+    if(_raw===null){
+      try{
+        const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=300`;
+        const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),8000);
+        const r=await fetch(url,{signal:controller.signal}); clearTimeout(t);
+        if(r.ok){ _raw = (await r.json())||{}; }
+      }catch{}
+    }
+    if(_raw===null){ _raw = await dbGet('votes') || {}; }
+    out=_raw;
+    // 아직 요약본 준비 전이면 이번 원본 읽기로 요약본 일괄 생성(백그라운드) — 다음 접속부턴 요약본 사용
+    if(!_useSummary){ try{ _migrateSummaries(_raw); }catch{} }
+  }
   _votesListCache={t:Date.now(), data:out};
   // 받은 목록을 버전과 함께 저장 → 다음 접속 때 변화 없으면 다운로드 생략
   try{ if(_ver!=null){ const _s=JSON.stringify(out); if(_s.length<4500000){ localStorage.setItem('c31_votesVer',String(_ver)); localStorage.setItem('c31_votesData',_s); } } }catch{}
@@ -807,8 +823,55 @@ async function dbGetVotesForGroup(gid){
 }
 // 투표 관련 쓰기가 일어날 때마다 작은 버전표식만 올림(업로드는 공짜). 목록 캐시 무효화 신호로 사용.
 function _bumpVotesVer(){ try{ fetch(`${DB}/votesVer.json`,{method:'PUT',body:JSON.stringify(Date.now())}); }catch{} }
+
+// ═══════ 투표 '요약본'(voteSummary) — 목록 다운로드 비용 절감 핵심 ═══════
+// 리스트는 제목·참여수·내참여여부만 필요(링크·사진URL·시간·메모는 상세에서만 씀).
+// 그래서 투표당 가벼운 요약본만 따로 저장해두고 리스트는 그것만 받음 → 투표당 ~8KB → ~1KB.
+// ★안전★ 요약본은 '읽기용 캐시'. 원본(votes)이 진실이고, 쓰기마다 원본에서 자동 재생성됨.
+//         상세·투표·제출은 전부 원본(dbGet)만 쓰므로 요약이 틀어져도 기능은 절대 안 깨짐.
+function _summaryFields(v){
+  const img={};
+  const src=v.images||{};
+  for(const k in src){ const a=src[k]; if(Array.isArray(a)&&a.length){ const isLeave=!!(a[0]&&a[0].url==='연차'); img[k]=[{url:isLeave?'연차':'x'}]; } }
+  return {
+    title:v.title||'', group:v.group||'', date:v.date||'', time:v.time||'',
+    createdAt:v.createdAt||0, closed:!!v.closed, imageUpload:!!v.imageUpload,
+    options:v.options||[], responses:v.responses||{}, images:img
+  };
+}
+async function _rebuildVoteSummary(vid){
+  if(!vid) return;
+  try{
+    const r=await fetch(`${DB}/votes/${vid}.json`); const v=r.ok?await r.json():null;
+    if(!v || v.deleted){ try{ await fetch(`${DB}/voteSummary/${vid}.json`,{method:'DELETE'}); }catch{} return; }
+    await fetch(`${DB}/voteSummary/${vid}.json`,{method:'PUT',body:JSON.stringify(_summaryFields(v))});
+  }catch(e){}
+}
+const _sumTimers={};
+function _scheduleSummary(vid){
+  if(!vid) return;
+  if(_sumTimers[vid]) clearTimeout(_sumTimers[vid]);
+  _sumTimers[vid]=setTimeout(()=>{ delete _sumTimers[vid]; _rebuildVoteSummary(vid); }, 1200);
+}
+function _vidFromPath(p){ if(!p) return null; if(p==='votes') return null; if(p.indexOf('votes/')===0){ const parts=p.split('/'); return parts[1]||null; } return null; }
+// 배포 후 최초 1회: 최근 투표들의 요약본을 한 번에 생성(백그라운드). 이후엔 쓰기 훅이 알아서 유지.
+let _migratingSummaries=false;
+async function _migrateSummaries(votesObj){
+  if(_migratingSummaries || !votesObj || typeof votesObj!=='object') return;
+  _migratingSummaries=true;
+  try{
+    const patch={};
+    for(const vid in votesObj){ const v=votesObj[vid]; if(!v||v.deleted) continue; patch['voteSummary/'+vid]=_summaryFields(v); }
+    if(Object.keys(patch).length){
+      await fetch(`${DB}/.json`,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify(patch)});
+    }
+    await fetch(`${DB}/meta/sumReady.json`,{method:'PUT',body:JSON.stringify(Date.now())});
+    try{ localStorage.setItem('c31_sumReady','1'); }catch{}
+  }catch(e){}
+  _migratingSummaries=false;
+}
 async function dbSet(p,d,retry=0){
-  _dbCacheClear(); if(p&&p.indexOf('votes')===0)_bumpVotesVer();
+  _dbCacheClear(); if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}
   try{
     const res=await fetch(`${DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});
     if(!res.ok && retry<2){ await new Promise(r=>setTimeout(r,500)); return dbSet(p,d,retry+1); }
@@ -819,9 +882,9 @@ async function dbSet(p,d,retry=0){
     return false;
   }
 }
-async function dbDelete(p){_dbCacheClear();if(p&&p.indexOf('votes')===0)_bumpVotesVer();try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
-async function dbPush(p,d){_dbCacheClear();if(p&&p.indexOf('votes')===0)_bumpVotesVer();try{const r=await fetch(`${DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
-async function dbDel(p){if(p&&p.indexOf('votes')===0)_bumpVotesVer();try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
+async function dbDelete(p){_dbCacheClear();if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
+async function dbPush(p,d){_dbCacheClear();if(p&&p.indexOf('votes')===0)_bumpVotesVer();try{const r=await fetch(`${DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});const j=await r.json();if(p&&p.indexOf('votes')===0){ _scheduleSummary(p==='votes'?(j&&j.name):_vidFromPath(p)); }return j;}catch{return null;}}
+async function dbDel(p){if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
 const _gameGetCache=new Map();
 async function gameGet(p){
   const now=Date.now();const hit=_gameGetCache.get(p);
@@ -885,7 +948,7 @@ async function gameSet(p,d){try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT'
 async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 // 멀티경로 PATCH(merge): 여러 항목을 요청 1번으로 한꺼번에 갱신 (키에 / 넣으면 하위경로). 성공시 true.
 async function gameUpdate(p,obj,retry=0){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}console.error('gameUpdate',e);return false;}}
-async function dbUpdate(p,obj,retry=0){if(p&&p.indexOf('votes')===0)_bumpVotesVer();try{const r=await fetch(`${DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}console.error('dbUpdate',e);return false;}}
+async function dbUpdate(p,obj,retry=0){if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}try{const r=await fetch(`${DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}console.error('dbUpdate',e);return false;}}
 
 // ══════════════════════════════════════════════
 // ── LOGIN ──
@@ -1564,7 +1627,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.투피드완료인식1019' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.요약본1020' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
