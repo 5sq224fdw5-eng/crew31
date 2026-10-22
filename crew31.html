@@ -862,7 +862,7 @@ const _sumTimers={};
 function _scheduleSummary(vid){
   if(!vid) return;
   if(_sumTimers[vid]) clearTimeout(_sumTimers[vid]);
-  _sumTimers[vid]=setTimeout(()=>{ delete _sumTimers[vid]; _rebuildVoteSummary(vid); }, 1200);
+  _sumTimers[vid]=setTimeout(()=>{ delete _sumTimers[vid]; _rebuildVoteSummary(vid); }, 400);
 }
 function _vidFromPath(p){ if(!p) return null; if(p==='votes') return null; if(p.indexOf('votes/')===0){ const parts=p.split('/'); return parts[1]||null; } return null; }
 // 배포 후 최초 1회: 최근 투표들의 요약본을 한 번에 생성(백그라운드). 이후엔 쓰기 훅이 알아서 유지.
@@ -1651,7 +1651,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.완료게이트긴급1022' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.도장즉시1022' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -6358,6 +6358,9 @@ async function pickVoteOption(vid, optIdx){
     if(window._pendingVote) delete window._pendingVote[vid];
     if(window._castVoteOK !== false){
       showSubmitDonePopup(groups[v?.group]?.name||'', _voteKindOf(v), 0);
+      // 방금 응답을 요약본에 즉시 반영 후 목록 다시 그림 → 퇴근완료 도장 바로 뜨게
+      try{ await _rebuildVoteSummary(vid); }catch(e){}
+      if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
     }
     return;
   }
@@ -6459,6 +6462,8 @@ async function submitVote(vid){
   }
   const _gn = groups[v?.group]?.name || '';
   showSubmitDonePopup(_gn, _voteKindOf(v), 0);
+  // 방금 낸 응답을 요약본에 '즉시' 반영한 뒤 다시 그림 → 도장이 바로 뜨게(요약본 지연으로 도장 안 뜨던 것 해결)
+  try{ await _rebuildVoteSummary(vid); }catch(e){}
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
