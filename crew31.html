@@ -760,20 +760,23 @@ async function dbGetVotesForGroup(gid){
   // ★ 다운로드 비용 핵심 ★ 화면은 최근 5일치만 보여주므로(아래 _render 필터), 받을 때도 그만큼만 받는다.
   //   네비게이션 중 같은 데이터를 반복 다운로드하지 않도록 10초 캐시(쓰기 발생 시 _dbCacheClear로 즉시 비움).
   if(_votesListCache.data && (Date.now()-_votesListCache.t)<10000) return _votesListCache.data;
-  // ★★ 버전 게이트(가장 큰 절감) ★★ 투표에 변화가 생길 때만 올라가는 votesVer(10바이트)만 읽어서,
-  //   지난번과 같으면 브라우저(localStorage)에 저장해둔 목록을 그대로 사용 → 투표 전체 다운로드 '생략'.
-  //   (Firebase는 다운로드만 과금 · 쓰기는 공짜라서, 쓰기 때 votesVer만 올려두면 조용한 시간엔 비용 0에 수렴)
+  // ★★ 버전 게이트 ★★ votesVer(클라 변경) + 최신투표키(워커/신규 생성) — 둘 중 하나라도 바뀌면 새로 읽음.
+  //   (Firebase는 다운로드만 과금 · 쓰기는 공짜. 조용한 시간엔 작은 신호 두 개만 읽고 캐시 사용 → 비용 0 수렴)
   let _ver=null;
   try{ const rv=await fetch(`${DB}/votesVer.json`); if(rv.ok) _ver=await rv.json(); }catch{}
-  if(_ver!=null){
-    try{
-      if(localStorage.getItem('c31_votesVer')===String(_ver)){
-        const cached=localStorage.getItem('c31_votesData');
-        if(cached){ const data=JSON.parse(cached); _votesListCache={t:Date.now(),data}; return data; }
-      }
-    }catch{}
-  }
-  // votesVer가 아직 없으면(최초) 한 번 초기화 → 이번 로드부터 바로 캐시 작동
+  // ★워커 대응★ 최신 투표 1개의 '키'만 확인 — 워커가 서버에서 직접 만든 투표도 감지하기 위함
+  let _newestKey='';
+  try{ const rn=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=1`); if(rn.ok){ const j=(await rn.json())||{}; _newestKey=Object.keys(j)[0]||''; } }catch{}
+  const _gateKey=String(_ver)+'|'+_newestKey;
+  try{
+    if(localStorage.getItem('c31_gateKey')===_gateKey){
+      const cached=localStorage.getItem('c31_votesData');
+      if(cached){ const data=JSON.parse(cached); _votesListCache={t:Date.now(),data}; return data; }
+    }
+  }catch{}
+  let _prevNewest=''; try{ _prevNewest=localStorage.getItem('c31_newestKey')||''; }catch{}
+  const _newVoteAppeared = !!(_newestKey && _newestKey!==_prevNewest);
+  // votesVer가 아직 없으면(최초) 한 번 초기화
   if(_ver==null){ _ver=Date.now(); try{ fetch(`${DB}/votesVer.json`,{method:'PUT',body:JSON.stringify(_ver)}); }catch{} }
   let out=null;
   // ★★ 요약본 우선 ★★ 요약본이 준비됐으면(sumReady) 가벼운 voteSummary만 받음(투표당 ~1KB).
@@ -790,6 +793,14 @@ async function dbGetVotesForGroup(gid){
       const r=await fetch(url,{signal:controller.signal}); clearTimeout(t);
       if(r.ok){ out = (await r.json())||{}; }
     }catch{}
+    // ★워커/신규 투표 보강★ 새 투표키가 생겼으면(=워커나 누가 투표 생성) 최신 원본 30개를 읽어,
+    //   요약본에 아직 없는 투표를 목록에 채워 넣고 요약본도 생성. '생성 이벤트'에만 돌아 비용 거의 안 늚.
+    if(out && _newVoteAppeared){
+      try{
+        const r2=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=30`);
+        if(r2.ok){ const recent=(await r2.json())||{}; for(const vid in recent){ const rv=recent[vid]; if(rv && !rv.deleted && out[vid]===undefined){ out[vid]=_summaryFields(rv); _scheduleSummary(vid); } } }
+      }catch{}
+    }
   }
   // 요약본 미준비/실패 → 원본(votes) 읽기(기존 방식) + 백그라운드로 요약본 생성(최초 1회 마이그레이션)
   if(out===null){
@@ -817,8 +828,8 @@ async function dbGetVotesForGroup(gid){
     if(!_useSummary){ try{ _migrateSummaries(_raw); }catch{} }
   }
   _votesListCache={t:Date.now(), data:out};
-  // 받은 목록을 버전과 함께 저장 → 다음 접속 때 변화 없으면 다운로드 생략
-  try{ if(_ver!=null){ const _s=JSON.stringify(out); if(_s.length<4500000){ localStorage.setItem('c31_votesVer',String(_ver)); localStorage.setItem('c31_votesData',_s); } } }catch{}
+  // 받은 목록을 게이트키(버전+최신투표키)와 함께 저장 → 다음 접속 때 둘 다 그대로면 다운로드 생략
+  try{ const _s=JSON.stringify(out); if(_s.length<4500000){ localStorage.setItem('c31_gateKey',_gateKey); localStorage.setItem('c31_newestKey',_newestKey); localStorage.setItem('c31_votesData',_s); } }catch{}
   return out;
 }
 // 투표 관련 쓰기가 일어날 때마다 작은 버전표식만 올림(업로드는 공짜). 목록 캐시 무효화 신호로 사용.
@@ -870,6 +881,19 @@ async function _migrateSummaries(votesObj){
   }catch(e){}
   _migratingSummaries=false;
 }
+// 현황 등: 최근 N일치 투표만 받기(원본은 그대로, 읽기만 제한). createdAt 인덱스 사용 → 없으면 $key 폴백.
+async function dbGetVotesRecentDays(days){
+  try{
+    const cutoff=Date.now()-days*24*60*60*1000;
+    const r=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`);
+    if(r.ok) return (await r.json())||{};
+  }catch{}
+  try{
+    const r=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=400`);
+    if(r.ok) return (await r.json())||{};
+  }catch{}
+  return await dbGet('votes')||{};
+}
 async function dbSet(p,d,retry=0){
   _dbCacheClear(); if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}
   try{
@@ -888,7 +912,7 @@ async function dbDel(p){if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleS
 const _gameGetCache=new Map();
 async function gameGet(p){
   const now=Date.now();const hit=_gameGetCache.get(p);
-  if(hit && (now-hit.t)<4000) return await hit.pr;
+  if(hit && (now-hit.t)<12000) return await hit.pr;  // 탭 전환 중 같은 오락실 데이터 반복 다운로드 방지(쓰기 시 즉시 무효화)
   const pr=(async()=>{try{const r=await fetch(`${GAME_DB}/${p}.json`);return await r.json();}catch{return null;}})();
   _gameGetCache.set(p,{t:now,pr});return await pr;
 }
@@ -944,10 +968,10 @@ async function _queueCloudinaryDelete(publicIds){
     }
   }catch(e){}
 }
-async function gameSet(p,d){try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});}catch{}}
-async function gamePush(p,d){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
+async function gameSet(p,d){try{_gameGetCache.clear();}catch{}try{await fetch(`${GAME_DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});}catch{}}
+async function gamePush(p,d){try{_gameGetCache.clear();}catch{}try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 // 멀티경로 PATCH(merge): 여러 항목을 요청 1번으로 한꺼번에 갱신 (키에 / 넣으면 하위경로). 성공시 true.
-async function gameUpdate(p,obj,retry=0){try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}console.error('gameUpdate',e);return false;}}
+async function gameUpdate(p,obj,retry=0){try{_gameGetCache.clear();}catch{}try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}console.error('gameUpdate',e);return false;}}
 async function dbUpdate(p,obj,retry=0){if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}try{const r=await fetch(`${DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}console.error('dbUpdate',e);return false;}}
 
 // ══════════════════════════════════════════════
@@ -1627,7 +1651,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.요약본1020' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.워커투표보강1021' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -1933,6 +1957,7 @@ function setMainHeader(title,sub='',actionsHtml=''){
 // ══════════════════════════════════════════════
 // ── TAB NAVIGATION ──
 // ══════════════════════════════════════════════
+function _tabViewKey(t){ return (t==='home'||t==='dept') ? ('home|'+(_currentDept||'')) : t; }
 function goTab(tab){
   if(tab==='chat') tab='home'; // 채팅 기능 종료 → 투표로
   // 관리자 전용 탭 가드 (사원 차단)
@@ -1940,6 +1965,8 @@ function goTab(tab){
     showToast('관리자 전용 메뉴입니다');
     return;
   }
+  // ⚡ 탭 전환 속도: 나가는 탭 화면을 기억(돌아올 때 즉시 표시 → '이전 탭 내용이 남아있다가 느리게 바뀜' 제거)
+  try{ const _mbPrev=document.getElementById('mainBody'); if(_mbPrev && _currentTab){ window._tabHtmlCache=window._tabHtmlCache||{}; window._tabHtmlCache[_tabViewKey(_currentTab)]=_mbPrev.innerHTML; } }catch(e){}
   _currentTab=tab;
   clearInterval(window._chatPoll);
   sessionStorage.setItem('lastTab', tab);
@@ -1979,6 +2006,9 @@ function goTab(tab){
   };
   const [title,sub]=headers[tab]||[tab,''];
   setMainHeader(title,sub);
+
+  // ⚡ 기억해둔 화면이 있으면 '즉시' 표시 → 아래 load가 백그라운드로 최신 데이터로 교체(빈 화면 대기 제거)
+  try{ const _ck=window._tabHtmlCache && window._tabHtmlCache[_tabViewKey(tab)]; if(_ck && mb){ mb.innerHTML=_ck; } }catch(e){}
 
   if(tab==='notice')loadNoticePage();
   if(tab==='home')loadHome();
@@ -7247,7 +7277,7 @@ async function loadStatusGroup(gid) {
   el.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text3);font-size:12px">불러오는 중...</div>';
 
   const [votes, attendance, crewMembers, attManual] = await Promise.all([
-    dbGet('votes'),
+    dbGetVotesRecentDays(35),   // 현황은 최근 4주만 표시 → 투표도 최근 35일치만 읽음(원본은 DB에 그대로)
     dbGet(`attendance/${gid}`),
     dbGet('members'),
     dbGet(`attendanceManual/${gid}`)
@@ -7429,7 +7459,8 @@ async function loadStatusGroup(gid) {
   const ADMIN_NAMES = ['고인물','에이스','경력직','불주먹','김월루','퇴사각','알잘딱'];
   let html = '';
 
-  for(const [mondayStr, wdata] of Object.entries(weeks).sort((a,b)=>b[0].localeCompare(a[0]))) {
+  // 최근 4주만 표시(원본 데이터는 그대로 — 화면 노출만 4주로 제한)
+  for(const [mondayStr, wdata] of Object.entries(weeks).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,4)) {
     const wLabel = getWeekLabel(mondayStr);
     // 월요일~일요일 7일 전체 생성 (투표 없는 요일도 빈칸으로 표시)
     const dates = [];
