@@ -723,7 +723,7 @@ function getKSTDate(){const d=new Date();d.setHours(d.getHours()+9);return d.toI
 const _dbCache=new Map();
 const _DB_CACHE_TTL=4000;
 let _votesListCache={t:0,data:null};  // 리스트 로딩 중복 다운로드 방지(네비게이션용)
-function _dbCacheClear(){ _dbCache.clear(); _votesListCache={t:0,data:null}; }
+function _dbCacheClear(){ _dbCache.clear(); _votesListCache={t:0,data:null}; try{ _rvCache={t:0,data:null}; }catch(e){} }
 async function dbGet(p){
   const now=Date.now();
   const hit=_dbCache.get(p);
@@ -774,59 +774,33 @@ async function dbGetVotesForGroup(gid){
       if(cached){ const data=JSON.parse(cached); _votesListCache={t:Date.now(),data}; return data; }
     }
   }catch{}
-  let _prevNewest=''; try{ _prevNewest=localStorage.getItem('c31_newestKey')||''; }catch{}
-  const _newVoteAppeared = !!(_newestKey && _newestKey!==_prevNewest);
   // votesVer가 아직 없으면(최초) 한 번 초기화
   if(_ver==null){ _ver=Date.now(); try{ fetch(`${DB}/votesVer.json`,{method:'PUT',body:JSON.stringify(_ver)}); }catch{} }
+  // ★원본 직접 읽기★ (요약본 방식 폐기 — 요약본이 오히려 쓰기마다 원본 재읽기로 비용↑·버그 유발)
+  //   화면은 최근 5일만 보여주므로 투표도 그만큼만 받음. createdAt 인덱스 → 없으면 $key → 최후 전체.
   let out=null;
-  // ★★ 요약본 우선 ★★ 요약본이 준비됐으면(sumReady) 가벼운 voteSummary만 받음(투표당 ~1KB).
-  let _useSummary=false;
-  try{ _useSummary = localStorage.getItem('c31_sumReady')==='1'; }catch{}
-  if(!_useSummary){
-    try{ const rs=await fetch(`${DB}/meta/sumReady.json`); if(rs.ok){ const sv=await rs.json(); if(sv){ _useSummary=true; try{localStorage.setItem('c31_sumReady','1');}catch{} } } }catch{}
-  }
-  if(_useSummary){
-    // voteSummary 최근 400개만($key — 인덱스 불필요). 요약본은 작아서 400개도 가벼움.
+  try{
+    const cutoff = Date.now() - 5*24*60*60*1000;
+    const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`;
+    const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),8000);
+    const r=await fetch(url,{signal:controller.signal}); clearTimeout(t);
+    if(r.ok){ out = (await r.json())||{}; }
+  }catch{}
+  if(out===null){
     try{
-      const url = `${DB}/voteSummary.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=400`;
+      const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=300`;
       const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),8000);
       const r=await fetch(url,{signal:controller.signal}); clearTimeout(t);
       if(r.ok){ out = (await r.json())||{}; }
     }catch{}
-    // ★워커/신규 투표 보강★ 새 투표키가 생겼으면(=워커나 누가 투표 생성) 최신 원본 30개를 읽어,
-    //   요약본에 아직 없는 투표를 목록에 채워 넣고 요약본도 생성. '생성 이벤트'에만 돌아 비용 거의 안 늚.
-    if(out && _newVoteAppeared){
-      try{
-        const r2=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=30`);
-        if(r2.ok){ const recent=(await r2.json())||{}; for(const vid in recent){ const rv=recent[vid]; if(rv && !rv.deleted && out[vid]===undefined){ out[vid]=_summaryFields(rv); _scheduleSummary(vid); } } }
-      }catch{}
-    }
   }
-  // 요약본 미준비/실패 → 원본(votes) 읽기(기존 방식) + 백그라운드로 요약본 생성(최초 1회 마이그레이션)
-  if(out===null){
-    let _raw=null;
-    // 1순위: createdAt 인덱스로 최근 5일치만
-    try{
-      const cutoff = Date.now() - 5*24*60*60*1000;
-      const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`;
-      const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),8000);
-      const r=await fetch(url,{signal:controller.signal}); clearTimeout(t);
-      if(r.ok){ _raw = (await r.json())||{}; }
-    }catch{}
-    // 2순위: $key 최근 300개(인덱스 불필요)
-    if(_raw===null){
-      try{
-        const url = `${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=300`;
-        const controller=new AbortController(); const t=setTimeout(()=>controller.abort(),8000);
-        const r=await fetch(url,{signal:controller.signal}); clearTimeout(t);
-        if(r.ok){ _raw = (await r.json())||{}; }
-      }catch{}
-    }
-    if(_raw===null){ _raw = await dbGet('votes') || {}; }
-    out=_raw;
-    // 아직 요약본 준비 전이면 이번 원본 읽기로 요약본 일괄 생성(백그라운드) — 다음 접속부턴 요약본 사용
-    if(!_useSummary){ try{ _migrateSummaries(_raw); }catch{} }
-  }
+  if(out===null){ out = await dbGet('votes') || {}; }
+  // ★워커 투표 보강★ createdAt 없는 워커 자동투표(자동 마감/퇴근투표 등)가 목록에서 빠지지 않도록
+  //   '키 기준 최신 25개'(작음)를 합침. 이미 있으면 그대로 → 중복/비용 거의 없음.
+  try{
+    const rk=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=25`);
+    if(rk.ok){ const newest=(await rk.json())||{}; for(const k in newest){ if(out[k]===undefined) out[k]=newest[k]; } }
+  }catch{}
   _votesListCache={t:Date.now(), data:out};
   // 받은 목록을 게이트키(버전+최신투표키)와 함께 저장 → 다음 접속 때 둘 다 그대로면 다운로드 생략
   try{ const _s=JSON.stringify(out); if(_s.length<4500000){ localStorage.setItem('c31_gateKey',_gateKey); localStorage.setItem('c31_newestKey',_newestKey); localStorage.setItem('c31_votesData',_s); } }catch{}
@@ -883,19 +857,45 @@ async function _migrateSummaries(votesObj){
 }
 // 현황 등: 최근 N일치 투표만 받기(원본은 그대로, 읽기만 제한). createdAt 인덱스 사용 → 없으면 $key 폴백.
 async function dbGetVotesRecentDays(days){
+  let out=null;
   try{
     const cutoff=Date.now()-days*24*60*60*1000;
     const r=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"createdAt"')}&startAt=${cutoff}`);
-    if(r.ok) return (await r.json())||{};
+    if(r.ok) out=(await r.json())||{};
   }catch{}
+  if(out===null){
+    try{
+      const r=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=400`);
+      if(r.ok) out=(await r.json())||{};
+    }catch{}
+  }
+  if(out===null) out = await dbGet('votes')||{};
+  // ★워커 투표 보강★ createdAt 없는 워커 자동투표가 빠지지 않게 최신 키 25개 합침(작음)
   try{
-    const r=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=400`);
-    if(r.ok) return (await r.json())||{};
+    const rk=await fetch(`${DB}/votes.json?orderBy=${encodeURIComponent('"$key"')}&limitToLast=25`);
+    if(rk.ok){ const newest=(await rk.json())||{}; for(const k in newest){ if(out[k]===undefined) out[k]=newest[k]; } }
   }catch{}
-  return await dbGet('votes')||{};
+  return out;
 }
+// ★★ 다운로드 비용 최대 원흉 차단 ★★
+//   renderVoteCard가 카드마다 dbGet('votes')(=전체 투표 통째 다운로드)를 3번씩 호출하던 것을
+//   '렌더 1회분' 짧은 캐시로 묶어서, 카드가 몇 개든 '최근 5일치'를 딱 한 번만 받게 함.
+//   (예전: N카드 × 3회 × 전체노드 → 지금: 1회 × 5일치. 투표가 쌓일수록 벌어지던 비용을 끊음)
+let _rvCache={t:0,data:null};
+async function _votesForRender(){
+  if(_rvCache.data && (Date.now()-_rvCache.t)<8000) return _rvCache.data;
+  // ★중복 다운로드 제거★ 방금 목록 로딩(dbGetVotesForGroup)이 받아둔 최근 투표가 있으면 그대로 재사용 → 추가 다운로드 0
+  if(_votesListCache.data && (Date.now()-_votesListCache.t)<10000){
+    _rvCache={t:Date.now(), data:_votesListCache.data};
+    return _votesListCache.data;
+  }
+  const d = await dbGetVotesRecentDays(5);
+  _rvCache={t:Date.now(), data:d};
+  return d;
+}
+function _clearVotesForRender(){ _rvCache={t:0,data:null}; }
 async function dbSet(p,d,retry=0){
-  _dbCacheClear(); if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}
+  _dbCacheClear(); if(p&&p.indexOf('votes')===0){_bumpVotesVer();}
   try{
     const res=await fetch(`${DB}/${p}.json`,{method:'PUT',body:JSON.stringify(d)});
     if(!res.ok && retry<2){ await new Promise(r=>setTimeout(r,500)); return dbSet(p,d,retry+1); }
@@ -906,9 +906,9 @@ async function dbSet(p,d,retry=0){
     return false;
   }
 }
-async function dbDelete(p){_dbCacheClear();if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
-async function dbPush(p,d){_dbCacheClear();if(p&&p.indexOf('votes')===0)_bumpVotesVer();try{const r=await fetch(`${DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});const j=await r.json();if(p&&p.indexOf('votes')===0){ _scheduleSummary(p==='votes'?(j&&j.name):_vidFromPath(p)); }return j;}catch{return null;}}
-async function dbDel(p){if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
+async function dbDelete(p){_dbCacheClear();if(p&&p.indexOf('votes')===0){_bumpVotesVer();}try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
+async function dbPush(p,d){_dbCacheClear();if(p&&p.indexOf('votes')===0)_bumpVotesVer();try{const r=await fetch(`${DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});const j=await r.json();return j;}catch{return null;}}
+async function dbDel(p){if(p&&p.indexOf('votes')===0){_bumpVotesVer();}try{await fetch(`${DB}/${p}.json`,{method:'DELETE'});}catch{}}
 const _gameGetCache=new Map();
 async function gameGet(p){
   const now=Date.now();const hit=_gameGetCache.get(p);
@@ -972,7 +972,7 @@ async function gameSet(p,d){try{_gameGetCache.clear();}catch{}try{await fetch(`$
 async function gamePush(p,d){try{_gameGetCache.clear();}catch{}try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'POST',body:JSON.stringify(d)});return await r.json();}catch{return null;}}
 // 멀티경로 PATCH(merge): 여러 항목을 요청 1번으로 한꺼번에 갱신 (키에 / 넣으면 하위경로). 성공시 true.
 async function gameUpdate(p,obj,retry=0){try{_gameGetCache.clear();}catch{}try{const r=await fetch(`${GAME_DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return gameUpdate(p,obj,retry+1);}console.error('gameUpdate',e);return false;}}
-async function dbUpdate(p,obj,retry=0){if(p&&p.indexOf('votes')===0){_bumpVotesVer();_scheduleSummary(_vidFromPath(p));}try{const r=await fetch(`${DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}console.error('dbUpdate',e);return false;}}
+async function dbUpdate(p,obj,retry=0){if(p&&p.indexOf('votes')===0){_bumpVotesVer();}try{const r=await fetch(`${DB}/${p}.json`,{method:'PATCH',body:JSON.stringify(obj)});if(!r.ok){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}return false;}return true;}catch(e){if(retry<2){await new Promise(s=>setTimeout(s,500));return dbUpdate(p,obj,retry+1);}console.error('dbUpdate',e);return false;}}
 
 // ══════════════════════════════════════════════
 // ── LOGIN ──
@@ -1641,7 +1641,8 @@ async function logout(){
 async function enterApp(){
   // 세션 복원 등으로 이름이 비어 들어온 경우 members에서 복구 → 응답/링크가 '익명'으로 분리 저장되는 것 방지
   if(CU && !CU.name && CU.key){
-    try{ const _m=await dbGet('members'); if(_m && _m[CU.key] && _m[CU.key].name){ CU.name=_m[CU.key].name; await persistSession(); } }catch(e){}
+    // ★계정 섞임 방지★ CU.name이 비어있을 때만 보충. (key가 다른 계정을 가리켜도 로그인 닉네임을 덮어쓰지 않음)
+    try{ const _m=await dbGet('members'); if(_m && CU && !CU.name && CU.key && _m[CU.key] && _m[CU.key].name){ CU.name=_m[CU.key].name; await persistSession(); } }catch(e){}
   }
   document.getElementById('loginPage').style.display='none';
   document.getElementById('app').style.display='flex';
@@ -1651,7 +1652,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.도장즉시1022' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.중복읽기제거1101' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -4321,7 +4322,9 @@ async function toggleVoteDetail(vid){
   if(el.style.display==='none'){
     el.style.display='block';
     window._openVotes[vid]=true;
-    const v = await dbGet(`votes/${vid}`);
+    let v = await dbGet(`votes/${vid}`);
+    // ★보강★ 단건 조회가 null이면(워커 지연·캐시 등) 최근 목록에서 같은 키를 찾아 사용
+    if(!v){ try{ const recent=await _votesForRender(); if(recent && recent[vid]) v=recent[vid]; }catch(e){} }
     try{ el.innerHTML = await renderVoteCard(vid, v); }
     catch(e){ el.innerHTML=`<div style="padding:10px;color:red">오류: ${e.message}</div>`; }
   } else {
@@ -4337,7 +4340,7 @@ async function _reopenVotes(){
     const el=document.getElementById(`voteDetail_${vid}`);
     if(!el){ delete window._openVotes[vid]; continue; }
     el.style.display='block';
-    try{ const v=await dbGet(`votes/${vid}`); el.innerHTML=await renderVoteCard(vid,v); }catch(e){}
+    try{ let v=await dbGet(`votes/${vid}`); if(!v){ const recent=await _votesForRender(); if(recent && recent[vid]) v=recent[vid]; } el.innerHTML=await renderVoteCard(vid,v); }catch(e){}
   }
 }
 
@@ -4346,6 +4349,10 @@ async function _reopenVotes(){
 // ══════════════════════════════════════════════
 async function renderVoteCard(vid,v){
   try {
+  // ★방어★ v가 null/비정상이면(요약본 잔재·동기화 지연 등) 터지지 않고 깔끔한 안내 표시
+  if(!v || typeof v!=='object'){
+    return `<div style="padding:14px;color:#c0392b;font-size:13px;line-height:1.5">⚠️ 이 투표를 불러오지 못했어요.<br>상단 <b>🔄 새로고침</b>을 한 번 눌러주세요.</div>`;
+  }
   const isAdmin=CU?.role==='admin';
   const opts=v.options||[];
   const responses=v.responses||{};
@@ -4402,7 +4409,7 @@ async function renderVoteCard(vid,v){
   // 완료 투표(선택지형, 이미지투표 아님) → 같은 날 시작 참여자 목록 (완료자 색 채움) — 관리자만
   if(isEndVote && !isImageVote && CU?.role==='admin'){
     try{
-      const _allV = await dbGet('votes');
+      const _allV = await _votesForRender();
       if(_allV){
         const _dm = (v.title||'').match(/(\d+)월\s*(\d+)일/);
         const _dl = _dm ? `${_dm[1]}월${_dm[2]}일` : null;
@@ -4464,7 +4471,7 @@ async function renderVoteCard(vid,v){
     let bonusSet = new Set();
     let totalCount = 0;
     try{
-      const allVotes = await dbGet('votes');
+      const allVotes = await _votesForRender();
       if(allVotes && v.group){
         const titleDate = getTitleDate(v);
         const startV = Object.values(allVotes).find(sv=>{
@@ -4662,7 +4669,7 @@ async function renderVoteCard(vid,v){
 
           // 완료 미제출 먼저 (완료 투표일 때만)
           if(isEndVote2){
-            const allVotes = await dbGet('votes');
+            const allVotes = await _votesForRender();
             if(allVotes){
               // 제목의 "N월 N일"로 매칭 (date는 하루 뒤라 쓰면 안 됨)
               const _dm2 = (v.title||'').match(/(\d+)월\s*(\d+)일/);
@@ -4840,13 +4847,15 @@ async function renderVoteCard(vid,v){
     }
   }
   // 사원은 링크를 한 번 제출하면 수정 불가 (관리자만 ✏️수정 가능) — 렌더 표시만, 저장 로직 무관
-  const _myLinkKey = CU?.key||'admin';
-  const _alreadySubmittedLink = !!(v.links && (v.links[_myLinkKey] || v.links[_myLinkKey+'_1'] || v.links[_myLinkKey+'_2']));
-  const _hasLink2 = !!(v.links && v.links[_myLinkKey+'_2']);
+  const _myLinkKey = CU?.name||CU?.key||'admin';   // 저장과 동일(CU.name 우선)
+  const _legacyLinkKey = CU?.key||'';              // 예전에 CU.key로 저장된 링크도 '제출됨'으로 인식
+  const _lk = kk => !!(v.links && kk && (v.links[kk]||v.links[kk+'_1']||v.links[kk+'_2']));
+  const _alreadySubmittedLink = _lk(_myLinkKey) || _lk(_legacyLinkKey);
+  const _hasLink2 = !!(v.links && ((v.links[_myLinkKey+'_2']) || (_legacyLinkKey && v.links[_legacyLinkKey+'_2'])));
   if(canSubmitLink && _alreadySubmittedLink && !isAdmin){
     if(isTupide && !_hasLink2){
       // 투피드로 변경 — 1번 링크는 제출완료(잠금), 2번 링크칸만 추가 입력
-      const _l1 = (v.links && (v.links[_myLinkKey+'_1']||v.links[_myLinkKey])) || {};
+      const _l1 = (v.links && (v.links[_myLinkKey+'_1']||v.links[_myLinkKey]||(_legacyLinkKey&&(v.links[_legacyLinkKey+'_1']||v.links[_legacyLinkKey])))) || {};
       html+=`<div style="margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text2);font-weight:700;margin-bottom:8px">🔒 1번 링크 제출 완료 (수정 불가)<div style="font-weight:500;color:var(--text3);font-size:11px;margin-top:4px">투피드 변경 — 아래에 <b>2번째 링크만</b> 추가해 주세요</div></div>`;
       html+=`<div>`;
       html+=`<input id="linkId_${vid}" class="linkfield" value="${escH(_l1.nick||'')}" placeholder="인스타그램 아이디 (예: narin_a.to)" style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:2px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text);outline:none">`;
@@ -4985,12 +4994,11 @@ function showIgIdError(err){
   else showBigAlert('🚫','아이디 형식 오류','인스타그램 아이디는 영문·숫자·\n밑줄(_)·마침표(.)만 가능해요.\n(예: narin_a.to)');
 }
 async function submitVoteLinkNew(vid, silent, preData){
-  let nick=CU?.name||'';
-  if(!nick && CU?.key){ try{ const _m=await dbGet('members'); nick=(_m&&_m[CU.key]&&_m[CU.key].name)||''; if(nick&&CU){CU.name=nick;} }catch(e){} }
+  const nick=CU?.name||'';
   if(!nick){ showToast('⚠️ 로그인 정보 확인이 필요해요 — 새로고침 후 다시 제출'); return; }
-  let key=CU?.key||'';
-  if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
-  if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
+  // ★계정 섞임 방지★ 링크 키 = 응답(castVote)의 myKey와 '반드시 동일'하게 CU.name 기준.
+  //   예전엔 CU.key로 저장해서, 부계★ 세션인데 key가 본계로 잡히면 링크만 본계 슬롯으로 새어 계정이 섞였음.
+  let key=CU?.name||CU?.key||'admin';
   // preData가 있으면 DOM 대신 그 값을 사용 (castVote가 화면을 다시 그려도 안전)
   const type = preData ? (preData.type||'normal') : (document.getElementById(`linkType_${vid}`)?.value||'normal');
   const linkId = preData ? (preData.id||'') : (document.getElementById(`linkId_${vid}`)?.value.trim()||'');
@@ -5029,12 +5037,11 @@ async function submitVoteLinkNew(vid, silent, preData){
 }
 
 async function submitVoteLink(vid, isTupide=false){
-  let nick=CU?.name||'';
-  if(!nick && CU?.key){ try{ const _m=await dbGet('members'); nick=(_m&&_m[CU.key]&&_m[CU.key].name)||''; if(nick&&CU){CU.name=nick;} }catch(e){} }
+  const nick=CU?.name||'';
   if(!nick){ showToast('⚠️ 로그인 정보 확인이 필요해요 — 새로고침 후 다시 제출'); return; }
-  let key=CU?.key||'';
-  if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
-  if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
+  // ★계정 섞임 방지★ 링크 키 = 응답(castVote)의 myKey와 '반드시 동일'하게 CU.name 기준.
+  //   예전엔 CU.key로 저장해서, 부계★ 세션인데 key가 본계로 잡히면 링크만 본계 슬롯으로 새어 계정이 섞였음.
+  let key=CU?.name||CU?.key||'admin';
   const linkId=document.getElementById(`linkId_${vid}`)?.value.trim()||'';
   const displayNick = linkId || nick;
   if(isTupide){
@@ -5065,12 +5072,11 @@ async function submitVoteLink(vid, isTupide=false){
 
 // 투피드 변경 시 2번째 링크만 추가 제출 (1번은 잠금 유지)
 async function submitTupide2(vid){
-  let nick=CU?.name||'';
-  if(!nick && CU?.key){ try{ const _m=await dbGet('members'); nick=(_m&&_m[CU.key]&&_m[CU.key].name)||''; if(nick&&CU){CU.name=nick;} }catch(e){} }
+  const nick=CU?.name||'';
   if(!nick){ showToast('⚠️ 로그인 정보 확인이 필요해요 — 새로고침 후 다시 제출'); return; }
-  let key=CU?.key||'';
-  if(!key){ try{ const _c=await dbGet('members')||{}; const _f=Object.entries(_c).find(([kk,mm])=>mm&&mm.name===(CU?.name||'익명')); if(_f) key=_f[0]; }catch(e){} }
-  if(!key) key=(CU?.name||'익명')||'admin';   // 'admin' 공유 폴백 제거 → 멤버별 고유키 (링크 덮어쓰기/누락 방지)
+  // ★계정 섞임 방지★ 링크 키 = 응답(castVote)의 myKey와 '반드시 동일'하게 CU.name 기준.
+  //   예전엔 CU.key로 저장해서, 부계★ 세션인데 key가 본계로 잡히면 링크만 본계 슬롯으로 새어 계정이 섞였음.
+  let key=CU?.name||CU?.key||'admin';
   const linkId=document.getElementById(`linkId_${vid}`)?.value.trim()||'';
   const url2=document.getElementById(`linkUrl_${vid}_2`)?.value.trim();
   if(!url2){ showToast('2번째 링크를 입력하세요'); return; }
@@ -6359,7 +6365,7 @@ async function pickVoteOption(vid, optIdx){
     if(window._castVoteOK !== false){
       showSubmitDonePopup(groups[v?.group]?.name||'', _voteKindOf(v), 0);
       // 방금 응답을 요약본에 즉시 반영 후 목록 다시 그림 → 퇴근완료 도장 바로 뜨게
-      try{ await _rebuildVoteSummary(vid); }catch(e){}
+      /* 요약본 제거: 쓰기 때마다 원본 재읽기(egress↑) 유발하던 로직 폐기 */
       if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
     }
     return;
@@ -6463,7 +6469,7 @@ async function submitVote(vid){
   const _gn = groups[v?.group]?.name || '';
   showSubmitDonePopup(_gn, _voteKindOf(v), 0);
   // 방금 낸 응답을 요약본에 '즉시' 반영한 뒤 다시 그림 → 도장이 바로 뜨게(요약본 지연으로 도장 안 뜨던 것 해결)
-  try{ await _rebuildVoteSummary(vid); }catch(e){}
+  /* 요약본 제거: 쓰기 때마다 원본 재읽기(egress↑) 유발하던 로직 폐기 */
   if(_currentTab==='home')loadHome(); else if(_currentTab==='dept')loadDeptPage(_currentDept);
 }
 
@@ -7146,7 +7152,7 @@ async function saveVote(){
     // 완료 투표 오픈 시: 같은 날 시작 투표에서 연차/당직 선택한 사람을 응답에 미리 산정
     if(newVid && ((title||'').includes('완료')||(title||'').includes('퇴근'))){
       try{
-        const allVotes = await dbGet('votes');
+        const allVotes = await _votesForRender();
         if(allVotes){
           const startVote = Object.entries(allVotes).find(([k,sv])=>
             !sv.deleted && sv.group===group && (sv.title||'')===title.replace('퇴근','출근')
