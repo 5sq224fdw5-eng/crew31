@@ -5117,7 +5117,7 @@ async function pasteInto(id){
   }
 }
 // 인사팀 계정(ADMIN_NAMES) → 로그아웃 없이 관리자 모드 전환
-const _ADMIN_SWITCH_NAMES=['고인물','에이스','경력직','불주먹','김월루','퇴사각','알잘딱'];
+const _ADMIN_SWITCH_NAMES=['고인물','에이스','경력직','불주먹','김월루','퇴사각','알잘딱','네니오','멘탈갑'];
 async function switchToAdmin(){
   if(!CU || !_ADMIN_SWITCH_NAMES.includes(CU.name)){ showToast('권한이 없어요'); return; }
   window._origMember={...CU};
