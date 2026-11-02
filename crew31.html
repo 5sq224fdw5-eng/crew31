@@ -1499,12 +1499,14 @@ async function goToGame(){
   if(!gameMembers){ _openGame('https://5sq224fdw5-eng.github.io/game31/game.html'); return; }
 
   // 내 닉네임이 포함된 그룹 찾기 (예: 좋아요불주먹, 댓글불주먹)
+  const myNick = CU?.name || '';
+  if(!myNick){ showToast('⚠️ 로그인 정보가 필요해요 — 새로고침 후 다시'); return; }
   const myGroups = [];
   Object.values(gameMembers).forEach(m=>{
     if(!m.name) return;
     const clean = m.name.replace(/^\*/,'');
-    if(clean.endsWith(CU.name)){
-      const gName = clean.slice(0, clean.length - CU.name.length);
+    if(clean.endsWith(myNick)){
+      const gName = clean.slice(0, clean.length - myNick.length);
       if(gName) myGroups.push({gName, fullName: clean});
     }
   });
@@ -1652,7 +1654,7 @@ async function enterApp(){
 
   // 헤더 사용자 정보
   const initial=(CU.name||'?')[0];
-  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.중복읽기제거1101' : '(주) 떠리원 사원');
+  const userRole = (CU.role==='admin' ? '(주) 떠리원 인사팀  ·  v.이관개선1102' : '(주) 떠리원 사원');
   const avatarEl = document.getElementById('headerAvatar');
   const nameEl = document.getElementById('headerName');
   const roleEl = document.getElementById('headerRole');
@@ -8920,6 +8922,8 @@ async function migrateNickFull(){
 
     const moved={responses:0,times:0,images:0,leaveUsed:0,saveCount:0,memos:0,canceled:0,adminConfirm:0,att:0,attMan:0,links:0};
     const fields=[['responses','responses'],['responseTimes','times'],['images','images'],['leaveUsed','leaveUsed'],['saveCount','saveCount'],['memos','memos'],['canceled','canceled'],['adminConfirm','adminConfirm']];
+    // ★속도개선★ 하나씩 쓰면 500명치에서 수백 번 왕복이라 느려서 안 끝남 → 멀티패스로 묶어 한 번에 전송
+    const U={};  // crew31 하위 경로 → 값 (null = 삭제)
 
     // 1) 인트라넷 votes 이관 (닉으로 키 저장된 것들)
     const vs=votes||{};
@@ -8927,8 +8931,8 @@ async function migrateNickFull(){
       const v=vs[vid]; if(!v) continue;
       for(const [field,cntKey] of fields){
         const obj=v[field]; if(!obj || obj[oldNick]===undefined) continue;
-        if(obj[newNick]===undefined){ await dbSet(`votes/${vid}/${field}/${newNick}`, obj[oldNick]); moved[cntKey]++; }
-        await dbDelete(`votes/${vid}/${field}/${oldNick}`);
+        if(obj[newNick]===undefined){ U[`votes/${vid}/${field}/${newNick}`]=obj[oldNick]; moved[cntKey]++; }
+        U[`votes/${vid}/${field}/${oldNick}`]=null;
       }
       // 링크: 닉 폴백으로 저장된 것만 (멤버키 기반은 이름과 무관하므로 그대로 둠)
       if(v.links){
@@ -8936,8 +8940,8 @@ async function migrateNickFull(){
           const base=lk.replace(/_[12]$/,''); const suf=(lk.match(/_[12]$/)||[''])[0];
           if(base===oldNick){
             const nlk=newNick+suf;
-            if(v.links[nlk]===undefined){ await dbSet(`votes/${vid}/links/${nlk}`, {...v.links[lk], nick:newNick}); moved.links++; }
-            await dbDelete(`votes/${vid}/links/${lk}`);
+            if(v.links[nlk]===undefined){ U[`votes/${vid}/links/${nlk}`]={...v.links[lk], nick:newNick}; moved.links++; }
+            U[`votes/${vid}/links/${lk}`]=null;
           }
         }
       }
@@ -8950,10 +8954,21 @@ async function migrateNickFull(){
         const weeks=root[gid]; if(!weeks) continue;
         for(const wk in weeks){
           const mem=weeks[wk]; if(!mem || mem[oldNick]===undefined) continue;
-          if(mem[newNick]===undefined){ await dbSet(`${path}/${gid}/${wk}/${newNick}`, mem[oldNick]); moved[cntKey]++; }
-          await dbDelete(`${path}/${gid}/${wk}/${oldNick}`);
+          if(mem[newNick]===undefined){ U[`${path}/${gid}/${wk}/${newNick}`]=mem[oldNick]; moved[cntKey]++; }
+          U[`${path}/${gid}/${wk}/${oldNick}`]=null;
         }
       }
+    }
+
+    // 2.5) 묶음 전송 — 300개씩 PATCH 한 번에, 진행률 표시, 실패 시 재시도
+    const _ukeys=Object.keys(U);
+    const _CH=300;
+    for(let i=0;i<_ukeys.length;i+=_CH){
+      const part={}; for(const k of _ukeys.slice(i,i+_CH)) part[k]=U[k];
+      showToast(`🔄 이관 중... (${Math.min(i+_CH,_ukeys.length)}/${_ukeys.length}건)`);
+      let _ok=false;
+      for(let r=0;r<3 && !_ok;r++){ _ok=await dbUpdate('', part); if(!_ok) await new Promise(s=>setTimeout(s,700)); }
+      if(!_ok) throw new Error(`쓰기 실패(${i}건 부근) — 백업으로 복구하세요`);
     }
 
     // 3) 인트라넷 로그인 명단: 기존 멤버 이름만 new로(키 유지 → 링크 보존)
